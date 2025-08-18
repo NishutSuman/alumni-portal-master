@@ -23,7 +23,7 @@ const generateTokens = (userId) => {
   return { accessToken, refreshToken };
 };
 
-// Register new user
+// Register new user - FIXED VERSION
 const register = async (req, res) => {
   const { email, password, fullName, batch } = req.body;
   
@@ -45,7 +45,7 @@ const register = async (req, res) => {
   
   // Validate batch year
   const currentYear = new Date().getFullYear();
-  if (batch < 1950) {
+  if (batch < 1950 || batch > currentYear + 10) {
     return errorResponse(res, 'Invalid batch year', 400);
   }
   
@@ -65,9 +65,24 @@ const register = async (req, res) => {
     // Generate email verification token
     const emailVerifyToken = crypto.randomBytes(32).toString('hex');
     
-    // Start transaction to create user and update batch
+    // Start transaction to create batch first, then user
     const result = await prisma.$transaction(async (prisma) => {
-      // Create user
+      // FIRST: Create or ensure batch exists
+      const batchRecord = await prisma.batch.upsert({
+        where: { year: parseInt(batch) },
+        update: {
+          totalMembers: {
+            increment: 1
+          }
+        },
+        create: {
+          year: parseInt(batch),
+          name: `Class of ${batch}`,
+          totalMembers: 1,
+        },
+      });
+      
+      // SECOND: Create user (now batch exists)
       const user = await prisma.user.create({
         data: {
           email: email.toLowerCase(),
@@ -85,21 +100,6 @@ const register = async (req, res) => {
           role: true,
           isEmailVerified: true,
           createdAt: true,
-        },
-      });
-      
-      // Update or create batch
-      await prisma.batch.upsert({
-        where: { year: parseInt(batch) },
-        update: {
-          totalMembers: {
-            increment: 1
-          }
-        },
-        create: {
-          year: parseInt(batch),
-          name: `Class of ${batch}`,
-          totalMembers: 1,
         },
       });
       
@@ -150,6 +150,7 @@ const register = async (req, res) => {
     return errorResponse(res, 'Registration failed', 500);
   }
 };
+
     
 
 

@@ -1,5 +1,20 @@
 // src/utils/response.js
 
+const getIndianTimestamp = () => {
+  const now = new Date();
+  const indianTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  
+  const day = String(indianTime.getDate()).padStart(2, '0');
+  const month = String(indianTime.getMonth() + 1).padStart(2, '0');
+  const year = indianTime.getFullYear();
+  
+  const hours = String(indianTime.getHours()).padStart(2, '0');
+  const minutes = String(indianTime.getMinutes()).padStart(2, '0');
+  const seconds = String(indianTime.getSeconds()).padStart(2, '0');
+  
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+};
+
 /**
  * Standard success response format
  * @param {Object} res - Express response object
@@ -13,7 +28,7 @@ const successResponse = (res, data = null, message = 'Success', statusCode = 200
     success: true,
     message,
     data,
-    timestamp: new Date().toISOString(),
+    timestamp: getIndianTimestamp(),
   };
   
   return res.status(statusCode).json(response);
@@ -30,7 +45,7 @@ const errorResponse = (res, message = 'An error occurred', statusCode = 400, err
   const response = {
     success: false,
     message,
-    timestamp: new Date().toISOString(),
+    timestamp: getIndianTimestamp(),
   };
   
   if (errors) {
@@ -60,7 +75,7 @@ const paginatedResponse = (res, data, pagination, message = 'Success') => {
       hasNext: pagination.hasNext,
       hasPrev: pagination.hasPrev,
     },
-    timestamp: new Date().toISOString(),
+    timestamp: getIndianTimestamp(),
   };
   
   return res.status(200).json(response);

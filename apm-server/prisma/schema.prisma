@@ -180,6 +180,8 @@ model Post {
   heroImage   String?
   images      String[]    // Array of image URLs
   tags        String[]    // Array of user IDs mentioned
+  allowComments Boolean @default(true)
+  allowLikes    Boolean @default(true)
   isArchived  Boolean     @default(false)
   isPublished Boolean     @default(true)
   
@@ -422,6 +424,8 @@ enum PostCategory {
   MOM         // Minutes of Meeting
   STORY       // Alumni Story
   POST        // General Post
+  NOTICE     // Official Notice
+  ANNOUNCEMENT // Event Announcement
 }
 
 enum AttendeeStatus {

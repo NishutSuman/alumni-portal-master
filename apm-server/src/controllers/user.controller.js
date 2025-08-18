@@ -1,6 +1,7 @@
 // src/controllers/user.js
 const { prisma } = require('../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../utils/response');
+const { getFileUrl, deleteUploadedFile } = require('../middleware/upload.middleware');
 
 // Update user profile
 const updateProfile = async (req, res) => {
@@ -177,320 +178,6 @@ const getAddresses = async (req, res) => {
   } catch (error) {
     console.error('Get addresses error:', error);
     return errorResponse(res, 'Failed to retrieve addresses', 500);
-  }
-};
-
-// Alumni Directory Search
-const searchAlumni = async (req, res) => {
-  const { 
-    search, // General search term (name, company, institution)
-    batch,
-    employmentStatus,
-    company,
-    institution,
-    city,
-    state,
-    country,
-    sortBy = 'fullName',
-    sortOrder = 'asc'
-  } = req.query;
-  
-  const { page, limit, skip } = getPaginationParams(req.query, 20);
-  
-  try {
-    // Build dynamic where clause
-    const whereClause = {
-      isActive: true,
-      isProfilePublic: true,
-    };
-    
-    // General search across multiple fields
-    if (search) {
-      whereClause.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { bio: { contains: search, mode: 'insensitive' } },
-        { workHistory: { some: { companyName: { contains: search, mode: 'insensitive' } } } },
-        { workHistory: { some: { jobRole: { contains: search, mode: 'insensitive' } } } },
-        { educationHistory: { some: { institution: { contains: search, mode: 'insensitive' } } } },
-        { educationHistory: { some: { course: { contains: search, mode: 'insensitive' } } } },
-      ];
-    }
-    
-    // Specific filters
-    if (batch) {
-      whereClause.batch = parseInt(batch);
-    }
-    
-    if (employmentStatus) {
-      whereClause.employmentStatus = employmentStatus;
-    }
-    
-    if (company) {
-      whereClause.workHistory = {
-        some: {
-          companyName: { contains: company, mode: 'insensitive' }
-        }
-      };
-    }
-    
-    if (institution) {
-      whereClause.educationHistory = {
-        some: {
-          institution: { contains: institution, mode: 'insensitive' }
-        }
-      };
-    }
-    
-    // Address filters
-    if (city || state || country) {
-      const addressFilter = {};
-      if (city) addressFilter.city = { contains: city, mode: 'insensitive' };
-      if (state) addressFilter.state = { contains: state, mode: 'insensitive' };
-      if (country) addressFilter.country = { contains: country, mode: 'insensitive' };
-      
-      whereClause.addresses = {
-        some: addressFilter
-      };
-    }
-    
-    // Valid sort fields
-    const validSortFields = ['fullName', 'batch', 'createdAt', 'employmentStatus'];
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'fullName';
-    const order = sortOrder === 'desc' ? 'desc' : 'asc';
-    
-    // Get total count
-    const total = await prisma.user.count({ where: whereClause });
-    
-    // Get paginated results
-    const users = await prisma.user.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        fullName: true,
-        batch: true,
-        bio: true,
-        employmentStatus: true,
-        profileImage: true,
-        email: true,
-        whatsappNumber: true,
-        alternateNumber: true,
-        showEmail: true,
-        showPhone: true,
-        linkedinUrl: true,
-        instagramUrl: true,
-        facebookUrl: true,
-        twitterUrl: true,
-        youtubeUrl: true,
-        portfolioUrl: true,
-        createdAt: true,
-        workHistory: {
-          where: { isCurrentJob: true },
-          select: {
-            companyName: true,
-            jobRole: true,
-            companyType: true,
-          },
-          take: 1,
-        },
-        educationHistory: {
-          orderBy: { toYear: 'desc' },
-          select: {
-            course: true,
-            stream: true,
-            institution: true,
-            fromYear: true,
-            toYear: true,
-          },
-          take: 1,
-        },
-        addresses: {
-          where: { addressType: 'CURRENT' },
-          select: {
-            city: true,
-            state: true,
-            country: true,
-          },
-          take: 1,
-        },
-      },
-      orderBy: { [sortField]: order },
-      skip,
-      take: limit,
-    });
-    
-    // Filter sensitive information based on privacy settings
-    const sanitizedUsers = users.map(user => ({
-      ...user,
-      email: user.showEmail ? user.email : null,
-      whatsappNumber: user.showPhone ? user.whatsappNumber : null,
-      alternateNumber: user.showPhone ? user.alternateNumber : null,
-      showEmail: undefined,
-      showPhone: undefined,
-      currentAddress: user.addresses[0] || null, // Get first address (current) or null
-      addresses: undefined, // Remove addresses array from response
-    }));
-    
-    const pagination = calculatePagination(total, page, limit);
-    
-    return paginatedResponse(res, sanitizedUsers, pagination, 'Alumni directory retrieved successfully');
-    
-  } catch (error) {
-    console.error('Search alumni error:', error);
-    return errorResponse(res, 'Failed to search alumni directory', 500);
-  }
-};
-
-// Get alumni statistics
-const getAlumniStats = async (req, res) => {
-  try {
-    const [
-      totalAlumni,
-      batchStats,
-      employmentStats,
-      recentJoins
-    ] = await Promise.all([
-      // Total active alumni
-      prisma.user.count({
-        where: { isActive: true, isProfilePublic: true }
-      }),
-      
-      // Alumni by batch
-      prisma.batch.findMany({
-        select: {
-          year: true,
-          name: true,
-          totalMembers: true,
-        },
-        orderBy: { year: 'desc' },
-        take: 10,
-      }),
-      
-      // Employment status distribution
-      prisma.user.groupBy({
-        by: ['employmentStatus'],
-        where: { isActive: true, isProfilePublic: true },
-        _count: true,
-      }),
-      
-      // Recent joins (last 30 days)
-      prisma.user.count({
-        where: {
-          isActive: true,
-          createdAt: {
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-          }
-        }
-      })
-    ]);
-    
-    const stats = {
-      totalAlumni,
-      recentJoins,
-      batchDistribution: batchStats,
-      employmentDistribution: employmentStats.map(stat => ({
-        status: stat.employmentStatus,
-        count: stat._count,
-      })),
-    };
-    
-    return successResponse(res, { stats }, 'Alumni statistics retrieved successfully');
-    
-  } catch (error) {
-    console.error('Get alumni stats error:', error);
-    return errorResponse(res, 'Failed to retrieve alumni statistics', 500);
-  }
-};
-
-// Get individual alumni profile (public view)
-const getAlumniProfile = async (req, res) => {
-  const { userId } = req.params;
-  
-  try {
-    const user = await prisma.user.findFirst({
-      where: {
-        id: userId,
-        isActive: true,
-        isProfilePublic: true,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        batch: true,
-        bio: true,
-        employmentStatus: true,
-        profileImage: true,
-        email: true,
-        whatsappNumber: true,
-        alternateNumber: true,
-        showEmail: true,
-        showPhone: true,
-        linkedinUrl: true,
-        instagramUrl: true,
-        facebookUrl: true,
-        twitterUrl: true,
-        youtubeUrl: true,
-        portfolioUrl: true,
-        createdAt: true,
-        educationHistory: {
-          orderBy: { fromYear: 'desc' },
-          select: {
-            id: true,
-            course: true,
-            stream: true,
-            institution: true,
-            fromYear: true,
-            toYear: true,
-            isOngoing: true,
-            description: true,
-          },
-        },
-        workHistory: {
-          orderBy: { fromYear: 'desc' },
-          select: {
-            id: true,
-            companyName: true,
-            jobRole: true,
-            companyType: true,
-            fromYear: true,
-            toYear: true,
-            isCurrentJob: true,
-            description: true,
-          },
-        },
-        addresses: {
-          select: {
-            addressLine1: true,
-            addressLine2: true,
-            city: true,
-            state: true,
-            country: true,
-            addressType: true,
-          },
-        },
-      },
-    });
-    
-    if (!user) {
-      return errorResponse(res, 'Alumni profile not found or private', 404);
-    }
-    
-    // Filter sensitive information based on privacy settings
-    const sanitizedUser = {
-      ...user,
-      email: user.showEmail ? user.email : null,
-      whatsappNumber: user.showPhone ? user.whatsappNumber : null,
-      alternateNumber: user.showPhone ? user.alternateNumber : null,
-      showEmail: undefined,
-      showPhone: undefined,
-      currentAddress: user.addresses.find(addr => addr.addressType === 'CURRENT') || null,
-      addresses: undefined, // Remove full addresses array
-    };
-    
-    return successResponse(res, { user: sanitizedUser }, 'Alumni profile retrieved successfully');
-    
-  } catch (error) {
-    console.error('Get alumni profile error:', error);
-    return errorResponse(res, 'Failed to retrieve alumni profile', 500);
   }
 };
 
@@ -840,6 +527,124 @@ const getWorkHistory = async (req, res) => {
   }
 };
 
+// Upload/Update profile picture
+const uploadProfilePicture = async (req, res) => {
+  try {
+    // Check if file was uploaded (multer middleware handles this)
+    if (!req.file) {
+      return errorResponse(res, 'No image file provided', 400);
+    }
+    
+    // Get the current user to check if they have an existing profile picture
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { profileImage: true },
+    });
+    
+    // Generate the file URL
+    const imageUrl = getFileUrl(req, req.file.filename, 'profiles');
+    
+    // Update user profile with image URL
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { profileImage: imageUrl },
+      select: {
+        id: true,
+        fullName: true,
+        profileImage: true,
+        updatedAt: true,
+      },
+    });
+    
+    // Delete old profile picture if it exists
+    if (currentUser.profileImage && currentUser.profileImage.includes('/uploads/')) {
+      const oldFileName = currentUser.profileImage.split('/').pop();
+      const oldFilePath = `./public/uploads/profiles/${oldFileName}`;
+      deleteUploadedFile(oldFilePath);
+    }
+    
+    // Log profile picture update
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.id,
+        action: 'profile_picture_upload',
+        details: { 
+          imageUrl,
+          fileName: req.file.filename,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype 
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+    });
+    
+    return successResponse(res, { user: updatedUser }, 'Profile picture uploaded successfully');
+    
+  } catch (error) {
+    console.error('Upload profile picture error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file) {
+      deleteUploadedFile(req.file.path);
+    }
+    
+    return errorResponse(res, 'Failed to upload profile picture', 500);
+  }
+};
+
+// Update existing profile picture (same as upload)
+const updateProfilePicture = async (req, res) => {
+  return uploadProfilePicture(req, res);
+};
+
+// Delete profile picture
+const deleteProfilePicture = async (req, res) => {
+  try {
+    // Get current user with profile image
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, profileImage: true },
+    });
+    
+    if (!user.profileImage) {
+      return errorResponse(res, 'No profile picture to delete', 400);
+    }
+    
+    // Delete file from storage if it's a local upload
+    if (user.profileImage.includes('/uploads/')) {
+      const fileName = user.profileImage.split('/').pop();
+      const filePath = `./public/uploads/profiles/${fileName}`;
+      deleteUploadedFile(filePath);
+    }
+    
+    // Remove profile image from database
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { profileImage: null },
+    });
+    
+    // Log profile picture deletion
+    await prisma.activityLog.create({
+      data: {
+        userId: req.user.id,
+        action: 'profile_picture_delete',
+        details: { 
+          deletedImageUrl: user.profileImage 
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+    });
+    
+    return successResponse(res, null, 'Profile picture deleted successfully');
+    
+  } catch (error) {
+    console.error('Delete profile picture error:', error);
+    return errorResponse(res, 'Failed to delete profile picture', 500);
+  }
+};
+
 module.exports = {
   updateProfile,
   updateAddress,
@@ -852,7 +657,7 @@ module.exports = {
   deleteWorkExperience,
   getEducationHistory,
   getWorkHistory,
-  searchAlumni,
-  getAlumniStats,
-  getAlumniProfile,
+  uploadProfilePicture,
+  updateProfilePicture,
+  deleteProfilePicture,
 };
