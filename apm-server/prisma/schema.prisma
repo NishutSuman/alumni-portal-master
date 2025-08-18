@@ -1,0 +1,474 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  isEmailVerified   Boolean  @default(false)
+  emailVerifyToken  String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  isActive          Boolean  @default(true)
+  deactivatedAt     DateTime?
+  
+  // Basic Profile Information
+  fullName          String
+  dateOfBirth       DateTime?
+  batch             Int
+  bio               String?
+  profileImage      String?
+  employmentStatus  EmploymentStatus @default(OPEN_TO_WORK)
+  
+  // Contact Information
+  whatsappNumber    String?
+  alternateNumber   String?
+  
+  // Social Links
+  linkedinUrl       String?
+  instagramUrl      String?
+  facebookUrl       String?
+  twitterUrl        String?
+  youtubeUrl        String?
+  portfolioUrl      String?
+  
+  // Privacy Settings
+  isProfilePublic   Boolean  @default(true)
+  showEmail         Boolean  @default(false)
+  showPhone         Boolean  @default(false)
+  
+  // Role and Permissions
+  role              UserRole @default(USER)
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastLoginAt       DateTime?
+  
+  // Relations
+  posts             Post[]
+  comments          Comment[]
+  likes             Like[]
+  events            Event[] @relation("EventOrganizer")
+  eventAttendees    EventAttendee[]
+  transactions      Transaction[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+  auditLogs         AuditLog[] @relation("AuditActor")
+  batchAdminOf      Batch[] @relation("BatchAdmin")
+  photoUploads      Photo[]
+  albumsCreated     Album[] @relation("AlbumCreator")
+  educationHistory  UserEducation[]
+  workHistory       UserWorkExperience[]
+  batch_            Batch   @relation("BatchMembers", fields: [batch], references: [year])
+  addresses         UserAddress[]
+  
+  // Approval relations (reverse side)
+  approvedPosts     Post[]  @relation("PostApprover")
+  approvedTransactions Transaction[] @relation("TransactionApprover")
+  
+  @@index([batch])
+  @@index([fullName])
+  @@index([employmentStatus])
+  @@index([isActive, isProfilePublic])
+  @@map("users")
+}
+
+model UserAddress {
+  id            String      @id @default(cuid())
+  addressLine1  String
+  addressLine2  String?
+  city          String
+  state         String
+  postalCode    String
+  country       String      @default("India")
+  addressType   AddressType
+  
+  // Relations
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@unique([userId, addressType])
+  @@map("user_addresses")
+}
+
+model UserEducation {
+  id            String   @id @default(cuid())
+  course        String   // e.g., "XII", "B.Tech", "MBA"
+  stream        String?  // e.g., "PCMB", "Computer Science", "Finance"
+  institution   String   // School/College/University name
+  fromYear      Int
+  toYear        Int?     // null for ongoing
+  isOngoing     Boolean  @default(false)
+  description   String?  // Additional details
+  
+  // Relations
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([institution])
+  @@index([fromYear, toYear])
+  @@map("user_education")
+}
+
+model UserWorkExperience {
+  id            String      @id @default(cuid())
+  companyName   String
+  jobRole       String
+  companyType   CompanyType?
+  workAddress   String?
+  fromYear      Int
+  toYear        Int?        // null for current job
+  isCurrentJob  Boolean     @default(false)
+  description   String?     // Job responsibilities, achievements
+  
+  // Relations
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([userId])
+  @@index([companyName])
+  @@index([fromYear, toYear])
+  @@map("user_work_experience")
+}
+
+model Batch {
+  id          String @id @default(cuid())
+  year        Int    @unique
+  name        String // e.g., "Class of 2020"
+  description String?
+  
+  // Batch Statistics
+  totalMembers Int   @default(0)
+  
+  // Batch Admins (2 per batch: 1 boy + 1 girl)
+  admins      User[] @relation("BatchAdmin")
+  
+  // All members of this batch
+  members     User[] @relation("BatchMembers")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([year])
+  @@map("batches")
+}
+
+model Post {
+  id          String      @id @default(cuid())
+  title       String
+  body        String      // Rich text content
+  category    PostCategory
+  heroImage   String?
+  images      String[]    // Array of image URLs
+  tags        String[]    // Array of user IDs mentioned
+  isArchived  Boolean     @default(false)
+  isPublished Boolean     @default(true)
+  
+  // Relations
+  createdBy   String
+  author      User        @relation(fields: [createdBy], references: [id])
+  approvedBy  String?
+  approver    User?       @relation("PostApprover", fields: [approvedBy], references: [id])
+  linkedEventId String?
+  linkedEvent Event?      @relation(fields: [linkedEventId], references: [id])
+  
+  comments    Comment[]
+  likes       Like[]
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  @@index([createdBy])
+  @@index([category])
+  @@index([isPublished, isArchived])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id            String    @id @default(cuid())
+  content       String
+  isEdited      Boolean   @default(false)
+  
+  // Relations
+  postId        String
+  post          Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdBy     String
+  author        User      @relation(fields: [createdBy], references: [id])
+  
+  // Nested replies
+  parentId      String?
+  parent        Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies       Comment[] @relation("CommentReplies")
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([postId])
+  @@index([createdBy])
+  @@map("comments")
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  
+  // Relations
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([postId, userId])
+  @@map("likes")
+}
+
+model Event {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  venue         String?
+  eventDate     DateTime
+  endDate       DateTime?
+  images        String[]
+  maxAttendees  Int?
+  isArchived    Boolean   @default(false)
+  
+  // Relations
+  organizerId   String
+  organizer     User      @relation("EventOrganizer", fields: [organizerId], references: [id])
+  
+  attendees     EventAttendee[]
+  linkedPosts   Post[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([organizerId])
+  @@index([eventDate])
+  @@index([isArchived])
+  @@map("events")
+}
+
+model EventAttendee {
+  id        String           @id @default(cuid())
+  status    AttendeeStatus   @default(PENDING)
+  
+  // Relations
+  eventId   String
+  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  
+  @@unique([eventId, userId])
+  @@map("event_attendees")
+}
+
+model Album {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  coverImage  String?
+  isArchived  Boolean  @default(false)
+  
+  // Relations
+  createdBy   String
+  creator     User     @relation("AlbumCreator", fields: [createdBy], references: [id])
+  photos      Photo[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([createdBy])
+  @@map("albums")
+}
+
+model Photo {
+  id          String   @id @default(cuid())
+  url         String
+  caption     String?
+  tags        String[] // Array of user IDs
+  metadata    Json?    // Store EXIF data, file size, etc.
+  
+  // Relations
+  albumId     String?
+  album       Album?   @relation(fields: [albumId], references: [id])
+  uploadedBy  String
+  uploader    User     @relation(fields: [uploadedBy], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([uploadedBy])
+  @@index([albumId])
+  @@map("photos")
+}
+
+model Transaction {
+  id            String           @id @default(cuid())
+  type          TransactionType
+  category      String           // e.g., "donation", "event_fee", "merchandise"
+  amount        Decimal          @db.Decimal(10, 2)
+  description   String
+  referenceId   String?          // External payment reference
+  receiptUrl    String?          // Upload receipt/invoice
+  status        TransactionStatus @default(PENDING)
+  
+  // Relations
+  userId        String?
+  user          User?            @relation(fields: [userId], references: [id])
+  approvedBy    String?
+  approver      User?            @relation("TransactionApprover", fields: [approvedBy], references: [id])
+  
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  
+  @@index([userId])
+  @@index([type, status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model Notification {
+  id          String            @id @default(cuid())
+  type        NotificationType
+  title       String
+  message     String
+  payload     Json?             // Additional data for the notification
+  isRead      Boolean           @default(false)
+  
+  // Relations
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime          @default(now())
+  
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // e.g., "login", "profile_update", "post_create"
+  details     Json?    // Additional context
+  ipAddress   String?
+  userAgent   String?
+  
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // e.g., "user_deactivate", "transaction_approve"
+  entityType  String   // e.g., "User", "Transaction"
+  entityId    String
+  oldValues   Json?
+  newValues   Json?
+  reason      String?
+  
+  // Relations
+  actorId     String
+  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Enums
+enum UserRole {
+  USER
+  BATCH_ADMIN
+  SUPER_ADMIN
+}
+
+enum PostCategory {
+  MOM         // Minutes of Meeting
+  STORY       // Alumni Story
+  POST        // General Post
+}
+
+enum AttendeeStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+enum TransactionType {
+  COLLECTION  // Money coming in (donations, fees)
+  EXPENSE     // Money going out
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum NotificationType {
+  MENTION
+  COMMENT_REPLY
+  POST_APPROVED
+  EVENT_INVITATION
+  PAYMENT_RECEIVED
+  GENERAL
+}
+
+enum EmploymentStatus {
+  WORKING
+  STUDYING
+  OPEN_TO_WORK
+  ENTREPRENEUR
+  RETIRED
+}
+
+enum CompanyType {
+  GOVERNMENT
+  PRIVATE
+  STARTUP
+  NGO
+  FREELANCE
+  SELF_EMPLOYED
+}
+
+enum AddressType {
+  PERMANENT
+  CURRENT
+}
