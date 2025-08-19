@@ -206,6 +206,10 @@ class CacheKeys {
   static postComments(postId, page = 1, limit = 10) {
     return `post:comments:${postId}:page:${page}:limit:${limit}`;
   }
+
+  static postLikes(postId, page = 1, limit = 20) {
+    return `post:likes:${postId}:page:${page}:limit:${limit}`;
+  }
   
   // Batch-related cache keys
   static batch(year) {

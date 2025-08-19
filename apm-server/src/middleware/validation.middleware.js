@@ -1,4 +1,4 @@
-// src/middleware/validation.middleware.js
+// src/middleware/validation.middleware.js - COMPLETE VERSION
 const Joi = require("joi");
 
 // Validation schemas
@@ -66,6 +66,25 @@ const schemas = {
 		}),
 
 		reason: Joi.string().trim().max(500).optional().allow(""),
+	}),
+
+	// Comment validation schemas
+	createComment: Joi.object({
+		content: Joi.string().trim().min(1).max(1000).required().messages({
+			"string.empty": "Comment content is required",
+			"string.min": "Comment must be at least 1 character long",
+			"string.max": "Comment must be less than 1000 characters",
+		}),
+
+		mentions: Joi.array().items(Joi.string().uuid()).optional().default([]),
+	}),
+
+	updateComment: Joi.object({
+		content: Joi.string().trim().min(1).max(1000).required().messages({
+			"string.empty": "Comment content is required",
+			"string.min": "Comment must be at least 1 character long",
+			"string.max": "Comment must be less than 1000 characters",
+		}),
 	}),
 
 	// User profile update schema
@@ -242,6 +261,8 @@ const validate = (schemaName, property = "body") => {
 const validateCreatePost = validate("createPost");
 const validateUpdatePost = validate("updatePost");
 const validateApprovePost = validate("approvePost");
+const validateCreateComment = validate("createComment");
+const validateUpdateComment = validate("updateComment");
 const validateUpdateProfile = validate("updateProfile");
 const validateUpdateAddress = validate("updateAddress");
 const validateAddEducation = validate("addEducation");
@@ -276,29 +297,64 @@ const validateParams = (schema) => {
 // Common parameter schemas
 const paramSchemas = {
 	postId: Joi.object({
-		postId: Joi.string().uuid().required(),
+		postId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid post ID format",
+			"any.required": "Post ID is required",
+		}),
 	}),
 
 	userId: Joi.object({
-		userId: Joi.string().uuid().required(),
+		userId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid user ID format",
+			"any.required": "User ID is required",
+		}),
+	}),
+
+	commentId: Joi.object({
+		commentId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid comment ID format",
+			"any.required": "Comment ID is required",
+		}),
+	}),
+
+	postAndComment: Joi.object({
+		postId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid post ID format",
+			"any.required": "Post ID is required",
+		}),
+		commentId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid comment ID format",
+			"any.required": "Comment ID is required",
+		}),
 	}),
 
 	educationId: Joi.object({
-		educationId: Joi.string().uuid().required(),
+		educationId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid education ID format",
+			"any.required": "Education ID is required",
+		}),
 	}),
 
 	workId: Joi.object({
-		workId: Joi.string().uuid().required(),
+		workId: Joi.string().uuid().required().messages({
+			"string.uuid": "Invalid work experience ID format",
+			"any.required": "Work experience ID is required",
+		}),
 	}),
 
 	addressType: Joi.object({
-		addressType: Joi.string().valid("permanent", "current").required(),
+		addressType: Joi.string().valid("permanent", "current").required().messages({
+			"any.only": "Address type must be either 'permanent' or 'current'",
+			"any.required": "Address type is required",
+		}),
 	}),
 };
 
 // Parameter validation middlewares
 const validatePostIdParam = validateParams(paramSchemas.postId);
 const validateUserIdParam = validateParams(paramSchemas.userId);
+const validateCommentIdParam = validateParams(paramSchemas.commentId);
+const validatePostAndCommentParams = validateParams(paramSchemas.postAndComment);
 const validateEducationIdParam = validateParams(paramSchemas.educationId);
 const validateWorkIdParam = validateParams(paramSchemas.workId);
 const validateAddressTypeParam = validateParams(paramSchemas.addressType);
@@ -308,12 +364,16 @@ module.exports = {
 	validateCreatePost,
 	validateUpdatePost,
 	validateApprovePost,
+	validateCreateComment,
+	validateUpdateComment,
 	validateUpdateProfile,
 	validateUpdateAddress,
 	validateAddEducation,
 	validateAddWorkExperience,
 	validatePostIdParam,
 	validateUserIdParam,
+	validateCommentIdParam,
+	validatePostAndCommentParams,
 	validateEducationIdParam,
 	validateWorkIdParam,
 	validateAddressTypeParam,

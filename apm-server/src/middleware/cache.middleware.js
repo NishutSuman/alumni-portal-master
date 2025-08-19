@@ -1,4 +1,4 @@
-// src/middleware/cache.middleware.js
+// src/middleware/cache.middleware.js - COMPLETE VERSION
 const { CacheService, CacheKeys } = require('../config/redis');
 
 // Generic cache middleware
@@ -16,11 +16,13 @@ const cache = (keyGenerator, expireInSeconds = 3600) => {
       if (cachedData) {
         // Cache hit - return cached data
         console.log(`🎯 Cache hit for: ${cacheKey}`);
+        req.cacheHit = true;
         return res.json(cachedData);
       }
       
       // Cache miss - continue to controller
       console.log(`❌ Cache miss for: ${cacheKey}`);
+      req.cacheHit = false;
       
       // Store original json method
       const originalJson = res.json;
@@ -44,6 +46,7 @@ const cache = (keyGenerator, expireInSeconds = 3600) => {
     } catch (error) {
       console.error('Cache middleware error:', error);
       // Don't let cache errors break the request
+      req.cacheHit = false;
       next();
     }
   };
@@ -84,6 +87,18 @@ const cachePost = cache(
   30 * 60
 );
 
+// Cache post comments (20 minutes)
+const cachePostComments = cache(
+  (req) => CacheKeys.postComments(req.params.postId, req.query.page, req.query.limit),
+  20 * 60
+);
+
+// Cache post likes (15 minutes)
+const cachePostLikes = cache(
+  (req) => `post:likes:${req.params.postId}:page:${req.query.page || 1}:limit:${req.query.limit || 20}`,
+  15 * 60
+);
+
 // Cache alumni directory (20 minutes)
 const cacheAlumniDirectory = cache(
   (req) => {
@@ -119,11 +134,21 @@ class CacheInvalidator {
     console.log(`🗑️ Invalidated user cache: ${userId}`);
   }
   
-  // Invalidate post-related caches
+  // Invalidate post-related caches (including likes and comments)
   static async invalidatePost(postId) {
     await CacheService.del(CacheKeys.post(postId));
     await CacheService.delPattern('posts:*'); // Invalidate all post lists
+    await CacheService.delPattern(`post:comments:${postId}*`); // Invalidate post comments
+    await CacheService.delPattern(`post:likes:${postId}*`); // Invalidate post likes
     console.log(`🗑️ Invalidated post cache: ${postId}`);
+  }
+  
+  // Invalidate specific post interactions (likes, comments, replies)
+  static async invalidatePostInteractions(postId) {
+    await CacheService.delPattern(`post:comments:${postId}*`); // Invalidate post comments
+    await CacheService.delPattern(`post:likes:${postId}*`); // Invalidate post likes
+    await CacheService.del(CacheKeys.post(postId)); // Invalidate post details (to update counts)
+    console.log(`🗑️ Invalidated post interactions cache: ${postId}`);
   }
   
   // Invalidate batch-related caches
@@ -178,11 +203,22 @@ const invalidateUserCache = invalidateCache(async (req) => {
   await CacheInvalidator.invalidateAlumniDirectory(); // User might appear in directory
 });
 
-// Invalidate post cache after post operations
+// Invalidate post cache after post operations (create, update, delete, approve)
 const invalidatePostCache = invalidateCache(async (req) => {
   const postId = req.params.postId;
   if (postId) {
     await CacheInvalidator.invalidatePost(postId);
+  }
+  
+  // Also invalidate general posts cache for new posts
+  await CacheService.delPattern('posts:*');
+});
+
+// Invalidate post interaction cache (likes, comments, replies)
+const invalidatePostInteractionCache = invalidateCache(async (req) => {
+  const postId = req.params.postId;
+  if (postId) {
+    await CacheInvalidator.invalidatePostInteractions(postId);
   }
 });
 
@@ -201,10 +237,13 @@ module.exports = {
   cacheBatchMembers,
   cachePosts,
   cachePost,
+  cachePostComments,
+  cachePostLikes,
   cacheAlumniDirectory,
   cacheAlumniStats,
   CacheInvalidator,
   invalidateUserCache,
   invalidatePostCache,
+  invalidatePostInteractionCache,
   invalidateBatchCache,
 };
