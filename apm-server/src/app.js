@@ -71,7 +71,7 @@ app.use('/api/users', require('./routes/users.route'));
 app.use('/api/batches', require('./routes/batches.route'));
 app.use('/api/alumni', require('./routes/alumni.route'));
 app.use('/api/posts', require('./routes/posts.route'));
-// app.use('/api/events', require('./routes/events.route'));
+app.use('/api/events', require('./routes/events.route'));
 // app.use('/api/transactions', require('./routes/transactions.route'));
 // app.use('/api/notifications', require('./routes/notifications.route'));
 

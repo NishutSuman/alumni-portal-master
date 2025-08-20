@@ -170,6 +170,23 @@ class CacheInvalidator {
     await CacheService.delPattern('*');
     console.log('🗑️ Invalidated ALL caches');
   }
+
+    // Invalidate event-related caches
+  static async invalidateEvents() {
+    await CacheService.delPattern('event:*');
+    await CacheService.delPattern('events:*');
+    console.log('🗑️ Invalidated event caches');
+  }
+  
+  // Invalidate specific event
+  static async invalidateEvent(eventId, slug = null) {
+    await CacheService.del(`event:${eventId}`);
+    if (slug) {
+      await CacheService.del(`event:slug:${slug}`);
+    }
+    await CacheService.delPattern(`event:${eventId}:*`);
+    console.log(`🗑️ Invalidated event cache: ${eventId}`);
+  }
 }
 
 // Middleware to invalidate cache after mutations
@@ -229,6 +246,8 @@ const invalidateBatchCache = invalidateCache(async (req) => {
     await CacheInvalidator.invalidateBatch(year);
   }
 });
+  
+
 
 module.exports = {
   cache,

@@ -57,8 +57,6 @@ model User {
   posts             Post[]
   comments          Comment[]
   likes             Like[]
-  events            Event[] @relation("EventOrganizer")
-  eventAttendees    EventAttendee[]
   transactions      Transaction[]
   notifications     Notification[]
   activityLogs      ActivityLog[]
@@ -71,6 +69,11 @@ model User {
   batch_            Batch   @relation("BatchMembers", fields: [batch], references: [year])
   addresses         UserAddress[]
   
+  // Event Relations
+  eventRegistrations    EventRegistration[]
+  eventsCreated         Event[] @relation("EventCreator") 
+  feedbackResponses     EventFeedbackResponse[]
+
   // Approval relations (reverse side)
   approvedPosts     Post[]  @relation("PostApprover")
   approvedTransactions Transaction[] @relation("TransactionApprover")
@@ -245,49 +248,6 @@ model Like {
   @@map("likes")
 }
 
-model Event {
-  id            String    @id @default(cuid())
-  title         String
-  description   String
-  venue         String?
-  eventDate     DateTime
-  endDate       DateTime?
-  images        String[]
-  maxAttendees  Int?
-  isArchived    Boolean   @default(false)
-  
-  // Relations
-  organizerId   String
-  organizer     User      @relation("EventOrganizer", fields: [organizerId], references: [id])
-  
-  attendees     EventAttendee[]
-  linkedPosts   Post[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  @@index([organizerId])
-  @@index([eventDate])
-  @@index([isArchived])
-  @@map("events")
-}
-
-model EventAttendee {
-  id        String           @id @default(cuid())
-  status    AttendeeStatus   @default(PENDING)
-  
-  // Relations
-  eventId   String
-  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User             @relation(fields: [userId], references: [id])
-  
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  
-  @@unique([eventId, userId])
-  @@map("event_attendees")
-}
 
 model Album {
   id          String   @id @default(cuid())
@@ -413,6 +373,371 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// Event Schemas Below
+
+model EventCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique // "MEETINGS", "SOCIAL", "CULTURAL", "WORKSHOP"
+  description String?
+  isActive    Boolean  @default(true)
+  
+  // Relations
+  events      Event[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([name])
+  @@index([isActive])
+  @@map("event_categories")
+}
+
+model Event {
+  id                String      @id @default(cuid())
+  title             String
+  description       String      @db.Text
+  slug              String?     @unique // For SEO-friendly URLs
+  
+  // Category and dates
+  categoryId        String
+  category          EventCategory @relation(fields: [categoryId], references: [id])
+  eventDate         DateTime
+  startTime         String?     // Store as "HH:MM" format
+  endTime           String?     // Store as "HH:MM" format
+  registrationStartDate DateTime?
+  registrationEndDate   DateTime?
+  
+  // Location and mode
+  venue             String?
+  meetingLink       String?
+  maxCapacity       Int?
+  eventMode         EventMode   @default(PHYSICAL)
+  
+  // Status
+  status            EventStatus @default(DRAFT)
+  
+  // Feature flags
+  hasRegistration   Boolean     @default(true)
+  hasExternalLink   Boolean     @default(false)
+  externalRegistrationLink String?
+  hasCustomForm     Boolean     @default(false)
+  hasMeals          Boolean     @default(false)
+  hasGuests         Boolean     @default(false)
+  hasDonations      Boolean     @default(false)
+  hasMerchandise    Boolean     @default(false)
+  hasPrizes         Boolean     @default(false)
+  hasSponsors       Boolean     @default(false)
+  hasOrganizers     Boolean     @default(false)
+  
+  // Modification settings
+  allowFormModification Boolean  @default(true)
+  formModificationDeadlineHours Int @default(24)
+  
+  // Fee structure
+  registrationFee   Decimal     @default(0) @db.Decimal(10, 2)
+  guestFee          Decimal     @default(0) @db.Decimal(10, 2)
+  
+  // Images and attachments
+  heroImage         String?
+  images            String[]    // Array of image URLs
+  
+  // Relations
+  createdBy         String
+  creator           User        @relation("EventCreator", fields: [createdBy], references: [id])
+  
+  sections          EventSection[]
+  form              EventForm?
+  merchandise       EventMerchandise[]
+  registrations     EventRegistration[]
+  feedbackForm      EventFeedbackForm?
+  linkedPosts       Post[]      // Posts can be linked to events
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  @@index([categoryId])
+  @@index([eventDate])
+  @@index([status])
+  @@index([createdBy])
+  @@index([hasRegistration])
+  @@map("events")
+}
+
+model EventSection {
+  id          String            @id @default(cuid())
+  eventId     String
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  sectionType EventSectionType
+  title       String
+  content     String            @db.Text
+  orderIndex  Int               @default(0)
+  isVisible   Boolean           @default(true)
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  @@index([eventId, orderIndex])
+  @@index([sectionType])
+  @@map("event_sections")
+}
+
+model EventForm {
+  id          String            @id @default(cuid())
+  eventId     String            @unique
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  title       String            @default("Registration Form")
+  description String?           @db.Text
+  isActive    Boolean           @default(true)
+  
+  // Relations
+  fields      EventFormField[]
+  // responses   EventFormResponse[]
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  @@map("event_forms")
+}
+
+model EventFormField {
+  id          String            @id @default(cuid())
+  formId      String
+  form        EventForm         @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  fieldName   String            // Unique within form
+  fieldLabel  String
+  fieldType   EventFormFieldType
+  options     Json?             // For SELECT, RADIO, CHECKBOX
+  isRequired  Boolean           @default(false)
+  orderIndex  Int               @default(0)
+  validation  Json?             // Custom validation rules
+  
+  // Relations
+  responses   EventFormResponse[]
+  guestResponses EventGuestFormResponse[]
+
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  @@unique([formId, fieldName])
+  @@index([formId, orderIndex])
+  @@map("event_form_fields")
+}
+
+model EventMerchandise {
+  id              String                    @id @default(cuid())
+  eventId         String
+  event           Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  name            String
+  description     String?                   @db.Text
+  price           Decimal                   @db.Decimal(10, 2)
+  images          String[]                  // Array of image URLs
+  availableSizes  String[]                  // ["S", "M", "L", "XL", "XXL"]
+  stockQuantity   Int?
+  isActive        Boolean                   @default(true)
+  orderIndex      Int                       @default(0)
+  
+  // Relations
+  orders          EventMerchandiseOrder[]
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  
+  @@index([eventId])
+  @@index([isActive])
+  @@map("event_merchandise")
+}
+
+model EventRegistration {
+  id                      String                    @id @default(cuid())
+  eventId                 String
+  event                   Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId                  String
+  user                    User                      @relation(fields: [userId], references: [id])
+  
+  registrationDate        DateTime                  @default(now())
+  status                  EventRegistrationStatus   @default(CONFIRMED)
+  
+  // Payment information
+  totalAmount             Decimal                   @default(0) @db.Decimal(10, 2)
+  registrationFeePaid     Decimal                   @default(0) @db.Decimal(10, 2)
+  guestFeesPaid           Decimal                   @default(0) @db.Decimal(10, 2)
+  merchandiseTotal        Decimal                   @default(0) @db.Decimal(10, 2)
+  donationAmount          Decimal                   @default(0) @db.Decimal(10, 2)
+  cancelledTodonation     Decimal                   @default(0) @db.Decimal(10, 2)
+  paymentStatus           PaymentStatus             @default(PENDING)
+  paymentReference        String?
+  
+  // Meal preferences
+  mealPreference          MealPreference?
+  
+  // Guest information
+  totalGuests             Int                       @default(0)
+  activeGuests            Int                       @default(0)
+  
+  // Modification tracking
+  lastModifiedAt          DateTime?
+  modificationCount       Int                       @default(0)
+  
+  // Relations
+  guests                  EventGuest[]
+  formResponses           EventFormResponse[]
+  merchandiseOrders       EventMerchandiseOrder[]
+  
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@map("event_registrations")
+}
+
+model EventGuest {
+  id              String                    @id @default(cuid())
+  registrationId  String
+  registration    EventRegistration         @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  
+  name            String
+  email           String?
+  phone           String?
+  mealPreference  MealPreference?
+  feesPaid        Decimal                   @default(0) @db.Decimal(10, 2)
+  status          GuestStatus               @default(ACTIVE)
+  
+  // Relations
+  formResponses   EventGuestFormResponse[]
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  
+  @@index([registrationId])
+  @@index([status])
+  @@map("event_guests")
+}
+
+model EventFormResponse {
+  id              String            @id @default(cuid())
+  registrationId  String
+  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  fieldId         String
+  field           EventFormField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  
+  response        String            @db.Text
+  version         Int               @default(1) // For modification tracking
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@unique([registrationId, fieldId])
+  @@index([registrationId])
+  @@map("event_form_responses")
+}
+
+model EventMerchandiseOrder {
+  id              String                @id @default(cuid())
+  registrationId  String
+  registration    EventRegistration     @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  merchandiseId   String
+  merchandise     EventMerchandise      @relation(fields: [merchandiseId], references: [id], onDelete: Cascade)
+  
+  quantity        Int
+  selectedSize    String?
+  unitPrice       Decimal               @db.Decimal(10, 2)
+  totalPrice      Decimal               @db.Decimal(10, 2)
+  
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  @@index([registrationId])
+  @@index([merchandiseId])
+  @@map("event_merchandise_orders")
+}
+
+model EventGuestFormResponse {
+  id          String          @id @default(cuid())
+  guestId     String
+  guest       EventGuest      @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  fieldId     String
+  field       EventFormField  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  
+  response    String          @db.Text
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  @@unique([guestId, fieldId])
+  @@map("event_guest_form_responses")
+}
+
+model EventFeedbackForm {
+  id          String                    @id @default(cuid())
+  eventId     String                    @unique
+  event       Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  title       String                    @default("Event Feedback")
+  description String?                   @db.Text
+  isActive    Boolean                   @default(true)
+  
+  // Relations
+  fields      EventFeedbackField[]
+  responses   EventFeedbackResponse[]
+  
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  
+  @@map("event_feedback_forms")
+}
+
+model EventFeedbackField {
+  id                String                    @id @default(cuid())
+  feedbackFormId    String
+  feedbackForm      EventFeedbackForm         @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  
+  fieldName         String
+  fieldLabel        String
+  fieldType         EventFormFieldType
+  options           Json?
+  isRequired        Boolean                   @default(false)
+  orderIndex        Int                       @default(0)
+  
+  // Relations
+  responses         EventFeedbackResponse[]
+  
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  
+  @@unique([feedbackFormId, fieldName])
+  @@index([feedbackFormId, orderIndex])
+  @@map("event_feedback_fields")
+}
+
+model EventFeedbackResponse {
+  id                String                @id @default(cuid())
+  feedbackFormId    String
+  feedbackForm      EventFeedbackForm     @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User                  @relation(fields: [userId], references: [id])
+  fieldId           String
+  field             EventFeedbackField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)  // Make sure this line exists
+  
+  response          String                @db.Text
+  
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  
+  @@unique([feedbackFormId, userId, fieldId])
+  @@map("event_feedback_responses")
+}
+
+
+
 // Enums
 enum UserRole {
   USER
@@ -475,4 +800,65 @@ enum CompanyType {
 enum AddressType {
   PERMANENT
   CURRENT
+}
+
+enum EventMode {
+  PHYSICAL
+  VIRTUAL
+  HYBRID
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum EventSectionType {
+  SCHEDULE
+  ORGANIZERS
+  LOCATION
+  PRIZES
+  SPONSORS
+  DONATIONS
+  MERCHANDISE
+  CUSTOM
+}
+
+enum EventFormFieldType {
+  TEXT
+  EMAIL
+  PHONE
+  TEXTAREA
+  SELECT
+  RADIO
+  CHECKBOX
+  RATING
+}
+
+enum EventRegistrationStatus {
+  CONFIRMED
+  CANCELLED
+  WAITLIST
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum MealPreference {
+  VEG
+  NON_VEG
+}
+
+enum GuestStatus {
+  ACTIVE
+  CANCELLED
 }
