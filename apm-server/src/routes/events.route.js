@@ -9,8 +9,40 @@ const { authenticateToken, requireRole, optionalAuth } = require("../middleware/
 const { asyncHandler } = require('../utils/response');
 const { handleUploadError } = require('../middleware/upload.middleware');
 
-// Event validation middleware
+// ==========================================
+// CACHING MIDDLEWARE IMPORTS (MISSING!)
+// ==========================================
 const {
+  EventCacheKeys,
+  cacheEvent,
+  cacheEventCategories,
+  cacheEventCategory,
+  cacheEventsList,
+  cacheEventDetails,
+  cacheEventSections,
+  cacheEventSection,
+  cacheEventStats,
+  cacheEventForm,
+  cacheEventFormFields,
+  cacheRegistrationStats,
+  cacheAdminRegistrationsList,
+  cacheGuestStats,
+  cacheGuestSummary,
+  cacheRegistrationGuestSummary,
+  cacheAdminGuestsList,
+  cacheCombinedEventStats,
+  EventCacheInvalidator,
+  autoInvalidateFormCaches,
+  autoInvalidateRegistrationCaches,
+  autoInvalidateGuestCaches,
+} = require('../middleware/event.cache.middleware');
+
+// ==========================================
+// VALIDATION MIDDLEWARE IMPORTS (COMPLETE)
+// ==========================================
+const {
+  validateEvent,
+  validateEventDates,
   validateCreateEventCategory,
   validateUpdateEventCategory,
   validateCreateEvent,
@@ -22,16 +54,43 @@ const {
   validateEventIdParam,
   validateCategoryIdParam,
   validateEventAndSectionParams,
-  validateEventDates,
+  
+  // Phase 2: User registration validation
+  validateUserRegistration,
+  validateUpdateUserRegistration,
+  validateRegistrationBusinessRules,
+  
+  // Phase 2: Event form validation
+  validateCreateEventForm,
+  validateUpdateEventForm,
+  validateCreateEventFormField,
+  validateUpdateEventFormField,
+  validateReorderEventFormFields,
+  validateFormFieldOptions,
+  
+  // Phase 3: Guest validation
+  validateAddGuest,
+  validateUpdateGuest,
+  validateGuestFormResponse,
+  validateUpdateGuestFormResponse,
+  validateGuestParams,
+  validateGuestBusinessRules,
+  validateGuestFormBusinessRules,
 } = require('../middleware/event.validation.middleware');
 
-// Controllers
+// ==========================================
+// CONTROLLER IMPORTS (COMPLETE)
+// ==========================================
 const eventCategoryController = require('../controllers/eventControllers/eventCategory.controller');
 const eventController = require('../controllers/eventControllers/event.controller');
 const eventSectionController = require('../controllers/eventControllers/eventSection.controller');
 const eventRegistrationController = require('../controllers/eventControllers/eventRegistration.controller');
+const eventFormController = require('../controllers/eventControllers/eventForm.controller');
+const eventGuestController = require('../controllers/eventControllers/eventGuest.controller');
 
-// Configure multer for event uploads
+// ==========================================
+// MULTER CONFIGURATION (EXISTING)
+// ==========================================
 const eventUploadStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = './public/uploads/events/';
@@ -51,7 +110,6 @@ const eventUploadStorage = multer.diskStorage({
 });
 
 const eventFileFilter = (req, file, cb) => {
-  // Allowed file types for events
   const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   const documentTypes = [
     'application/pdf', 
@@ -64,7 +122,7 @@ const eventFileFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Allowed: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX'), false);
+    cb(new Error('Invalid file type. Only images and documents are allowed.'), false);
   }
 };
 
@@ -72,28 +130,40 @@ const uploadEventFiles = multer({
   storage: eventUploadStorage,
   fileFilter: eventFileFilter,
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15MB per file
-    files: 10 // Maximum 10 files total
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 10 // Maximum 10 files
   }
-}).fields([
-  { name: 'heroImage', maxCount: 1 },
-  { name: 'images', maxCount: 9 } // 9 additional images + 1 hero = 10 total
-]);
+});
 
 // ==========================================
-// EVENT CATEGORY ROUTES
+// EVENT CATEGORY ROUTES (PHASE 1)
 // ==========================================
 
-// Public routes
-router.get('/categories', optionalAuth, asyncHandler(eventCategoryController.getAllCategories));
-router.get('/categories/:categoryId', optionalAuth, validateCategoryIdParam, asyncHandler(eventCategoryController.getCategoryById));
+// Public event category routes (CACHED!)
+router.get('/categories', 
+  cacheEventCategories,  // 🆕 CACHE: 2 hours
+  asyncHandler(eventCategoryController.getAllCategories)
+);
 
-// Super Admin only routes
+router.get('/categories/:categoryId', 
+  validateCategoryIdParam,
+  cacheEventCategory,  // 🆕 CACHE: 1 hour with events
+  asyncHandler(eventCategoryController.getCategoryById)
+);
+
+// Super Admin only routes (category management) - with cache invalidation
 router.post('/categories', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateCreateEventCategory,
-  asyncHandler(eventCategoryController.createCategory)
+  // Auto-invalidate category caches after successful creation
+  asyncHandler(async (req, res, next) => {
+    const result = await eventCategoryController.createCategory(req, res);
+    if (res.statusCode === 201) {
+      EventCacheInvalidator.invalidateAdminDashboardCaches();
+    }
+    return result;
+  })
 );
 
 router.put('/categories/:categoryId', 
@@ -101,44 +171,89 @@ router.put('/categories/:categoryId',
   requireRole('SUPER_ADMIN'),
   validateCategoryIdParam,
   validateUpdateEventCategory,
-  asyncHandler(eventCategoryController.updateCategory)
+  // Auto-invalidate category caches after successful update
+  asyncHandler(async (req, res, next) => {
+    const result = await eventCategoryController.updateCategory(req, res);
+    if (res.statusCode === 200) {
+      EventCacheInvalidator.invalidateAdminDashboardCaches();
+    }
+    return result;
+  })
 );
 
 router.delete('/categories/:categoryId', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateCategoryIdParam,
-  asyncHandler(eventCategoryController.deleteCategory)
+  // Auto-invalidate category caches after successful deletion
+  asyncHandler(async (req, res, next) => {
+    const result = await eventCategoryController.deleteCategory(req, res);
+    if (res.statusCode === 200) {
+      EventCacheInvalidator.invalidateAdminDashboardCaches();
+    }
+    return result;
+  })
 );
 
 // ==========================================
-// EVENT ROUTES
+// EVENT MANAGEMENT ROUTES (PHASE 1)
 // ==========================================
 
-// Public routes (events discovery)
-router.get('/', optionalAuth, asyncHandler(eventController.getAllEvents));
-router.get('/:eventId', optionalAuth, validateEventIdParam, asyncHandler(eventController.getEventById));
+// Public event routes (CACHED!)
+router.get('/', 
+  optionalAuth,
+  cacheEventsList,  // 🆕 CACHE: 30 minutes with filters
+  asyncHandler(eventController.getAllEvents)
+);
 
-// Super Admin only routes (event management)
+router.get('/:eventId', 
+  optionalAuth,
+  validateEventIdParam,
+  cacheEventDetails,  // 🆕 CACHE: 45 minutes
+  asyncHandler(eventController.getEventById)
+);
+
+// Super Admin only routes (event management) - with cache invalidation
 router.post('/', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
+  uploadEventFiles.fields([
+    { name: 'heroImage', maxCount: 1 },
+    { name: 'galleryImages', maxCount: 10 }
+  ]),
   validateCreateEvent,
   validateEventDates,
-  uploadEventFiles,
   handleUploadError,
-  asyncHandler(eventController.createEvent)
+  // Auto-invalidate event caches after successful creation
+  asyncHandler(async (req, res, next) => {
+    const result = await eventController.createEvent(req, res);
+    if (res.statusCode === 201) {
+      EventCacheInvalidator.invalidateAdminDashboardCaches();
+    }
+    return result;
+  })
 );
 
 router.put('/:eventId', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
+  uploadEventFiles.fields([
+    { name: 'heroImage', maxCount: 1 },
+    { name: 'galleryImages', maxCount: 10 }
+  ]),
   validateUpdateEvent,
   validateEventDates,
-  uploadEventFiles,
   handleUploadError,
-  asyncHandler(eventController.updateEvent)
+  // Auto-invalidate all event caches after successful update
+  asyncHandler(async (req, res, next) => {
+    const result = await eventController.updateEvent(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
 router.patch('/:eventId/status', 
@@ -146,40 +261,65 @@ router.patch('/:eventId/status',
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
   validateUpdateEventStatus,
-  asyncHandler(eventController.updateEventStatus)
+  // Auto-invalidate event caches after status change
+  asyncHandler(async (req, res, next) => {
+    const result = await eventController.updateEventStatus(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
 router.delete('/:eventId', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
-  asyncHandler(eventController.deleteEvent)
+  // Auto-invalidate all caches after successful deletion
+  asyncHandler(async (req, res, next) => {
+    const result = await eventController.deleteEvent(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+      EventCacheInvalidator.invalidateAdminDashboardCaches();
+    }
+    return result;
+  })
 );
 
 // ==========================================
-// EVENT SECTION ROUTES
+// EVENT SECTIONS MANAGEMENT (PHASE 1)
 // ==========================================
 
-// Public routes (view sections)
+// Public section routes (CACHED!)
 router.get('/:eventId/sections', 
-  optionalAuth, 
-  validateEventIdParam, 
+  validateEventIdParam,
+  cacheEventSections,  // 🆕 CACHE: 1 hour
   asyncHandler(eventSectionController.getEventSections)
 );
 
 router.get('/:eventId/sections/:sectionId', 
-  optionalAuth, 
-  validateEventAndSectionParams, 
-  asyncHandler(eventSectionController.getSectionById)
+  validateEventAndSectionParams,
+  cacheEventSection,  // 🆕 CACHE: 1 hour
+  asyncHandler(eventSectionController.getEventSectionById)
 );
 
-// Super Admin only routes (section management)
+// Super Admin only routes (section management) - with cache invalidation
 router.post('/:eventId/sections', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
   validateCreateEventSection,
-  asyncHandler(eventSectionController.addEventSection)
+  // Auto-invalidate section caches after successful creation
+  asyncHandler(async (req, res, next) => {
+    const result = await eventSectionController.addEventSection(req, res);
+    if (res.statusCode === 201) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
 router.put('/:eventId/sections/:sectionId', 
@@ -187,14 +327,30 @@ router.put('/:eventId/sections/:sectionId',
   requireRole('SUPER_ADMIN'),
   validateEventAndSectionParams,
   validateUpdateEventSection,
-  asyncHandler(eventSectionController.updateEventSection)
+  // Auto-invalidate section caches after successful update
+  asyncHandler(async (req, res, next) => {
+    const result = await eventSectionController.updateEventSection(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
 router.delete('/:eventId/sections/:sectionId', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventAndSectionParams,
-  asyncHandler(eventSectionController.deleteEventSection)
+  // Auto-invalidate section caches after successful deletion
+  asyncHandler(async (req, res, next) => {
+    const result = await eventSectionController.deleteEventSection(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
 router.post('/:eventId/sections/reorder', 
@@ -202,19 +358,27 @@ router.post('/:eventId/sections/reorder',
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
   validateReorderEventSections,
-  asyncHandler(eventSectionController.reorderEventSections)
+  // Auto-invalidate section caches after successful reorder
+  asyncHandler(async (req, res, next) => {
+    const result = await eventSectionController.reorderEventSections(req, res);
+    if (res.statusCode === 200) {
+      const eventId = req.params.eventId;
+      EventCacheInvalidator.invalidateAllEventCaches(eventId);
+    }
+    return result;
+  })
 );
 
-
 // ==========================================
-// EVENT REGISTRATION MANAGEMENT (Admin)
+// ADMIN REGISTRATION MANAGEMENT (PHASE 1)
 // ==========================================
 
-// Super Admin only routes (registration management)
+// Super Admin only routes (registration management) - CACHED!
 router.get('/:eventId/registrations', 
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
+  cacheAdminRegistrationsList,  // 🆕 CACHE: 10 minutes
   asyncHandler(eventRegistrationController.getEventRegistrations)
 );
 
@@ -222,7 +386,203 @@ router.get('/:eventId/registrations/stats',
   authenticateToken,
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
+  cacheRegistrationStats,  // 🆕 CACHE: 15 minutes
   asyncHandler(eventRegistrationController.getRegistrationStats)
+);
+
+// ==========================================
+// USER REGISTRATION SYSTEM (PHASE 2)
+// ==========================================
+
+// User registration routes (authenticated users) - with cache invalidation
+router.post('/:eventId/register', 
+  authenticateToken,
+  validateEventIdParam,
+  validateUserRegistration,
+  validateRegistrationBusinessRules,
+  autoInvalidateRegistrationCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventRegistrationController.registerForEvent)
+);
+
+router.get('/:eventId/my-registration', 
+  authenticateToken,
+  validateEventIdParam,
+  // NOT cached - user-specific data
+  asyncHandler(eventRegistrationController.getMyRegistration)
+);
+
+router.put('/:eventId/my-registration', 
+  authenticateToken,
+  validateEventIdParam,
+  validateUpdateUserRegistration,
+  autoInvalidateRegistrationCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventRegistrationController.updateMyRegistration)
+);
+
+router.delete('/:eventId/my-registration', 
+  authenticateToken,
+  validateEventIdParam,
+  autoInvalidateRegistrationCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventRegistrationController.cancelMyRegistration)
+);
+
+// ==========================================
+// EVENT FORM MANAGEMENT (PHASE 2)
+// ==========================================
+
+// Public route to get event registration form - CACHED!
+router.get('/:eventId/form', 
+  validateEventIdParam,
+  cacheEventForm,  // 🆕 CACHE: 1 hour
+  asyncHandler(eventFormController.getEventForm)
+);
+
+// Super Admin only routes (form management) - with cache invalidation
+router.post('/:eventId/form', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateCreateEventForm,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.createOrUpdateEventForm)
+);
+
+router.put('/:eventId/form', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateUpdateEventForm,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.createOrUpdateEventForm)
+);
+
+router.delete('/:eventId/form', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.deleteEventForm)
+);
+
+// ==========================================
+// FORM FIELD MANAGEMENT (PHASE 2)
+// ==========================================
+
+// Super Admin only routes (form field management) - with cache invalidation
+router.post('/:eventId/form/fields', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateCreateEventFormField,
+  validateFormFieldOptions,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.addFormField)
+);
+
+router.put('/:eventId/form/fields/:fieldId', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateUpdateEventFormField,
+  validateFormFieldOptions,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.updateFormField)
+);
+
+router.delete('/:eventId/form/fields/:fieldId', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.deleteFormField)
+);
+
+router.post('/:eventId/form/fields/reorder', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateReorderEventFormFields,
+  autoInvalidateFormCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventFormController.reorderFormFields)
+);
+
+// ==========================================
+// GUEST MANAGEMENT SYSTEM (PHASE 3)
+// ==========================================
+
+// User guest management routes (authenticated users) - with cache invalidation
+router.post('/:eventId/guests', 
+  authenticateToken,
+  validateEventIdParam,
+  validateAddGuest,
+  validateGuestBusinessRules,
+  autoInvalidateGuestCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventGuestController.addGuest)
+);
+
+router.get('/:eventId/guests', 
+  authenticateToken,
+  validateEventIdParam,
+  // NOT cached - user-specific data
+  asyncHandler(eventGuestController.getMyGuests)
+);
+
+router.put('/:eventId/guests/:guestId', 
+  authenticateToken,
+  validateGuestParams,
+  validateUpdateGuest,
+  autoInvalidateGuestCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventGuestController.updateGuest)
+);
+
+router.delete('/:eventId/guests/:guestId', 
+  authenticateToken,
+  validateGuestParams,
+  autoInvalidateGuestCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventGuestController.cancelGuest)
+);
+
+// ==========================================
+// GUEST FORM MANAGEMENT (PHASE 3)
+// ==========================================
+
+// Guest form routes (authenticated users) - with cache invalidation
+router.get('/:eventId/guests/:guestId/form', 
+  authenticateToken,
+  validateGuestParams,
+  // NOT cached - user-specific data
+  asyncHandler(eventGuestController.getGuestForm)
+);
+
+router.post('/:eventId/guests/:guestId/form', 
+  authenticateToken,
+  validateGuestParams,
+  validateGuestFormResponse,
+  validateGuestFormBusinessRules,
+  autoInvalidateGuestCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventGuestController.submitGuestForm)
+);
+
+router.put('/:eventId/guests/:guestId/form', 
+  authenticateToken,
+  validateGuestParams,
+  validateUpdateGuestFormResponse,
+  validateGuestFormBusinessRules,
+  autoInvalidateGuestCaches,  // 🆕 AUTO INVALIDATE AFTER SUCCESS
+  asyncHandler(eventGuestController.submitGuestForm)
+);
+
+// ==========================================
+// ADMIN GUEST MANAGEMENT (PHASE 3)
+// ==========================================
+
+// Super Admin only routes (guest management) - CACHED!
+router.get('/:eventId/all-guests', 
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  cacheAdminGuestsList,  // 🆕 CACHE: 10 minutes
+  asyncHandler(eventGuestController.getAllEventGuests)
 );
 
 
