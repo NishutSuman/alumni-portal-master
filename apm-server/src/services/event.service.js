@@ -1392,6 +1392,446 @@ class EventService {
 					: `Additional payment of ₹${feeChange} required for ${guestCount} guest(s)`,
 		};
 	}
+
+	/**
+	 * Validate merchandise stock availability
+	 */
+	static async validateMerchandiseStock(
+		merchandiseId,
+		requestedQuantity,
+		selectedSize = null
+	) {
+		try {
+			const merchandise = await prisma.eventMerchandise.findUnique({
+				where: { id: merchandiseId },
+				select: {
+					id: true,
+					name: true,
+					stockQuantity: true,
+					isActive: true,
+					availableSizes: true,
+				},
+			});
+
+			if (!merchandise) {
+				return {
+					valid: false,
+					reason: "Merchandise item not found",
+				};
+			}
+
+			if (!merchandise.isActive) {
+				return {
+					valid: false,
+					reason: "Merchandise item is inactive",
+				};
+			}
+
+			// Validate size if item has sizes
+			if (merchandise.availableSizes.length > 0 && !selectedSize) {
+				return {
+					valid: false,
+					reason: "Size selection is required for this item",
+				};
+			}
+
+			if (selectedSize && !merchandise.availableSizes.includes(selectedSize)) {
+				return {
+					valid: false,
+					reason: "Selected size is not available",
+				};
+			}
+
+			// Check stock availability
+			if (
+				merchandise.stockQuantity !== null &&
+				merchandise.stockQuantity < requestedQuantity
+			) {
+				return {
+					valid: false,
+					reason: `Insufficient stock. Only ${merchandise.stockQuantity} items available`,
+					availableStock: merchandise.stockQuantity,
+				};
+			}
+
+			return {
+				valid: true,
+				merchandise,
+				availableStock: merchandise.stockQuantity,
+			};
+		} catch (error) {
+			console.error("Validate merchandise stock error:", error);
+			return {
+				valid: false,
+				reason: "Stock validation failed",
+			};
+		}
+	}
+
+	/**
+	 * Calculate cart totals and summary
+	 */
+	static async calculateCartSummary(registrationId) {
+		try {
+			const cartItems = await prisma.eventMerchandiseOrder.findMany({
+				where: { registrationId },
+				include: {
+					merchandise: {
+						select: {
+							name: true,
+							stockQuantity: true,
+							isActive: true,
+						},
+					},
+				},
+			});
+
+			const summary = {
+				itemCount: cartItems.length,
+				totalQuantity: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+				totalAmount: cartItems.reduce(
+					(sum, item) => sum + Number(item.totalPrice),
+					0
+				),
+				items: cartItems.map((item) => ({
+					id: item.id,
+					merchandiseId: item.merchandiseId,
+					name: item.merchandise.name,
+					quantity: item.quantity,
+					selectedSize: item.selectedSize,
+					unitPrice: Number(item.unitPrice),
+					totalPrice: Number(item.totalPrice),
+					stockStatus:
+						item.merchandise.stockQuantity !== null
+							? item.merchandise.stockQuantity >= item.quantity
+								? "AVAILABLE"
+								: "INSUFFICIENT"
+							: "UNLIMITED",
+					isActive: item.merchandise.isActive,
+				})),
+				stockIssues: cartItems.filter(
+					(item) =>
+						!item.merchandise.isActive ||
+						(item.merchandise.stockQuantity !== null &&
+							item.merchandise.stockQuantity < item.quantity)
+				).length,
+			};
+
+			return {
+				success: true,
+				summary,
+			};
+		} catch (error) {
+			console.error("Calculate cart summary error:", error);
+			return {
+				success: false,
+				error: "Failed to calculate cart summary",
+			};
+		}
+	}
+
+	/**
+	 * Get merchandise statistics for event
+	 */
+	static async getEventMerchandiseStats(eventId) {
+		try {
+			// Get merchandise overview
+			const merchandiseOverview = await prisma.eventMerchandise.findMany({
+				where: { eventId },
+				select: {
+					id: true,
+					name: true,
+					price: true,
+					stockQuantity: true,
+					isActive: true,
+					_count: {
+						select: { orders: true },
+					},
+				},
+			});
+
+			// Get order statistics
+			const orderStats = await prisma.eventMerchandiseOrder.aggregate({
+				where: {
+					registration: { eventId },
+				},
+				_sum: {
+					quantity: true,
+					totalPrice: true,
+				},
+				_count: {
+					id: true,
+				},
+			});
+
+			// Get revenue by merchandise
+			const revenueByMerchandise = await prisma.eventMerchandiseOrder.groupBy({
+				by: ["merchandiseId"],
+				where: {
+					registration: { eventId },
+				},
+				_sum: {
+					quantity: true,
+					totalPrice: true,
+				},
+				_count: {
+					id: true,
+				},
+			});
+
+			// Get customer statistics
+			const customerStats = await prisma.eventMerchandiseOrder.findMany({
+				where: {
+					registration: { eventId },
+				},
+				select: {
+					registrationId: true,
+				},
+				distinct: ["registrationId"],
+			});
+
+			// Calculate stock status
+			const stockStatus = {
+				lowStock: merchandiseOverview.filter(
+					(item) => item.stockQuantity !== null && item.stockQuantity <= 5
+				).length,
+				outOfStock: merchandiseOverview.filter(
+					(item) => item.stockQuantity !== null && item.stockQuantity === 0
+				).length,
+				unlimited: merchandiseOverview.filter(
+					(item) => item.stockQuantity === null
+				).length,
+			};
+
+			return {
+				overview: {
+					totalItems: merchandiseOverview.length,
+					activeItems: merchandiseOverview.filter((item) => item.isActive)
+						.length,
+					totalOrders: orderStats._count.id || 0,
+					totalQuantitySold: orderStats._sum.quantity || 0,
+					totalRevenue: Number(orderStats._sum.totalPrice || 0),
+					uniqueCustomers: customerStats.length,
+				},
+				stockStatus,
+				merchandisePerformance: revenueByMerchandise
+					.map((item) => {
+						const merchandise = merchandiseOverview.find(
+							(m) => m.id === item.merchandiseId
+						);
+						return {
+							merchandiseId: item.merchandiseId,
+							name: merchandise?.name || "Unknown",
+							price: merchandise?.price || 0,
+							orderCount: item._count.id,
+							quantitySold: item._sum.quantity || 0,
+							revenue: Number(item._sum.totalPrice || 0),
+						};
+					})
+					.sort((a, b) => b.revenue - a.revenue),
+				items: merchandiseOverview.map((item) => ({
+					id: item.id,
+					name: item.name,
+					price: Number(item.price),
+					stockQuantity: item.stockQuantity,
+					isActive: item.isActive,
+					orderCount: item._count.orders,
+					stockStatus:
+						item.stockQuantity === null
+							? "UNLIMITED"
+							: item.stockQuantity > 5
+								? "GOOD"
+								: item.stockQuantity > 0
+									? "LOW"
+									: "OUT_OF_STOCK",
+				})),
+			};
+		} catch (error) {
+			console.error("Get event merchandise stats error:", error);
+			throw new Error("Failed to get merchandise statistics");
+		}
+	}
+
+	/**
+	 * Get user's order summary for event
+	 */
+	static async getUserOrderSummary(eventId, userId) {
+		try {
+			const registration = await prisma.eventRegistration.findUnique({
+				where: {
+					eventId_userId: { eventId, userId },
+				},
+				select: { id: true },
+			});
+
+			if (!registration) {
+				return {
+					hasOrders: false,
+					summary: null,
+				};
+			}
+
+			const orders = await prisma.eventMerchandiseOrder.findMany({
+				where: { registrationId: registration.id },
+				include: {
+					merchandise: {
+						select: {
+							name: true,
+							images: true,
+						},
+					},
+				},
+			});
+
+			if (orders.length === 0) {
+				return {
+					hasOrders: false,
+					summary: null,
+				};
+			}
+
+			const summary = {
+				totalOrders: orders.length,
+				totalItems: orders.reduce((sum, order) => sum + order.quantity, 0),
+				totalAmount: orders.reduce(
+					(sum, order) => sum + Number(order.totalPrice),
+					0
+				),
+				firstOrderDate: new Date(
+					Math.min(...orders.map((o) => new Date(o.createdAt)))
+				),
+				lastOrderDate: new Date(
+					Math.max(...orders.map((o) => new Date(o.createdAt)))
+				),
+				items: orders.map((order) => ({
+					name: order.merchandise.name,
+					quantity: order.quantity,
+					selectedSize: order.selectedSize,
+					totalPrice: Number(order.totalPrice),
+					images: order.merchandise.images,
+					orderDate: order.createdAt,
+				})),
+			};
+
+			return {
+				hasOrders: true,
+				summary,
+			};
+		} catch (error) {
+			console.error("Get user order summary error:", error);
+			throw new Error("Failed to get user order summary");
+		}
+	}
+
+	/**
+	 * Validate checkout eligibility
+	 */
+	static async validateCheckoutEligibility(registrationId) {
+		try {
+			const registration = await prisma.eventRegistration.findUnique({
+				where: { id: registrationId },
+				include: {
+					event: {
+						select: {
+							eventDate: true,
+							allowFormModification: true,
+							formModificationDeadlineHours: true,
+							hasMerchandise: true,
+						},
+					},
+				},
+			});
+
+			if (!registration) {
+				return {
+					canCheckout: false,
+					reason: "Registration not found",
+				};
+			}
+
+			if (!registration.event.hasMerchandise) {
+				return {
+					canCheckout: false,
+					reason: "Merchandise not available for this event",
+				};
+			}
+
+			if (registration.status !== "CONFIRMED") {
+				return {
+					canCheckout: false,
+					reason: "Registration must be confirmed to purchase merchandise",
+				};
+			}
+
+			// Check modification deadline (same rules as registration modification)
+			const modificationCheck = this.canModifyRegistration(registration);
+			if (!modificationCheck.allowed) {
+				return {
+					canCheckout: false,
+					reason: modificationCheck.reason,
+				};
+			}
+
+			// Get cart items and validate
+			const cartItems = await prisma.eventMerchandiseOrder.findMany({
+				where: { registrationId },
+				include: {
+					merchandise: {
+						select: {
+							stockQuantity: true,
+							isActive: true,
+							name: true,
+						},
+					},
+				},
+			});
+
+			if (cartItems.length === 0) {
+				return {
+					canCheckout: false,
+					reason: "Cart is empty",
+				};
+			}
+
+			// Check stock availability for all items
+			const stockIssues = [];
+			for (const item of cartItems) {
+				if (!item.merchandise.isActive) {
+					stockIssues.push(`${item.merchandise.name} is no longer available`);
+				} else if (
+					item.merchandise.stockQuantity !== null &&
+					item.merchandise.stockQuantity < item.quantity
+				) {
+					stockIssues.push(
+						`Insufficient stock for ${item.merchandise.name}. Available: ${item.merchandise.stockQuantity}`
+					);
+				}
+			}
+
+			if (stockIssues.length > 0) {
+				return {
+					canCheckout: false,
+					reason: "Stock issues found",
+					stockIssues,
+				};
+			}
+
+			return {
+				canCheckout: true,
+				cartItemCount: cartItems.length,
+				totalAmount: cartItems.reduce(
+					(sum, item) => sum + Number(item.totalPrice),
+					0
+				),
+			};
+		} catch (error) {
+			console.error("Validate checkout eligibility error:", error);
+			return {
+				canCheckout: false,
+				reason: "Checkout validation failed",
+			};
+		}
+	}
 }
 
 module.exports = EventService;

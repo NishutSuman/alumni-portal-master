@@ -161,6 +161,31 @@ class EventCacheKeys {
 			this.adminGuestsList(eventId),
 		];
 	}
+
+	// Merchandise cache keys
+	static eventMerchandise(eventId, includeInactive = false) {
+		return `event:${eventId}:merchandise:${includeInactive ? "all" : "active"}`;
+	}
+
+	static merchandiseItem(eventId, itemId) {
+		return `event:${eventId}:merchandise:${itemId}`;
+	}
+
+	static userCart(registrationId) {
+		return `registration:${registrationId}:cart`;
+	}
+
+	static userOrders(registrationId) {
+		return `registration:${registrationId}:orders`;
+	}
+
+	static merchandiseStats(eventId) {
+		return `event:${eventId}:merchandise:stats`;
+	}
+
+	static adminMerchandiseOrders(eventId, page = 1, search = "") {
+		return `admin:event:${eventId}:orders:page:${page}:search:${search}`;
+	}
 }
 
 // Generic event cache middleware
@@ -340,7 +365,7 @@ class EventCacheInvalidator {
 		console.log("🗑️ Invalidated ALL event caches");
 	}
 
-    // Invalidate form-related caches when form is modified
+	// Invalidate form-related caches when form is modified
 	static async invalidateFormCaches(eventId) {
 		try {
 			const keys = EventCacheKeys.getFormRelatedKeys(eventId);
@@ -384,7 +409,69 @@ class EventCacheInvalidator {
 		}
 	}
 
-	// Nuclear option - invalidate all event-related caches
+	// Invalidate merchandise caches
+	static async invalidateMerchandiseCaches(eventId) {
+		try {
+			await Promise.all([
+				CacheService.delPattern(`event:${eventId}:merchandise:*`),
+				CacheService.del(EventCacheKeys.merchandiseStats(eventId)),
+				CacheService.delPattern(`admin:event:${eventId}:orders:*`),
+			]);
+			console.log(`🗑️ Invalidated merchandise caches for event ${eventId}`);
+		} catch (error) {
+			console.error("Failed to invalidate merchandise caches:", error);
+		}
+	}
+
+	// Invalidate specific merchandise item cache
+	static async invalidateMerchandiseItem(eventId, itemId) {
+		try {
+			await Promise.all([
+				CacheService.del(EventCacheKeys.merchandiseItem(eventId, itemId)),
+				// Also invalidate merchandise lists
+				CacheService.delPattern(`event:${eventId}:merchandise:*`),
+			]);
+			console.log(`🗑️ Invalidated merchandise item cache: ${itemId}`);
+		} catch (error) {
+			console.error("Failed to invalidate merchandise item cache:", error);
+		}
+	}
+
+	// Invalidate cart caches
+	static async invalidateCartCaches(registrationId, eventId = null) {
+		try {
+			await Promise.all([
+				CacheService.del(EventCacheKeys.userCart(registrationId)),
+				CacheService.del(EventCacheKeys.userOrders(registrationId)),
+				// Also invalidate merchandise stats if eventId provided
+				eventId
+					? CacheService.del(EventCacheKeys.merchandiseStats(eventId))
+					: Promise.resolve(),
+			]);
+			console.log(
+				`🗑️ Invalidated cart caches for registration ${registrationId}`
+			);
+		} catch (error) {
+			console.error("Failed to invalidate cart caches:", error);
+		}
+	}
+
+	// Invalidate order caches
+	static async invalidateOrderCaches(eventId) {
+		try {
+			await Promise.all([
+				CacheService.delPattern(`admin:event:${eventId}:orders:*`),
+				CacheService.del(EventCacheKeys.merchandiseStats(eventId)),
+				// Also invalidate registration stats as merchandise affects totals
+				CacheService.delPattern(`event:${eventId}:registration:stats:*`),
+			]);
+			console.log(`🗑️ Invalidated order caches for event ${eventId}`);
+		} catch (error) {
+			console.error("Failed to invalidate order caches:", error);
+		}
+	}
+
+	// Update the existing invalidateAllEventCaches method
 	static async invalidateAllEventCaches(eventId) {
 		try {
 			await Promise.all([
@@ -392,6 +479,9 @@ class EventCacheInvalidator {
 				this.invalidateRegistrationCaches(eventId),
 				this.invalidateGuestCaches(eventId),
 				this.invalidateAdminDashboardCaches(eventId),
+				// NEW: Add merchandise cache invalidation
+				this.invalidateMerchandiseCaches(eventId),
+				this.invalidateOrderCaches(eventId),
 			]);
 			console.log(`☢️ Invalidated ALL caches for event ${eventId}`);
 		} catch (error) {
@@ -537,68 +627,6 @@ const cacheCombinedEventStats = cacheEvent(
 	20 * 60
 );
 
-// Cache invalidation utility class
-// class EventCacheInvalidator {
-	// // Invalidate form-related caches when form is modified
-	// static async invalidateFormCaches(eventId) {
-	// 	try {
-	// 		const keys = EventCacheKeys.getFormRelatedKeys(eventId);
-	// 		await Promise.all(keys.map((key) => CacheService.del(key)));
-	// 		console.log(`🗑️ Invalidated form caches for event ${eventId}`);
-	// 	} catch (error) {
-	// 		console.error("Failed to invalidate form caches:", error);
-	// 	}
-	// }
-
-	// // Invalidate registration-related caches when registration changes
-	// static async invalidateRegistrationCaches(eventId) {
-	// 	try {
-	// 		const keys = EventCacheKeys.getRegistrationRelatedKeys(eventId);
-	// 		await Promise.all(keys.map((key) => CacheService.del(key)));
-	// 		console.log(`🗑️ Invalidated registration caches for event ${eventId}`);
-	// 	} catch (error) {
-	// 		console.error("Failed to invalidate registration caches:", error);
-	// 	}
-	// }
-
-	// // Invalidate guest-related caches when guest changes
-	// static async invalidateGuestCaches(eventId, registrationId = null) {
-	// 	try {
-	// 		const keys = EventCacheKeys.getGuestRelatedKeys(eventId, registrationId);
-	// 		await Promise.all(keys.map((key) => CacheService.del(key)));
-	// 		console.log(`🗑️ Invalidated guest caches for event ${eventId}`);
-	// 	} catch (error) {
-	// 		console.error("Failed to invalidate guest caches:", error);
-	// 	}
-	// }
-
-	// // Invalidate admin dashboard caches
-	// static async invalidateAdminDashboardCaches(eventId) {
-	// 	try {
-	// 		const keys = EventCacheKeys.getAdminDashboardKeys(eventId);
-	// 		await Promise.all(keys.map((key) => CacheService.del(key)));
-	// 		console.log(`🗑️ Invalidated admin dashboard caches for event ${eventId}`);
-	// 	} catch (error) {
-	// 		console.error("Failed to invalidate admin dashboard caches:", error);
-	// 	}
-	// }
-
-	// // Nuclear option - invalidate all event-related caches
-	// static async invalidateAllEventCaches(eventId) {
-	// 	try {
-	// 		await Promise.all([
-	// 			this.invalidateFormCaches(eventId),
-	// 			this.invalidateRegistrationCaches(eventId),
-	// 			this.invalidateGuestCaches(eventId),
-	// 			this.invalidateAdminDashboardCaches(eventId),
-	// 		]);
-	// 		console.log(`☢️ Invalidated ALL caches for event ${eventId}`);
-	// 	} catch (error) {
-	// 		console.error("Failed to invalidate all event caches:", error);
-	// 	}
-	// }
-// }
-
 // Middleware to automatically invalidate caches after operations
 const autoInvalidateFormCaches = (req, res, next) => {
 	const originalJson = res.json;
@@ -658,6 +686,127 @@ const autoInvalidateGuestCaches = (req, res, next) => {
 	next();
 };
 
+// Merchandise caching middleware functions
+
+// Cache event merchandise list (30 minutes)
+const cacheEventMerchandise = cacheEvent(
+	(req) =>
+		EventCacheKeys.eventMerchandise(
+			req.params.eventId,
+			req.query.includeInactive
+		),
+	30 * 60
+);
+
+// Cache single merchandise item (1 hour)
+const cacheMerchandiseItem = cacheEvent(
+	(req) =>
+		EventCacheKeys.merchandiseItem(req.params.eventId, req.params.itemId),
+	60 * 60
+);
+
+// Cache user cart (5 minutes - shorter due to frequent updates)
+const cacheUserCart = cacheEvent(
+	(req) => EventCacheKeys.userCart(req.userRegistration.id),
+	5 * 60
+);
+
+// Cache user orders (15 minutes)
+const cacheUserOrders = cacheEvent(
+	(req) => EventCacheKeys.userOrders(req.userRegistration.id),
+	15 * 60
+);
+
+// Cache merchandise statistics (10 minutes)
+const cacheMerchandiseStats = cacheEvent(
+	(req) => EventCacheKeys.merchandiseStats(req.params.eventId),
+	10 * 60
+);
+
+// Cache admin merchandise orders (5 minutes)
+const cacheAdminMerchandiseOrders = cacheEvent(
+	(req) =>
+		EventCacheKeys.adminMerchandiseOrders(
+			req.params.eventId,
+			req.query.page || 1,
+			req.query.search || ""
+		),
+	5 * 60
+);
+
+// Auto-invalidation middleware for merchandise operations
+const autoInvalidateMerchandiseCaches = (req, res, next) => {
+	const originalJson = res.json;
+
+	res.json = function (data) {
+		// If operation was successful, invalidate merchandise caches
+		if (res.statusCode < 300 && data.success) {
+			const eventId = req.params.eventId;
+			const itemId = req.params.itemId;
+
+			if (eventId) {
+				// Async invalidation - don't wait for it
+				if (itemId) {
+					EventCacheInvalidator.invalidateMerchandiseItem(eventId, itemId);
+				} else {
+					EventCacheInvalidator.invalidateMerchandiseCaches(eventId);
+				}
+			}
+		}
+
+		return originalJson.call(this, data);
+	};
+
+	next();
+};
+
+// Auto-invalidation middleware for cart operations
+const autoInvalidateCartCaches = (req, res, next) => {
+	const originalJson = res.json;
+
+	res.json = function (data) {
+		// If operation was successful, invalidate cart caches
+		if (res.statusCode < 300 && data.success) {
+			const eventId = req.params.eventId;
+			const registrationId = req.userRegistration?.id;
+
+			if (registrationId) {
+				// Async invalidation - don't wait for it
+				EventCacheInvalidator.invalidateCartCaches(registrationId, eventId);
+			}
+		}
+
+		return originalJson.call(this, data);
+	};
+
+	next();
+};
+
+// Auto-invalidation middleware for order operations (checkout)
+const autoInvalidateOrderCaches = (req, res, next) => {
+	const originalJson = res.json;
+
+	res.json = function (data) {
+		// If operation was successful, invalidate order caches
+		if (res.statusCode < 300 && data.success) {
+			const eventId = req.params.eventId;
+			const registrationId = req.userRegistration?.id;
+
+			if (eventId) {
+				// Async invalidation - don't wait for it
+				EventCacheInvalidator.invalidateOrderCaches(eventId);
+				if (registrationId) {
+					EventCacheInvalidator.invalidateCartCaches(registrationId, eventId);
+				}
+			}
+		}
+
+		return originalJson.call(this, data);
+	};
+
+	next();
+};
+
 module.exports = {
 	EventCacheKeys,
 	cacheEvent,
@@ -687,8 +836,21 @@ module.exports = {
 	cacheCombinedEventStats,
 
 	// Cache invalidation utilities
-	
+
 	autoInvalidateFormCaches,
 	autoInvalidateRegistrationCaches,
 	autoInvalidateGuestCaches,
+
+	// NEW: Merchandise caching middleware
+	cacheEventMerchandise,
+	cacheMerchandiseItem,
+	cacheUserCart,
+	cacheUserOrders,
+	cacheMerchandiseStats,
+	cacheAdminMerchandiseOrders,
+
+	// NEW: Auto-invalidation middleware
+	autoInvalidateMerchandiseCaches,
+	autoInvalidateCartCaches,
+	autoInvalidateOrderCaches,
 };

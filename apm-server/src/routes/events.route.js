@@ -7,7 +7,7 @@ const fs = require('fs');
 
 const { authenticateToken, requireRole, optionalAuth } = require("../middleware/auth.middleware");
 const { asyncHandler } = require('../utils/response');
-const { handleUploadError } = require('../middleware/upload.middleware');
+const { uploadEventImages, handleUploadError } = require('../middleware/upload.middleware');
 
 // ==========================================
 // CACHING MIDDLEWARE IMPORTS (MISSING!)
@@ -35,6 +35,15 @@ const {
   autoInvalidateFormCaches,
   autoInvalidateRegistrationCaches,
   autoInvalidateGuestCaches,
+  cacheEventMerchandise,
+  cacheMerchandiseItem,
+  cacheUserCart,
+  cacheUserOrders,
+  cacheMerchandiseStats,
+  cacheAdminMerchandiseOrders,
+  autoInvalidateMerchandiseCaches,
+  autoInvalidateCartCaches,
+  autoInvalidateOrderCaches
 } = require('../middleware/event.cache.middleware');
 
 // ==========================================
@@ -76,6 +85,18 @@ const {
   validateGuestParams,
   validateGuestBusinessRules,
   validateGuestFormBusinessRules,
+
+  // Merchandise Validation
+  validateAddMerchandise,
+  validateUpdateMerchandise,
+  validateReorderMerchandise,
+  validateAddToCart,
+  validateUpdateCartItem,
+  validateCheckoutCart,
+  validateMerchandiseParams,
+  validateCartParams,
+  validateMerchandiseBusinessRules,
+  validateCartBusinessRules
 } = require('../middleware/event.validation.middleware');
 
 // ==========================================
@@ -87,6 +108,9 @@ const eventSectionController = require('../controllers/eventControllers/eventSec
 const eventRegistrationController = require('../controllers/eventControllers/eventRegistration.controller');
 const eventFormController = require('../controllers/eventControllers/eventForm.controller');
 const eventGuestController = require('../controllers/eventControllers/eventGuest.controller');
+const merchandiseController = require('../controllers/eventControllers/eventMerchandise.controller');
+const merchandiseCartController = require('../controllers/eventControllers/merchandiseCart.controller');
+
 
 // ==========================================
 // MULTER CONFIGURATION (EXISTING)
@@ -583,6 +607,309 @@ router.get('/:eventId/all-guests',
   validateEventIdParam,
   cacheAdminGuestsList,  // 🆕 CACHE: 10 minutes
   asyncHandler(eventGuestController.getAllEventGuests)
+);
+
+// =============================================================================
+// MERCHANDISE MANAGEMENT ROUTES (Phase 4)
+// =============================================================================
+
+// PUBLIC: Get event merchandise (with caching)
+router.get(
+  '/:eventId/merchandise',
+  [
+    validateEventIdParam,
+    validateMerchandiseBusinessRules,
+    cacheEventMerchandise
+  ],
+  asyncHandler(merchandiseController.getEventMerchandise)
+);
+
+// PUBLIC: Get single merchandise item (with caching)
+router.get(
+  '/:eventId/merchandise/:itemId',
+  [
+    validateMerchandiseParams,
+    validateMerchandiseBusinessRules,
+    cacheMerchandiseItem
+  ],
+  asyncHandler(merchandiseController.getMerchandiseItem)
+);
+
+// ADMIN: Add merchandise item
+router.post(
+  '/:eventId/merchandise',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateEventIdParam,
+    validateAddMerchandise,
+    validateMerchandiseBusinessRules,
+    autoInvalidateMerchandiseCaches
+  ],
+  asyncHandler(merchandiseController.addMerchandise)
+);
+
+// ADMIN: Update merchandise item
+router.put(
+  '/:eventId/merchandise/:itemId',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateMerchandiseParams,
+    validateUpdateMerchandise,
+    validateMerchandiseBusinessRules,
+    autoInvalidateMerchandiseCaches
+  ],
+  asyncHandler(merchandiseController.updateMerchandise)
+);
+
+// ADMIN: Delete merchandise item
+router.delete(
+  '/:eventId/merchandise/:itemId',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateMerchandiseParams,
+    validateMerchandiseBusinessRules,
+    autoInvalidateMerchandiseCaches
+  ],
+  asyncHandler(merchandiseController.deleteMerchandise)
+);
+
+// ADMIN: Reorder merchandise items
+router.post(
+  '/:eventId/merchandise/reorder',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateEventIdParam,
+    validateReorderMerchandise,
+    validateMerchandiseBusinessRules,
+    autoInvalidateMerchandiseCaches
+  ],
+  asyncHandler(merchandiseController.reorderMerchandise)
+);
+
+// ADMIN: Upload merchandise images (REUSE EXISTING UPLOAD MIDDLEWARE)
+router.post(
+  '/:eventId/merchandise/:itemId/images',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateMerchandiseParams,
+    validateMerchandiseBusinessRules,
+    uploadEventImages, // REUSE existing upload middleware
+    handleUploadError,
+    autoInvalidateMerchandiseCaches
+  ],
+  asyncHandler(async (req, res) => {
+    const { eventId, itemId } = req.params;
+    const userId = req.user.id;
+    const files = req.files;
+
+    try {
+      // Check if merchandise item exists
+      const merchandise = await prisma.eventMerchandise.findFirst({
+        where: {
+          id: itemId,
+          eventId
+        },
+        select: {
+          id: true,
+          name: true,
+          images: true
+        }
+      });
+
+      if (!merchandise) {
+        return errorResponse(res, 'Merchandise item not found', 404);
+      }
+
+      if (!files || files.length === 0) {
+        return errorResponse(res, 'No files uploaded', 400);
+      }
+
+      // Generate URLs for uploaded files using existing upload structure
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const newImageUrls = files.map(file => {
+        const relativePath = file.path.replace(process.cwd(), '').replace(/\\/g, '/');
+        return `${baseUrl}${relativePath}`;
+      });
+
+      // Update merchandise with new image URLs
+      const existingImages = merchandise.images || [];
+      const updatedImages = [...existingImages, ...newImageUrls];
+
+      const updatedMerchandise = await prisma.eventMerchandise.update({
+        where: { id: itemId },
+        data: {
+          images: updatedImages
+        },
+        select: {
+          id: true,
+          name: true,
+          images: true
+        }
+      });
+
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          action: 'merchandise_images_upload',
+          details: {
+            eventId,
+            itemId,
+            uploadedCount: files.length,
+            totalImages: updatedImages.length
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+        }
+      });
+
+      return successResponse(res, {
+        merchandise: {
+          id: updatedMerchandise.id,
+          name: updatedMerchandise.name,
+          images: updatedMerchandise.images
+        },
+        uploadedImages: newImageUrls,
+        uploadCount: files.length
+      }, `${files.length} image(s) uploaded successfully`);
+
+    } catch (error) {
+      console.error('Upload merchandise images error:', error);
+      return errorResponse(res, 'Failed to upload images', 500);
+    }
+  })
+);
+
+// =============================================================================
+// SHOPPING CART ROUTES (Phase 4)
+// =============================================================================
+
+// USER: Get my cart (with caching)
+router.get(
+  '/:eventId/cart',
+  [
+    authenticateToken,
+    validateEventIdParam,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    cacheUserCart
+  ],
+  asyncHandler(merchandiseCartController.getCart)
+);
+
+// USER: Add item to cart
+router.post(
+  '/:eventId/cart',
+  [
+    authenticateToken,
+    validateEventIdParam,
+    validateAddToCart,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    autoInvalidateCartCaches
+  ],
+  asyncHandler(merchandiseCartController.addToCart)
+);
+
+// USER: Update cart item
+router.put(
+  '/:eventId/cart/:itemId',
+  [
+    authenticateToken,
+    validateCartParams,
+    validateUpdateCartItem,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    autoInvalidateCartCaches
+  ],
+  asyncHandler(merchandiseCartController.updateCartItem)
+);
+
+// USER: Remove item from cart
+router.delete(
+  '/:eventId/cart/:itemId',
+  [
+    authenticateToken,
+    validateCartParams,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    autoInvalidateCartCaches
+  ],
+  asyncHandler(merchandiseCartController.removeFromCart)
+);
+
+// USER: Checkout cart (place order)
+router.post(
+  '/:eventId/checkout',
+  [
+    authenticateToken,
+    validateEventIdParam,
+    validateCheckoutCart,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    autoInvalidateOrderCaches
+  ],
+  asyncHandler(merchandiseCartController.checkoutCart)
+);
+
+// =============================================================================
+// ORDER MANAGEMENT ROUTES (Phase 4)
+// =============================================================================
+
+// USER: Get my orders (with caching)
+router.get(
+  '/:eventId/my-orders',
+  [
+    authenticateToken,
+    validateEventIdParam,
+    validateMerchandiseBusinessRules,
+    validateCartBusinessRules,
+    cacheUserOrders
+  ],
+  asyncHandler(merchandiseCartController.getMyOrders)
+);
+
+// ADMIN: Get all event orders (with caching)
+router.get(
+  '/:eventId/orders',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateEventIdParam,
+    validateMerchandiseBusinessRules,
+    cacheAdminMerchandiseOrders
+  ],
+  asyncHandler(merchandiseCartController.getAllEventOrders)
+);
+
+// ADMIN: Get merchandise statistics (with caching)
+router.get(
+  '/:eventId/merchandise/stats',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateEventIdParam,
+    validateMerchandiseBusinessRules,
+    cacheMerchandiseStats
+  ],
+  asyncHandler(async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const EventService = require('../services/event.service');
+      
+      const stats = await EventService.getEventMerchandiseStats(eventId);
+      
+      return successResponse(res, stats, 'Merchandise statistics retrieved successfully');
+    } catch (error) {
+      console.error('Get merchandise stats error:', error);
+      return errorResponse(res, 'Failed to retrieve merchandise statistics', 500);
+    }
+  })
 );
 
 

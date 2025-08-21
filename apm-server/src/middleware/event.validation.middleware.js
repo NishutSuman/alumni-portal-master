@@ -1,5 +1,6 @@
 // src/middleware/event.validation.js
 const Joi = require("joi");
+const { prisma } = require('../config/database');
 
 // Event validation schemas
 const eventSchemas = {
@@ -575,6 +576,104 @@ const eventSchemas = {
 			"any.required": "Guest ID is required",
 		}),
 	}),
+
+	// Merchandise validation schemas
+	addMerchandise: Joi.object({
+		name: Joi.string().trim().min(2).max(100).required().messages({
+			"string.empty": "Merchandise name is required",
+			"string.min": "Merchandise name must be at least 2 characters",
+			"string.max": "Merchandise name cannot exceed 100 characters",
+		}),
+
+		description: Joi.string().trim().max(500).optional().allow(""),
+
+		price: Joi.number().positive().precision(2).required().messages({
+			"number.base": "Price must be a valid number",
+			"number.positive": "Price must be positive",
+			"any.required": "Price is required",
+		}),
+
+		availableSizes: Joi.array()
+			.items(Joi.string().valid("XS", "S", "M", "L", "XL", "XXL", "XXXL"))
+			.unique()
+			.optional()
+			.default([])
+			.messages({
+				"array.unique": "Duplicate sizes not allowed",
+				"any.only": "Invalid size. Must be one of: XS, S, M, L, XL, XXL, XXXL",
+			}),
+
+		stockQuantity: Joi.number()
+			.integer()
+			.min(0)
+			.optional()
+			.allow(null)
+			.messages({
+				"number.base": "Stock quantity must be a valid number",
+				"number.integer": "Stock quantity must be an integer",
+				"number.min": "Stock quantity cannot be negative",
+			}),
+	}),
+
+	updateMerchandise: Joi.object({
+		name: Joi.string().trim().min(2).max(100).optional(),
+		description: Joi.string().trim().max(500).optional().allow(""),
+		price: Joi.number().positive().precision(2).optional(),
+		availableSizes: Joi.array()
+			.items(Joi.string().valid("XS", "S", "M", "L", "XL", "XXL", "XXXL"))
+			.unique()
+			.optional(),
+		stockQuantity: Joi.number().integer().min(0).optional().allow(null),
+		isActive: Joi.boolean().optional(),
+	}).min(1),
+
+	reorderMerchandise: Joi.object({
+		itemOrders: Joi.array()
+			.items(
+				Joi.object({
+					id: Joi.string().required(),
+					orderIndex: Joi.number().integer().min(0).required(),
+				})
+			)
+			.min(1)
+			.required()
+			.messages({
+				"array.min": "At least one item order is required",
+			}),
+	}),
+
+	addToCart: Joi.object({
+		merchandiseId: Joi.string().required().messages({
+			"any.required": "Merchandise ID is required",
+		}),
+
+		quantity: Joi.number().integer().min(1).max(10).required().messages({
+			"number.base": "Quantity must be a valid number",
+			"number.integer": "Quantity must be an integer",
+			"number.min": "Quantity must be at least 1",
+			"number.max": "Maximum quantity per item is 10",
+			"any.required": "Quantity is required",
+		}),
+
+		selectedSize: Joi.string()
+			.valid("XS", "S", "M", "L", "XL", "XXL", "XXXL")
+			.optional()
+			.messages({
+				"any.only": "Invalid size selected",
+			}),
+	}),
+
+	updateCartItem: Joi.object({
+		quantity: Joi.number().integer().min(1).max(10).optional(),
+		selectedSize: Joi.string()
+			.valid("XS", "S", "M", "L", "XL", "XXL", "XXXL")
+			.optional(),
+	}).min(1),
+
+	checkoutCart: Joi.object({
+		paymentReference: Joi.string().trim().max(100).optional(),
+		notes: Joi.string().trim().max(500).optional(),
+	}),
 };
 
 // Generic validation middleware factory for events
@@ -727,6 +826,16 @@ const eventParamSchemas = {
 			"string.uuid": "Invalid guest ID format",
 			"any.required": "Guest ID is required",
 		}),
+	}),
+
+	merchandiseItem: Joi.object({
+		eventId: Joi.string().required(),
+		itemId: Joi.string().required(),
+	}),
+
+	cartItem: Joi.object({
+		eventId: Joi.string().required(),
+		itemId: Joi.string().required(),
 	}),
 };
 
@@ -995,6 +1104,122 @@ const validateGuestFormBusinessRules = async (req, res, next) => {
 	}
 };
 
+// Business rules validation for merchandise
+const validateMerchandiseBusinessRules = async (req, res, next) => {
+	const { eventId } = req.params;
+
+	try {
+		const event = await prisma.event.findUnique({
+			where: { id: eventId },
+			select: {
+				id: true,
+				hasMerchandise: true,
+				status: true,
+				eventDate: true,
+			},
+		});
+
+		if (!event) {
+			return res.status(404).json({
+				success: false,
+				message: "Event not found",
+			});
+		}
+
+		if (!event.hasMerchandise) {
+			return res.status(400).json({
+				success: false,
+				message: "Merchandise is not enabled for this event",
+			});
+		}
+
+		// For cart operations, check if event hasn't passed
+		if (["POST", "PUT", "DELETE"].includes(req.method)) {
+			const now = new Date();
+			const eventDate = new Date(event.eventDate);
+
+			if (eventDate < now) {
+				return res.status(400).json({
+					success: false,
+					message: "Cannot modify merchandise orders for past events",
+				});
+			}
+		}
+
+		req.eventData = event;
+		next();
+	} catch (error) {
+		console.error("Merchandise business rules validation error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Failed to validate merchandise access",
+		});
+	}
+};
+
+// Cart business rules validation
+const validateCartBusinessRules = async (req, res, next) => {
+	const { eventId } = req.params;
+	const userId = req.user.id;
+
+	try {
+		const registration = await prisma.eventRegistration.findUnique({
+			where: {
+				eventId_userId: {
+					eventId,
+					userId,
+				},
+			},
+			select: {
+				id: true,
+				status: true,
+				event: {
+					select: {
+						eventDate: true,
+						allowFormModification: true,
+						formModificationDeadlineHours: true,
+					},
+				},
+			},
+		});
+
+		if (!registration) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"You must be registered for this event to purchase merchandise",
+			});
+		}
+
+		if (registration.status !== "CONFIRMED") {
+			return res.status(400).json({
+				success: false,
+				message: "Your registration must be confirmed to purchase merchandise",
+			});
+		}
+
+		// Check if modification is still allowed (using same rules as registration modification)
+		const EventService = require("../../services/event.service");
+		const modificationCheck = EventService.canModifyRegistration(registration);
+
+		if (!modificationCheck.allowed) {
+			return res.status(400).json({
+				success: false,
+				message: `Merchandise orders not allowed: ${modificationCheck.reason}`,
+			});
+		}
+
+		req.userRegistration = registration;
+		next();
+	} catch (error) {
+		console.error("Cart business rules validation error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Failed to validate cart access",
+		});
+	}
+};
+
 // Specific validation middlewares
 const validateCreateEventCategory = validateEvent("createEventCategory");
 const validateUpdateEventCategory = validateEvent("updateEventCategory");
@@ -1029,6 +1254,18 @@ const validateUpdateGuestFormResponse = validateEvent(
 
 // Parameter validation middleware for guest routes
 const validateGuestParams = validateEventParams("guestParams");
+
+// Merchandise validation middleware
+const validateAddMerchandise = validateEvent("addMerchandise");
+const validateUpdateMerchandise = validateEvent("updateMerchandise");
+const validateReorderMerchandise = validateEvent("reorderMerchandise");
+const validateAddToCart = validateEvent("addToCart");
+const validateUpdateCartItem = validateEvent("updateCartItem");
+const validateCheckoutCart = validateEvent("checkoutCart");
+
+// Parameter validation for merchandise routes
+const validateMerchandiseParams = validateEventParams("merchandiseItem");
+const validateCartParams = validateEventParams("cartItem");
 
 module.exports = {
 	validateEvent,
@@ -1066,6 +1303,18 @@ module.exports = {
 	validateGuestParams,
 	validateGuestBusinessRules,
 	validateGuestFormBusinessRules,
+
+	// NEW: Merchandise validation
+	validateAddMerchandise,
+	validateUpdateMerchandise,
+	validateReorderMerchandise,
+	validateAddToCart,
+	validateUpdateCartItem,
+	validateCheckoutCart,
+	validateMerchandiseParams,
+	validateCartParams,
+	validateMerchandiseBusinessRules,
+	validateCartBusinessRules,
 
 	eventSchemas,
 };
