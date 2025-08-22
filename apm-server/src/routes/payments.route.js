@@ -1,0 +1,222 @@
+const express = require('express');
+const router = express.Router();
+
+// Import middleware (following existing pattern)
+const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
+const { asyncHandler } = require('../utils/response');
+
+// Import payment-specific middleware
+const {
+  validateInitiatePayment,
+  validateVerifyPayment,
+  validateCalculatePayment,
+  validateTransactionIdParam,
+  validateProviderParam,
+  validateAdminPaymentList,
+  validatePaymentAnalytics,
+  validatePaymentInitiationRules,
+  validatePaymentVerificationRules,
+  validateWebhookRequest
+} = require('../middleware/payment.validation.middleware');
+
+// Import caching middleware
+const {
+  cacheUserPayments,
+  cachePaymentStatus,
+  cachePaymentCalculation,
+  cacheAdminPayments,
+  cachePaymentAnalytics,
+  cacheInvoice,
+  autoInvalidatePaymentCaches
+} = require('../middleware/payment.cache.middleware');
+
+// Import controllers
+const paymentController = require('../controllers/payment.controller');
+const invoiceController = require('../controllers/invoice.controller');
+
+// =============================================
+// PUBLIC ROUTES
+// =============================================
+
+// Handle payment webhook from providers
+router.post(
+  '/webhook/:provider',
+  [
+    validateProviderParam,
+    validateWebhookRequest,
+    autoInvalidatePaymentCaches
+  ],
+  asyncHandler(paymentController.handleWebhook)
+);
+
+// =============================================
+// USER ROUTES (Authenticated)
+// =============================================
+
+// Calculate payment total (preview) - CACHED
+router.post(
+  '/calculate',
+  [
+    authenticateToken,
+    validateCalculatePayment,
+    cachePaymentCalculation
+  ],
+  asyncHandler(paymentController.calculatePaymentTotal)
+);
+
+// Initiate payment transaction
+router.post(
+  '/initiate',
+  [
+    authenticateToken,
+    validateInitiatePayment,
+    validatePaymentInitiationRules,
+    autoInvalidatePaymentCaches
+  ],
+  asyncHandler(paymentController.initiatePayment)
+);
+
+// Verify payment completion
+router.post(
+  '/:transactionId/verify',
+  [
+    authenticateToken,
+    validateTransactionIdParam,
+    validateVerifyPayment,
+    validatePaymentVerificationRules,
+    autoInvalidatePaymentCaches
+  ],
+  asyncHandler(paymentController.verifyPayment)
+);
+
+// Get payment status - CACHED
+router.get(
+  '/:transactionId/status',
+  [
+    authenticateToken,
+    validateTransactionIdParam,
+    cachePaymentStatus
+  ],
+  asyncHandler(paymentController.getPaymentStatus)
+);
+
+// Get user's payment history - CACHED
+router.get(
+  '/my-payments',
+  [
+    authenticateToken,
+    cacheUserPayments
+  ],
+  asyncHandler(paymentController.getUserPayments)
+);
+
+// =============================================
+// INVOICE ROUTES (User)
+// =============================================
+
+// Generate invoice
+router.post(
+  '/:transactionId/invoice',
+  [
+    authenticateToken,
+    validateTransactionIdParam,
+    autoInvalidatePaymentCaches
+  ],
+  asyncHandler(invoiceController.generateInvoice)
+);
+
+// Get invoice data - CACHED
+router.get(
+  '/:transactionId/invoice',
+  [
+    authenticateToken,
+    validateTransactionIdParam,
+    cacheInvoice
+  ],
+  asyncHandler(invoiceController.getInvoice)
+);
+
+// Download invoice PDF
+router.get(
+  '/:transactionId/invoice/pdf',
+  [
+    authenticateToken,
+    validateTransactionIdParam
+  ],
+  asyncHandler(invoiceController.downloadInvoicePDF)
+);
+
+// Resend invoice email
+router.post(
+  '/:transactionId/invoice/resend',
+  [
+    authenticateToken,
+    validateTransactionIdParam
+  ],
+  asyncHandler(invoiceController.resendInvoiceEmail)
+);
+
+// =============================================
+// ADMIN ROUTES
+// =============================================
+
+// Get all payments with filters - CACHED
+router.get(
+  '/admin/payments',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateAdminPaymentList,
+    cacheAdminPayments
+  ],
+  asyncHandler(paymentController.getAdminPayments)
+);
+
+// Get payment analytics - CACHED
+router.get(
+  '/admin/payments/analytics',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validatePaymentAnalytics,
+    cachePaymentAnalytics
+  ],
+  asyncHandler(paymentController.getPaymentAnalytics)
+);
+
+// Get detailed payment information
+router.get(
+  '/admin/payments/:transactionId',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateTransactionIdParam
+  ],
+  asyncHandler(paymentController.getAdminPaymentDetails)
+);
+
+// Admin generate invoice
+router.post(
+  '/admin/payments/:transactionId/invoice',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateTransactionIdParam,
+    autoInvalidatePaymentCaches
+  ],
+  asyncHandler(invoiceController.adminGenerateInvoice)
+);
+
+// Admin get invoice
+router.get(
+  '/admin/payments/:transactionId/invoice',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    validateTransactionIdParam,
+    cacheInvoice
+  ],
+  asyncHandler(invoiceController.adminGetInvoice)
+);
+
+module.exports = router;

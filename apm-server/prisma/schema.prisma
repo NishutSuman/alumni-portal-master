@@ -77,6 +77,9 @@ model User {
   // Approval relations (reverse side)
   approvedPosts     Post[]  @relation("PostApprover")
   approvedTransactions Transaction[] @relation("TransactionApprover")
+
+  // Payment relation
+  paymentTransactions      PaymentTransaction[]
   
   @@index([batch])
   @@index([fullName])
@@ -569,7 +572,6 @@ model EventRegistration {
   merchandiseTotal        Decimal                   @default(0) @db.Decimal(10, 2)
   donationAmount          Decimal                   @default(0) @db.Decimal(10, 2)
   cancelledTodonation     Decimal                   @default(0) @db.Decimal(10, 2)
-  paymentStatus           PaymentStatus             @default(PENDING)
   paymentReference        String?
   
   // Meal preferences
@@ -582,6 +584,15 @@ model EventRegistration {
   // Modification tracking
   lastModifiedAt          DateTime?
   modificationCount       Int                       @default(0)
+
+   // Payment Information (Enhanced)
+  paymentStatus       PaymentStatus       @default(PENDING)
+  paymentTransactionId String?            
+  paymentTransaction  PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+  
+  // Payment Amounts (For quick reference)
+  totalAmountPaid     Decimal             @default(0) @db.Decimal(10, 2)
+  lastPaymentAt       DateTime?
   
   // Relations
   guests                  EventGuest[]
@@ -651,6 +662,11 @@ model EventMerchandiseOrder {
   selectedSize    String?
   unitPrice       Decimal               @db.Decimal(10, 2)
   totalPrice      Decimal               @db.Decimal(10, 2)
+
+  // Payment Information
+  paymentStatus       PaymentStatus       @default(PENDING)
+  paymentTransactionId String?           
+  paymentTransaction  PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
   
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
@@ -734,6 +750,142 @@ model EventFeedbackResponse {
   
   @@unique([feedbackFormId, userId, fieldId])
   @@map("event_feedback_responses")
+}
+
+// Payment Models
+
+model PaymentTransaction {
+  id                  String              @id @default(cuid())
+  
+  // Payment Identification
+  transactionNumber   String              @unique
+  razorpayOrderId     String?             @unique
+  razorpayPaymentId   String?             @unique
+  
+  // Transaction Details
+  amount              Decimal             @db.Decimal(12, 2)
+  currency            String              @default("INR")
+  description         String
+  
+  // Reference Information
+  referenceType       PaymentReferenceType
+  referenceId         String
+  
+  // Payment Breakdown
+  breakdown           Json
+  
+  // Payment Provider Information
+  provider            PaymentProvider      @default(RAZORPAY)
+  providerOrderData   Json?
+  providerPaymentData Json?
+  
+  // Status and Timestamps
+  status              PaymentStatus        @default(PENDING)
+  initiatedAt         DateTime             @default(now())
+  completedAt         DateTime?
+  expiresAt           DateTime?
+  
+  // User Information
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id])
+  
+  // Metadata
+  metadata            Json?
+  notes               String?
+  
+  // Relations
+  webhooks            PaymentWebhook[]
+  invoices            PaymentInvoice[]
+  eventRegistrations  EventRegistration[]
+  merchandiseOrders   EventMerchandiseOrder[]
+  
+  // Timestamps
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([referenceType, referenceId])
+  @@index([provider, razorpayOrderId])
+  @@index([transactionNumber])
+  @@index([createdAt])
+  @@map("payment_transactions")
+}
+
+model PaymentWebhook {
+  id                  String              @id @default(cuid())
+  
+  // Webhook Identification
+  provider            PaymentProvider
+  eventType           String
+  eventId             String?
+  
+  // Transaction Reference
+  transactionId       String?
+  transaction         PaymentTransaction? @relation(fields: [transactionId], references: [id])
+  
+  // Webhook Data
+  rawPayload          Json
+  signature           String
+  isSignatureValid    Boolean             @default(false)
+  
+  // Processing Status
+  status              WebhookStatus       @default(RECEIVED)
+  processedAt         DateTime?
+  errorMessage        String?
+  retryCount          Int                 @default(0)
+  
+  // Request Information
+  headers             Json?
+  ipAddress           String?
+  userAgent           String?
+  
+  // Timestamps
+  receivedAt          DateTime            @default(now())
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@index([provider, eventType])
+  @@index([transactionId])
+  @@index([status])
+  @@index([receivedAt])
+  @@map("payment_webhooks")
+}
+
+model PaymentInvoice {
+  id                  String              @id @default(cuid())
+  
+  // Invoice Identification
+  invoiceNumber       String              @unique
+  
+  // Transaction Reference
+  transactionId       String              @unique
+  transaction         PaymentTransaction  @relation(fields: [transactionId], references: [id])
+  
+  // Invoice Data
+  invoiceData         Json
+  
+  // PDF Management
+  pdfUrl              String?
+  pdfGeneratedAt      DateTime?
+  
+  // Email Management
+  emailSentTo         String?
+  emailSentAt         DateTime?
+  emailResendCount    Int                 @default(0)
+  
+  // Status
+  status              InvoiceStatus       @default(PENDING)
+  
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@index([invoiceNumber])
+  @@index([transactionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payment_invoices")
 }
 
 
@@ -847,11 +999,6 @@ enum EventRegistrationStatus {
   WAITLIST
 }
 
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-}
 
 enum MealPreference {
   VEG
@@ -861,4 +1008,45 @@ enum MealPreference {
 enum GuestStatus {
   ACTIVE
   CANCELLED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  PAYTM
+  PHONEPE
+  STRIPE
+}
+
+enum PaymentReferenceType {
+  EVENT_REGISTRATION    // Full event registration payment
+  MERCHANDISE          // Merchandise only payment
+  GUEST_FEES          // Guest fees only payment
+  ADDITIONAL_FEES     // Any additional fees
+  DONATION           // Donation payment
+}
+
+enum PaymentStatus {
+  PENDING            // Payment initiated but not completed
+  PROCESSING         // Payment in progress
+  COMPLETED          // Payment successful
+  FAILED             // Payment failed
+  CANCELLED          // Payment cancelled by user
+  REFUNDED           // Payment refunded
+  PARTIALLY_REFUNDED // Partial refund processed
+  EXPIRED            // Payment link expired
+}
+
+enum WebhookStatus {
+  RECEIVED           // Webhook received
+  VERIFIED           // Signature verified
+  PROCESSED          // Successfully processed
+  FAILED             // Processing failed
+  IGNORED            // Ignored (duplicate or irrelevant)
+}
+
+enum InvoiceStatus {
+  PENDING            // Invoice not yet generated
+  GENERATED          // Invoice generated
+  EMAILED            // Invoice sent via email
+  FAILED             // Invoice generation failed
 }

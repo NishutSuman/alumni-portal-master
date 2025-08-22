@@ -1,0 +1,238 @@
+<!-- =============================================
+     TEST FILE 1: public/test-payment.html
+     =============================================
+     Create this file: public/test-payment.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment System Test</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 5px; }
+        button:hover { background: #0056b3; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 3px; }
+        .response { background: #f8f9fa; padding: 10px; border-radius: 3px; white-space: pre-wrap; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Payment System Test Dashboard</h1>
+    
+    <!-- Authentication Section -->
+    <div class="test-section">
+        <h2>1. Authentication</h2>
+        <input type="text" id="userToken" placeholder="Enter your JWT token here" />
+        <button onclick="setToken()">Set Token</button>
+        <p id="tokenStatus">No token set</p>
+    </div>
+
+    <!-- Test Payment Calculation -->
+    <div class="test-section">
+        <h2>2. Test Payment Calculation</h2>
+        <input type="text" id="registrationId" placeholder="Registration ID" />
+        <select id="referenceType">
+            <option value="EVENT_REGISTRATION">Event Registration</option>
+            <option value="MERCHANDISE">Merchandise Only</option>
+        </select>
+        <button onclick="calculatePayment()">Calculate Payment</button>
+        <div id="calculationResult" class="response"></div>
+    </div>
+
+    <!-- Test Payment Initiation -->
+    <div class="test-section">
+        <h2>3. Test Payment Initiation</h2>
+        <button onclick="initiatePayment()">Initiate Payment</button>
+        <div id="initiationResult" class="response"></div>
+    </div>
+
+    <!-- Payment Status Check -->
+    <div class="test-section">
+        <h2>4. Check Payment Status</h2>
+        <input type="text" id="transactionId" placeholder="Transaction ID" />
+        <button onclick="checkPaymentStatus()">Check Status</button>
+        <div id="statusResult" class="response"></div>
+    </div>
+
+    <!-- Webhook Test -->
+    <div class="test-section">
+        <h2>5. Webhook Status</h2>
+        <p>Check your server console for webhook logs when payments are processed.</p>
+        <button onclick="checkWebhookLogs()">Refresh Webhook Logs</button>
+        <div id="webhookLogs" class="response"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let currentRegistrationId = '';
+        let currentTransactionId = '';
+
+        // Set authentication token
+        function setToken() {
+            authToken = document.getElementById('userToken').value;
+            if (authToken) {
+                document.getElementById('tokenStatus').textContent = '✅ Token set successfully';
+                document.getElementById('tokenStatus').className = 'success';
+            } else {
+                document.getElementById('tokenStatus').textContent = '❌ No token provided';
+                document.getElementById('tokenStatus').className = 'error';
+            }
+        }
+
+        // API call helper
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                };
+
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(`http://localhost:5000${endpoint}`, options);
+                const data = await response.json();
+                
+                return {
+                    status: response.status,
+                    data: data
+                };
+            } catch (error) {
+                return {
+                    status: 0,
+                    data: { success: false, message: error.message }
+                };
+            }
+        }
+
+        // Test payment calculation
+        async function calculatePayment() {
+            const registrationId = document.getElementById('registrationId').value;
+            const referenceType = document.getElementById('referenceType').value;
+            
+            if (!registrationId) {
+                alert('Please enter a registration ID');
+                return;
+            }
+
+            currentRegistrationId = registrationId;
+
+            const result = await apiCall('/api/payments/calculate', 'POST', {
+                referenceType: referenceType,
+                referenceId: registrationId
+            });
+
+            document.getElementById('calculationResult').textContent = JSON.stringify(result, null, 2);
+            
+            if (result.data.success) {
+                document.getElementById('calculationResult').className = 'response success';
+            } else {
+                document.getElementById('calculationResult').className = 'response error';
+            }
+        }
+
+        // Test payment initiation
+        async function initiatePayment() {
+            if (!currentRegistrationId) {
+                alert('Please calculate payment first to set registration ID');
+                return;
+            }
+
+            const referenceType = document.getElementById('referenceType').value;
+
+            const result = await apiCall('/api/payments/initiate', 'POST', {
+                referenceType: referenceType,
+                referenceId: currentRegistrationId,
+                description: 'Test Payment from Dashboard'
+            });
+
+            document.getElementById('initiationResult').textContent = JSON.stringify(result, null, 2);
+
+            if (result.data.success) {
+                document.getElementById('initiationResult').className = 'response success';
+                
+                // Store transaction ID for status checking
+                currentTransactionId = result.data.data.transaction.id;
+                document.getElementById('transactionId').value = currentTransactionId;
+                
+                // Open Razorpay checkout
+                const checkoutOptions = result.data.data.provider.checkoutOptions;
+                checkoutOptions.handler = function(response) {
+                    console.log('Payment response:', response);
+                    verifyPayment(currentTransactionId, response);
+                };
+                
+                const rzp = new Razorpay(checkoutOptions);
+                rzp.open();
+                
+            } else {
+                document.getElementById('initiationResult').className = 'response error';
+            }
+        }
+
+        // Verify payment after Razorpay success
+        async function verifyPayment(transactionId, razorpayResponse) {
+            const result = await apiCall(`/api/payments/${transactionId}/verify`, 'POST', {
+                razorpay_order_id: razorpayResponse.razorpay_order_id,
+                razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                razorpay_signature: razorpayResponse.razorpay_signature
+            });
+
+            console.log('Payment verification result:', result);
+            
+            if (result.data.success) {
+                alert('✅ Payment completed successfully!');
+                checkPaymentStatus(); // Refresh status
+            } else {
+                alert('❌ Payment verification failed: ' + result.data.message);
+            }
+        }
+
+        // Check payment status
+        async function checkPaymentStatus() {
+            const transactionId = document.getElementById('transactionId').value || currentTransactionId;
+            
+            if (!transactionId) {
+                alert('Please enter a transaction ID');
+                return;
+            }
+
+            const result = await apiCall(`/api/payments/${transactionId}/status`);
+            
+            document.getElementById('statusResult').textContent = JSON.stringify(result, null, 2);
+            
+            if (result.data.success) {
+                document.getElementById('statusResult').className = 'response success';
+            } else {
+                document.getElementById('statusResult').className = 'response error';
+            }
+        }
+
+        // Check webhook logs (placeholder)
+        function checkWebhookLogs() {
+            document.getElementById('webhookLogs').textContent = 
+                'Check your server console (Terminal) for webhook logs.\n\n' +
+                'Look for messages like:\n' +
+                '🎯 Payment cache hit: ...\n' +
+                '[RAZORPAY] [INFO] Webhook signature verification result\n' +
+                '[RAZORPAY] [INFO] Processing webhook event\n\n' +
+                'Webhook logs appear when Razorpay sends payment notifications.';
+        }
+
+        // Auto-set demo values on load
+        window.onload = function() {
+            // You can set demo values here if needed
+            // document.getElementById('registrationId').value = 'demo-registration-id';
+        };
+    </script>
+</body>
+</html>

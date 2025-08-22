@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 
+// const paymentRoutes = require('./routes/payments.route');
+
 const app = express();
 
 // Security middleware
@@ -19,6 +21,9 @@ app.use(helmet({
     },
   },
 }));
+
+// Important: For webhook handling, ensure raw body parsing for specific routes
+app.use('/api/payments/webhook/*', express.raw({ type: 'application/json' }));
 
 // CORS configuration
 app.use(cors({
@@ -39,7 +44,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use('/api/', limiter);
+// app.use('/api/', limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -58,8 +63,14 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: config.nodeEnv,
+    payment: {
+      provider: process.env.PAYMENT_PROVIDER || 'not configured',
+      configured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+    }
   });
 });
+
+
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static('public/uploads'));
@@ -72,8 +83,12 @@ app.use('/api/batches', require('./routes/batches.route'));
 app.use('/api/alumni', require('./routes/alumni.route'));
 app.use('/api/posts', require('./routes/posts.route'));
 app.use('/api/events', require('./routes/events.route'));
+app.use('/api/payments', require('./routes/payments.route'));
 // app.use('/api/transactions', require('./routes/transactions.route'));
 // app.use('/api/notifications', require('./routes/notifications.route'));
+
+// Serve test files - ADD THIS if you want to serve the test HTML
+app.use(express.static('public'));
 
 // 404 handler
 app.use('*', (req, res) => {
