@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": {
+      "id": "cmenb250a0002vvwzutt0usun",
+      "email": "test@payment.com",
+      "fullName": "Test Payment User",
+      "batch": 2020,
+      "bio": null,
+      "employmentStatus": "OPEN_TO_WORK",
+      "role": "USER",
+      "isActive": true,
+      "isEmailVerified": false,
+      "deactivatedAt": null
+    },
+    "tokens": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWVuYjI1MGEwMDAydnZ3enV0dDB1c3VuIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc1NTg5NjQ3NywiZXhwIjoxNzU2MDY5Mjc3fQ.MJSv1-CEjnM2eoF5RRcvDkblSLBUXDsXVTvbrdkgruM",
+      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWVuYjI1MGEwMDAydnZ3enV0dDB1c3VuIiwidHlwZSI6InJlZnJlc2giLCJpYXQiOjE3NTU4OTY0NzcsImV4cCI6MTc1NzE5MjQ3N30.3tP5teoKcwSq8-bfG96aMsitZm_qCl0NO9si7HUsrSQ"
+    }
+  },
+  "timestamp": "23-08-2025 02:31:17"
+}
