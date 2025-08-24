@@ -57,7 +57,13 @@ const {
   autoInvalidateSubcategoriesCache,
   autoInvalidateExpensesCache,
   autoInvalidateCollectionsCache,
-  autoInvalidateBalanceCache
+  autoInvalidateBalanceCache,
+  cacheDashboard,
+  cacheDashboardYear,
+  cacheAnalyticsCollections,
+  cacheAnalyticsExpenses,
+  cacheYearlySummary,
+  cacheAnalyticsTrends,
 } = require('../middleware/treasury.cache.middleware');
 
 // Treasury audit middleware
@@ -89,6 +95,9 @@ const treasuryExpenseController = require('../controllers/treasury/treasuryExpen
 const treasuryCollectionController = require('../controllers/treasury/treasuryCollection.controller');
 const treasuryBalanceController = require('../controllers/treasury/treasuryBalance.controller');
 const treasuryReceiptController = require('../controllers/treasury/treasuryReceipt.controller');
+const treasuryDashboardController = require('../controllers/treasury/treasuryDashboard.controller');
+const treasuryAnalyticsController = require('../controllers/treasury/treasuryAnalytics.controller');
+const treasuryReportsController = require('../controllers/treasury/treasuryReports.controller');
 
 // ============================================
 // EXPENSE CATEGORY ROUTES (PHASE 2)
@@ -819,6 +828,245 @@ router.use('*', (req, res) => {
     }
   });
 });
+
+// ============================================
+// PHASE 4: DASHBOARD ROUTES
+// ============================================
+
+/**
+ * Get main treasury dashboard
+ * GET /api/treasury/dashboard
+ */
+router.get('/dashboard',
+  [
+    optionalAuth,
+    cacheDashboard
+  ],
+  asyncHandler(treasuryDashboardController.getMainDashboard)
+);
+
+/**
+ * Get yearly dashboard
+ * GET /api/treasury/dashboard/:year
+ */
+router.get('/dashboard/:year',
+  [
+    optionalAuth,
+    validateYearParam,
+    cacheDashboardYear
+  ],
+  asyncHandler(treasuryDashboardController.getYearlyDashboard)
+);
+
+// ============================================
+// PHASE 4: COLLECTION ANALYTICS ROUTES  
+// ============================================
+
+/**
+ * Get comprehensive collection analytics
+ * GET /api/treasury/analytics/collections
+ */
+router.get('/analytics/collections',
+  [
+    optionalAuth,
+    cacheAnalyticsCollections
+  ],
+  asyncHandler(treasuryAnalyticsController.getCollectionAnalytics)
+);
+
+/**
+ * Get online collection analytics (PaymentTransaction data)
+ * GET /api/treasury/analytics/collections/online
+ */
+router.get('/analytics/collections/online',
+  [
+    optionalAuth,
+    cacheAnalyticsCollections
+  ],
+  asyncHandler(treasuryAnalyticsController.getOnlineCollectionAnalytics)
+);
+
+/**
+ * Get manual collection analytics breakdown
+ * GET /api/treasury/analytics/collections/manual
+ */
+router.get('/analytics/collections/manual',
+  [
+    optionalAuth,
+    cacheAnalyticsCollections
+  ],
+  asyncHandler(treasuryAnalyticsController.getManualCollectionAnalytics)
+);
+
+/**
+ * Get collections by source analysis
+ * GET /api/treasury/analytics/collections/by-source
+ */
+router.get('/analytics/collections/by-source',
+  [
+    optionalAuth,
+    cacheAnalyticsCollections
+  ],
+  asyncHandler(treasuryAnalyticsController.getCollectionAnalytics) // Uses main analytics with source breakdown
+);
+
+// ============================================
+// PHASE 4: EXPENSE ANALYTICS ROUTES
+// ============================================
+
+/**
+ * Get comprehensive expense analytics
+ * GET /api/treasury/analytics/expenses
+ */
+router.get('/analytics/expenses',
+  [
+    optionalAuth,
+    cacheAnalyticsExpenses
+  ],
+  asyncHandler(treasuryAnalyticsController.getExpenseAnalytics)
+);
+
+/**
+ * Get category-wise expense analytics
+ * GET /api/treasury/analytics/expenses/by-category
+ */
+router.get('/analytics/expenses/by-category',
+  [
+    optionalAuth,
+    cacheAnalyticsExpenses
+  ],
+  asyncHandler(treasuryAnalyticsController.getCategoryExpenseAnalytics)
+);
+
+/**
+ * Get subcategory-wise expense analytics
+ * GET /api/treasury/analytics/expenses/by-subcategory
+ */
+router.get('/analytics/expenses/by-subcategory',
+  [
+    optionalAuth,
+    cacheAnalyticsExpenses
+  ],
+  asyncHandler(treasuryAnalyticsController.getExpenseAnalytics) // Uses main analytics with subcategory filter
+);
+
+/**
+ * Get event-wise expense analytics
+ * GET /api/treasury/analytics/expenses/by-event
+ */
+router.get('/analytics/expenses/by-event',
+  [
+    optionalAuth,
+    cacheAnalyticsExpenses
+  ],
+  asyncHandler(treasuryAnalyticsController.getExpenseAnalytics) // Uses main analytics with event filter
+);
+
+// ============================================
+// PHASE 4: FINANCIAL SUMMARY ROUTES
+// ============================================
+
+/**
+ * Get yearly financial summary
+ * GET /api/treasury/analytics/yearly-summary/:year
+ */
+router.get('/analytics/yearly-summary/:year',
+  [
+    optionalAuth,
+    validateYearParam,
+    cacheYearlySummary
+  ],
+  asyncHandler(treasuryAnalyticsController.getYearlyFinancialSummary)
+);
+
+/**
+ * Get current surplus/deficit analysis
+ * GET /api/treasury/analytics/surplus-deficit
+ */
+router.get('/analytics/surplus-deficit',
+  [
+    optionalAuth,
+    cacheAnalyticsCollections
+  ],
+  asyncHandler(treasuryAnalyticsController.getSurplusDeficitAnalysis)
+);
+
+/**
+ * Get multi-year financial trends
+ * GET /api/treasury/analytics/trends
+ */
+router.get('/analytics/trends',
+  [
+    optionalAuth,
+    cacheAnalyticsTrends
+  ],
+  asyncHandler(treasuryAnalyticsController.getSurplusDeficitAnalysis) // Can be extended for multi-year trends
+);
+
+// ============================================
+// PHASE 4: REPORTS & EXPORTS ROUTES
+// ============================================
+
+/**
+ * Get financial report (JSON format)
+ * GET /api/treasury/reports/financial/:year
+ */
+router.get('/reports/financial/:year',
+  [
+    optionalAuth,
+    validateYearParam
+  ],
+  asyncHandler(treasuryReportsController.getFinancialReport)
+);
+
+/**
+ * Export financial report to Excel
+ * GET /api/treasury/reports/export/excel/:year
+ */
+router.get('/reports/export/excel/:year',
+  [
+    optionalAuth,
+    validateYearParam
+  ],
+  asyncHandler(treasuryReportsController.exportFinancialReportExcel)
+);
+
+/**
+ * Export financial report to PDF
+ * GET /api/treasury/reports/export/pdf/:year
+ */
+router.get('/reports/export/pdf/:year',
+  [
+    optionalAuth,
+    validateYearParam
+  ],
+  asyncHandler(treasuryReportsController.exportFinancialReportPDF)
+);
+
+/**
+ * Get category-specific report
+ * GET /api/treasury/reports/category-wise/:categoryId
+ */
+router.get('/reports/category-wise/:categoryId',
+  [
+    optionalAuth,
+    validateCategoryIdParam
+  ],
+  asyncHandler(treasuryReportsController.getCategoryWiseReport)
+);
+
+/**
+ * Get receipt summary report
+ * GET /api/treasury/reports/receipt-summary
+ */
+router.get('/reports/receipt-summary',
+  [
+    optionalAuth
+  ],
+  asyncHandler(treasuryReportsController.getReceiptSummaryReport)
+);
+
+
 
 // ============================================
 // ROUTE DOCUMENTATION SUMMARY

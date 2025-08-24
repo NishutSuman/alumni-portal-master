@@ -248,6 +248,206 @@ const getFileUrl = (req, filename, subfolder = '') => {
   return `${baseUrl}/uploads${subfolder ? '/' + subfolder : ''}/${filename}`;
 };
 
+// ============================================
+// PHOTO & ALBUM UPLOAD CONFIGURATIONS
+// ============================================
+
+// Album cover image upload (single file, 3MB limit)
+const uploadAlbumCover = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = './public/uploads/albums/covers/';
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `album_cover_${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, JPG, PNG, and WebP images are allowed for album covers'), false);
+    }
+  },
+  limits: {
+    fileSize: 3 * 1024 * 1024, // 3MB for album covers
+    files: 1
+  }
+}).single('coverImage');
+
+// Album photos upload (multiple files, 5MB each)
+const uploadAlbumPhotos = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = './public/uploads/albums/photos/';
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `photo_${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, JPG, PNG, WebP, and GIF images are allowed for photos'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB per photo
+    files: 20 // Maximum 20 photos at once
+  }
+}).array('photos', 20);
+
+// Single photo upload
+const uploadSinglePhoto = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = './public/uploads/albums/photos/';
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `photo_${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB per photo
+    files: 1
+  }
+}).single('photo');
+
+// ============================================
+// PHOTO METADATA EXTRACTION UTILITIES
+// ============================================
+
+/**
+ * Extract basic metadata from uploaded file
+ */
+const extractPhotoMetadata = (file) => {
+  if (!file) return null;
+
+  const metadata = {
+    originalName: file.originalname,
+    filename: file.filename,
+    mimetype: file.mimetype,
+    size: file.size,
+    uploadedAt: new Date().toISOString()
+  };
+
+  // Add image-specific metadata if available
+  if (file.mimetype.startsWith('image/')) {
+    metadata.imageInfo = {
+      format: file.mimetype.split('/')[1].toUpperCase(),
+      sizeFormatted: formatFileSize(file.size)
+    };
+  }
+
+  return metadata;
+};
+
+/**
+ * Format file size in human readable format
+ */
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+/**
+ * Generate photo URL from file path
+ */
+const generatePhotoUrl = (req, file) => {
+  if (!file) return null;
+  
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const relativePath = file.path.replace('./public', '').replace(/\\/g, '/');
+  return `${baseUrl}${relativePath}`;
+};
+
+/**
+ * Validate photo file before processing
+ */
+const validatePhotoFile = (file, maxSizeMB = 5) => {
+  const errors = [];
+  
+  if (!file) {
+    errors.push('No file provided');
+    return { isValid: false, errors };
+  }
+  
+  // Check file size
+  const maxSize = maxSizeMB * 1024 * 1024;
+  if (file.size > maxSize) {
+    errors.push(`File size exceeds ${maxSizeMB}MB limit`);
+  }
+  
+  // Check file type
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowedTypes.includes(file.mimetype)) {
+    errors.push('Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+/**
+ * Clean up uploaded files on error
+ */
+const cleanupUploadedFiles = (files) => {
+  if (!files) return;
+  
+  const filesToClean = Array.isArray(files) ? files : [files];
+  
+  filesToClean.forEach(file => {
+    if (file && file.path) {
+      deleteUploadedFile(file.path);
+    }
+  });
+};
+
 module.exports = {
   upload,
   uploadProfilePicture,
@@ -259,5 +459,17 @@ module.exports = {
   uploadGeneral,
   handleUploadError,
   deleteUploadedFile,
-  getFileUrl
+  getFileUrl,
+
+  // Photo & Album uploads
+  uploadAlbumCover,
+  uploadAlbumPhotos,
+  uploadSinglePhoto,
+  
+  // Photo utilities
+  extractPhotoMetadata,
+  formatFileSize,
+  generatePhotoUrl,
+  validatePhotoFile,
+  cleanupUploadedFiles,
 };

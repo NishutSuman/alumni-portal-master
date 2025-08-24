@@ -129,6 +129,10 @@ app.use("/api/alumni", require("./routes/alumni.route"));
 app.use("/api/posts", require("./routes/posts.route"));
 app.use("/api/events", require("./routes/events.route"));
 app.use('/api/admin', require('./routes/admin.route'));
+app.use('/api/payments', require('./routes/payments.route'));
+app.use('/api/treasury', require('./routes/treasury.route'));
+app.use('/api/albums', require('./routes/albums.route'));
+app.use('/api/photos', require('./routes/photos.route'));
 
 // PAYMENT ROUTES - ENABLED (was commented out)
 try {
