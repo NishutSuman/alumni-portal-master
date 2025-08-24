@@ -81,6 +81,12 @@ model User {
 
   // Payment relation
   paymentTransactions      PaymentTransaction[]
+
+  // CheckIn And Delivery Relations
+  checkInsProcessed   EventCheckIn[]      @relation("CheckInStaff")
+  deliveriesProcessed MerchandiseDelivery[] @relation("DeliveryStaff")
+
+  
   
   @@index([batch])
   @@index([fullName])
@@ -451,6 +457,10 @@ model Event {
   feedbackForm      EventFeedbackForm?
   feedbackAnalytics EventFeedbackAnalytics? @relation("FeedbackAnalytics")
   feedbackReminders EventFeedbackReminder[] @relation("FeedbackReminders")
+  analytics             EventAnalytics?
+
+  // Dashboard Privacy
+  privacySettings       EventPrivacySettings?
   
   sections          EventSection[]
   form              EventForm?
@@ -601,6 +611,9 @@ model EventRegistration {
   guests                  EventGuest[]
   formResponses           EventFormResponse[]
   merchandiseOrders       EventMerchandiseOrder[]
+
+  qr              RegistrationQR?
+  checkIns        EventCheckIn[]
   
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
@@ -670,6 +683,8 @@ model EventMerchandiseOrder {
   paymentStatus       PaymentStatus       @default(PENDING)
   paymentTransactionId String?           
   paymentTransaction  PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+
+  delivery        MerchandiseDelivery?
   
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
@@ -994,6 +1009,193 @@ model PaymentInvoice {
   @@map("payment_invoices")
 }
 
+model EventAnalytics {
+  id                    String   @id @default(cuid())
+  eventId               String   @unique
+  event                 Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Revenue Analytics
+  totalRevenue          Decimal  @default(0) @db.Decimal(10, 2)
+  registrationRevenue   Decimal  @default(0) @db.Decimal(10, 2)
+  merchandiseRevenue    Decimal  @default(0) @db.Decimal(10, 2)
+  donationRevenue       Decimal  @default(0) @db.Decimal(10, 2)
+  
+  // Participation Analytics
+  totalRegistrations    Int      @default(0)
+  confirmedRegistrations Int     @default(0)
+  cancelledRegistrations Int     @default(0)
+  totalGuests           Int      @default(0)
+  
+  // Performance Metrics
+  conversionRate        Decimal? @db.Decimal(5, 2) // Registration rate
+  averageOrderValue     Decimal? @db.Decimal(10, 2)
+  feedbackScore         Decimal? @db.Decimal(3, 2) // Average feedback rating
+  
+  // Timestamps
+  calculatedAt          DateTime @default(now())
+  lastUpdated          DateTime @updatedAt
+  
+  @@index([eventId])
+  @@index([calculatedAt])
+  @@map("event_analytics")
+}
+
+model SystemMetrics {
+  id                    String   @id @default(cuid())
+  
+  // System-wide totals
+  totalEvents           Int      @default(0)
+  totalUsers            Int      @default(0)
+  totalRevenue          Decimal  @default(0) @db.Decimal(12, 2)
+  totalRegistrations    Int      @default(0)
+  
+  // Monthly growth rates  
+  monthlyEventGrowth    Decimal? @db.Decimal(5, 2)
+  monthlyUserGrowth     Decimal? @db.Decimal(5, 2)
+  monthlyRevenueGrowth  Decimal? @db.Decimal(5, 2)
+  
+  // Batch participation data
+  batchWiseStats        Json?    // { "2020": { users: 50, participation: 85% }, ... }
+  
+  // Calculated date range
+  periodStart           DateTime
+  periodEnd             DateTime
+  metricsDate           DateTime @default(now())
+  
+  @@index([metricsDate])
+  @@map("system_metrics")
+}
+
+// ==========================================
+// QR CODE & CHECK-IN MODELS (Phase 7B)
+// ==========================================
+
+model RegistrationQR {
+  id              String            @id @default(cuid())
+  registrationId  String            @unique
+  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  
+  // QR Code Data
+  qrCode          String            @unique // Generated QR code hash
+  qrData          Json              // Complete registration data (user + guests + merchandise)
+  qrImageUrl      String?           // URL to QR code image (if stored)
+  
+  // Metadata
+  generatedAt     DateTime          @default(now())
+  lastScannedAt   DateTime?
+  scanCount       Int               @default(0)
+  isActive        Boolean           @default(true)
+  expiresAt       DateTime?         // Optional expiration
+  
+  // Relations
+  checkIns        EventCheckIn[]
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@index([qrCode])
+  @@index([registrationId])
+  @@index([isActive])
+  @@map("registration_qr")
+}
+
+model EventCheckIn {
+  id              String            @id @default(cuid())
+  registrationId  String
+  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  qrId            String?
+  qr              RegistrationQR?   @relation(fields: [qrId], references: [id])
+  
+  // Check-in Details
+  checkedInAt     DateTime          @default(now())
+  checkedInBy     String?           // Admin/Staff user ID who processed check-in
+  checkedInStaff  User?             @relation("CheckInStaff", fields: [checkedInBy], references: [id])
+  
+  // Guest Check-in Info
+  guestsCheckedIn Int               @default(0)
+  totalGuests     Int               @default(0)
+  guestDetails    Json?             // Which specific guests were checked in
+  
+  // Additional Info
+  checkInLocation String?           // Venue/Gate location
+  notes           String?           @db.Text
+  checkInMethod   CheckInMethod     @default(QR_CODE)
+  
+  // Verification
+  isVerified      Boolean           @default(true)
+  verificationNotes String?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@index([registrationId])
+  @@index([checkedInAt])
+  @@index([checkedInBy])
+  @@map("event_check_ins")
+}
+
+model MerchandiseDelivery {
+  id                String                @id @default(cuid())
+  orderId           String                @unique
+  order             EventMerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Delivery Details
+  deliveredAt       DateTime              @default(now())
+  deliveredBy       String                // Staff/Admin user ID
+  deliveryStaff     User                  @relation("DeliveryStaff", fields: [deliveredBy], references: [id])
+  
+  // Delivery Information
+  deliveryNotes     String?               @db.Text
+  confirmationPhoto String?               // Photo URL as confirmation
+  recipientName     String                // Who received the item
+  deliveryLocation  String?               // Where it was delivered
+  
+  // Status tracking
+  status            DeliveryStatus        @default(DELIVERED)
+  
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  
+  @@index([orderId])
+  @@index([deliveredBy])
+  @@index([deliveredAt])
+  @@map("merchandise_deliveries")
+}
+
+// ==========================================
+// REGISTRATION DASHBOARD MODELS (Phase 7D)
+// ==========================================
+
+model EventPrivacySettings {
+  id                    String  @id @default(cuid())
+  eventId               String  @unique
+  event                 Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Public Visibility Controls
+  showPaymentAmounts    Boolean @default(false)  // Admin toggle: show payment amounts to public
+  showDonationAmounts   Boolean @default(false)  // Admin toggle: show donations to public
+  showUserEmails        Boolean @default(false)  // Admin toggle: show emails to public
+  showUserPhones        Boolean @default(false)  // Admin toggle: show phone numbers to public
+  showGuestDetails      Boolean @default(true)   // Admin toggle: show guest names to public
+  showBatchInfo         Boolean @default(true)   // Admin toggle: show batch year to public
+  showRegistrationDate  Boolean @default(true)   // Admin toggle: show registration dates to public
+  
+  // Dashboard Configuration
+  enablePublicDashboard Boolean @default(true)   // Admin toggle: enable/disable public dashboard
+  dashboardTitle        String? @default("Event Registrations")
+  dashboardMessage      String? // Custom message for public dashboard
+  
+  // Statistics Visibility
+  showTotalCount        Boolean @default(true)   // Show total registration count
+  showBatchStats        Boolean @default(true)   // Show batch-wise breakdown
+  showPaymentStats      Boolean @default(false)  // Show payment completion stats
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([eventId])
+  @@map("event_privacy_settings")
+}
 
 
 // Enums
@@ -1172,4 +1374,19 @@ enum InvoiceStatus {
   GENERATED          // Invoice generated
   EMAILED            // Invoice sent via email
   FAILED             // Invoice generation failed
+}
+
+enum CheckInMethod {
+  QR_CODE
+  MANUAL
+  BULK_IMPORT
+  API
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+  RETURNED
 }

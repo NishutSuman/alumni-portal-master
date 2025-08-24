@@ -5,7 +5,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const config = require("./config");
-const emailManager = require("./services/email/EmailManager");
+// const emailManager = require("./services/email/EmailManager");
 
 const app = express();
 
@@ -103,19 +103,19 @@ app.use("/uploads", express.static("public/uploads"));
 // Serve test files - ENABLED for testing
 app.use(express.static("public"));
 
-// Initialize email system on app startup
-emailManager
-	.initialize()
-	.then((result) => {
-		if (result.success) {
-			console.log("✅ Email system initialized successfully");
-		} else {
-			console.error("❌ Email system initialization failed:", result.error);
-		}
-	})
-	.catch((error) => {
-		console.error("❌ Email system initialization error:", error);
-	});
+// Initialize email system on app startup ---> Temporoary Disable
+// emailManager
+// 	.initialize()
+// 	.then((result) => {
+// 		if (result.success) {
+// 			console.log("✅ Email system initialized successfully");
+// 		} else {
+// 			console.error("❌ Email system initialization failed:", result.error);
+// 		}
+// 	})
+// 	.catch((error) => {
+// 		console.error("❌ Email system initialization error:", error);
+// 	});
 
 // =============================================
 // API ROUTES REGISTRATION
@@ -128,6 +128,7 @@ app.use("/api/batches", require("./routes/batches.route"));
 app.use("/api/alumni", require("./routes/alumni.route"));
 app.use("/api/posts", require("./routes/posts.route"));
 app.use("/api/events", require("./routes/events.route"));
+app.use('/api/admin', require('./routes/admin.route'));
 
 // PAYMENT ROUTES - ENABLED (was commented out)
 try {
