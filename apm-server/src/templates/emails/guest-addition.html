@@ -1,0 +1,62 @@
+<!-- src/templates/emails/guest-addition.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest Added</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%); color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; }
+        .guest-details { background: #fff3cd; border-left: 4px solid #fd7e14; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .highlight { color: #fd7e14; font-weight: bold; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 48px; margin-bottom: 20px;">👥</div>
+            <h1>Guest Added Successfully!</h1>
+            <p>Your guest has been registered</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hi {{userName}}! 👋</h2>
+            <p>Good news! You've successfully added <span class="highlight">{{guestName}}</span> as your guest for <strong>{{eventTitle}}</strong>.</p>
+            
+            <div class="guest-details">
+                <h3>👤 Guest Details</h3>
+                <p><strong>Guest Name:</strong> {{guestName}}</p>
+                {{#if guestEmail}}
+                <p><strong>Guest Email:</strong> {{guestEmail}}</p>
+                {{/if}}
+                <p><strong>Event:</strong> {{eventTitle}}</p>
+                <p><strong>Event Date:</strong> {{eventDate}}</p>
+                {{#if guestFee}}
+                <p><strong>Guest Fee:</strong> ₹{{guestFee}}</p>
+                {{/if}}
+                {{#if mealPreference}}
+                <p><strong>Meal Preference:</strong> {{mealPreference}}</p>
+                {{/if}}
+            </div>
+
+            <h3>📝 Important Notes:</h3>
+            <ul>
+                <li>Your guest has been successfully registered</li>
+                <li>Additional payment may be required if applicable</li>
+                <li>Guest details can be modified before the deadline</li>
+                <li>Both you and your guest will receive event updates</li>
+            </ul>
+
+            <p>Thank you for including your guest in this event!</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 Alumni Portal. This email confirms guest registration.</p>
+        </div>
+    </div>
+</body>
+</html>

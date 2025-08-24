@@ -1,0 +1,75 @@
+<!-- src/templates/emails/event-reminder.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Reminder</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%); color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; }
+        .event-info { background: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .highlight { color: #dc3545; font-weight: bold; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
+        .btn { display: inline-block; background: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 48px; margin-bottom: 20px;">⏰</div>
+            <h1>Event Tomorrow!</h1>
+            <p>Don't forget about your upcoming event</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hi {{userName}}! 👋</h2>
+            <p>This is a friendly reminder that <span class="highlight">{{eventTitle}}</span> is happening <strong>tomorrow</strong>!</p>
+            
+            <div class="event-info">
+                <h3>📅 Event Information</h3>
+                <p><strong>Event:</strong> {{eventTitle}}</p>
+                <p><strong>Date:</strong> {{eventDate}}</p>
+                <p><strong>Time:</strong> {{eventTime}}</p>
+                <p><strong>Mode:</strong> {{eventMode}}</p>
+                {{#if eventVenue}}
+                <p><strong>Venue:</strong> {{eventVenue}}</p>
+                {{/if}}
+                {{#if guestCount}}
+                <p><strong>You're bringing:</strong> {{guestCount}} guest(s)</p>
+                {{/if}}
+                {{#if mealPreference}}
+                <p><strong>Your meal preference:</strong> {{mealPreference}}</p>
+                {{/if}}
+            </div>
+
+            {{#if meetingLink}}
+            <p style="text-align: center;">
+                <a href="{{meetingLink}}" class="btn">🎥 Join Virtual Event</a>
+            </p>
+            {{/if}}
+
+            <h3>📋 Things to Remember:</h3>
+            <ul>
+                <li>Be on time - the event starts at {{eventTime}}</li>
+                {{#if eventVenue}}
+                <li>Venue address: {{eventVenue}}</li>
+                {{/if}}
+                <li>Bring a valid ID for verification</li>
+                <li>Check for any last-minute updates</li>
+                {{#if guestCount}}
+                <li>Don't forget to bring your {{guestCount}} guest(s)</li>
+                {{/if}}
+            </ul>
+
+            <p>We're excited to see you tomorrow! 🎉</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 Alumni Portal. This is an automated event reminder.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!-- src/templates/emails/merchandise-confirmation.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Merchandise Order Confirmed</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; }
+        .order-details { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .highlight { color: #17a2b8; font-weight: bold; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 48px; margin-bottom: 20px;">🛍️</div>
+            <h1>Order Confirmed!</h1>
+            <p>Your merchandise order has been received</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hi {{userName}}! 👋</h2>
+            <p>Thank you for your merchandise order for <span class="highlight">{{eventTitle}}</span>!</p>
+            
+            <div class="order-details">
+                <h3>📦 Order Summary</h3>
+                <p><strong>Event:</strong> {{eventTitle}}</p>
+                <p><strong>Order Date:</strong> {{orderDate}}</p>
+                <p><strong>Total Amount:</strong> ₹{{totalAmount}}</p>
+                
+                {{#if orderItems}}
+                <h4>Items Ordered:</h4>
+                <ul>
+                {{#each orderItems}}
+                    <li>{{name}} {{#if selectedSize}}({{selectedSize}}){{/if}} - Qty: {{quantity}} - ₹{{unitPrice}}</li>
+                {{/each}}
+                </ul>
+                {{/if}}
+            </div>
+
+            <h3>📋 What Happens Next?</h3>
+            <ul>
+                <li>Your order will be processed</li>
+                <li>Items will be available for pickup at the event</li>
+                <li>Bring your registration confirmation for verification</li>
+                <li>We'll send updates if there are any changes</li>
+            </ul>
+
+            <p>Looking forward to seeing you at the event!</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 Alumni Portal. This confirms your merchandise order.</p>
+        </div>
+    </div>
+</body>
+</html>

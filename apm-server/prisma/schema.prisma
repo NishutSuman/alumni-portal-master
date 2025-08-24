@@ -73,6 +73,7 @@ model User {
   eventRegistrations    EventRegistration[]
   eventsCreated         Event[] @relation("EventCreator") 
   feedbackResponses     EventFeedbackResponse[]
+  feedbackReminders     EventFeedbackReminder[] @relation("FeedbackReminders")
 
   // Approval relations (reverse side)
   approvedPosts     Post[]  @relation("PostApprover")
@@ -447,12 +448,14 @@ model Event {
   // Relations
   createdBy         String
   creator           User        @relation("EventCreator", fields: [createdBy], references: [id])
+  feedbackForm      EventFeedbackForm?
+  feedbackAnalytics EventFeedbackAnalytics? @relation("FeedbackAnalytics")
+  feedbackReminders EventFeedbackReminder[] @relation("FeedbackReminders")
   
   sections          EventSection[]
   form              EventForm?
   merchandise       EventMerchandise[]
   registrations     EventRegistration[]
-  feedbackForm      EventFeedbackForm?
   linkedPosts       Post[]      // Posts can be linked to events
   
   createdAt         DateTime    @default(now())
@@ -700,10 +703,19 @@ model EventFeedbackForm {
   title       String                    @default("Event Feedback")
   description String?                   @db.Text
   isActive    Boolean                   @default(true)
+
+  allowAnonymous        Boolean          @default(true)
+  showAfterEvent        Boolean          @default(true)
+  autoSendReminders     Boolean          @default(false)
+  reminderDelayHours    Int             @default(24)
+  closeAfterHours       Int             @default(168) // 7 days
+  completionMessage     String          @default("Thank you for your feedback!")
   
   // Relations
   fields      EventFeedbackField[]
   responses   EventFeedbackResponse[]
+  analytics   EventFeedbackAnalytics? // 🆕 New relation
+  reminders   EventFeedbackReminder[] // 🆕 New relation
   
   createdAt   DateTime                  @default(now())
   updatedAt   DateTime                  @updatedAt
@@ -722,6 +734,13 @@ model EventFeedbackField {
   options           Json?
   isRequired        Boolean                   @default(false)
   orderIndex        Int                       @default(0)
+
+  minValue          Int?
+  maxValue          Int?
+  stepValue         Int?                      @default(1)
+  ratingStyle       String?                   @default("stars") // stars, numbers, emoji
+  placeholder       String?
+  helpText          String?
   
   // Relations
   responses         EventFeedbackResponse[]
@@ -738,18 +757,105 @@ model EventFeedbackResponse {
   id                String                @id @default(cuid())
   feedbackFormId    String
   feedbackForm      EventFeedbackForm     @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
-  userId            String
-  user              User                  @relation(fields: [userId], references: [id])
+  userId            String?
+  user              User?                  @relation(fields: [userId], references: [id])
   fieldId           String
   field             EventFeedbackField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)  // Make sure this line exists
   
   response          String                @db.Text
+
+  status            FeedbackResponseStatus @default(SUBMITTED)
+  isAnonymous       Boolean               @default(false)
+  sentimentScore    SentimentScore?
+  ipAddress         String?
+  userAgent         String?
+  submittedAt       DateTime?
   
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   
-  @@unique([feedbackFormId, userId, fieldId])
+  // 🆕 Updated unique constraint to handle anonymous responses
+  @@unique([feedbackFormId, userId, fieldId], name: "unique_identified_response")
+  @@index([feedbackFormId])
+  @@index([userId])
+  @@index([isAnonymous])
+  @@index([sentimentScore])
   @@map("event_feedback_responses")
+}
+
+model EventFeedbackAnalytics {
+  id              String            @id @default(cuid())
+  feedbackFormId  String            @unique
+  feedbackForm    EventFeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  eventId         String             @unique
+  event           Event             @relation("FeedbackAnalytics", fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Response Statistics
+  totalResponses      Int             @default(0)
+  anonymousResponses  Int             @default(0)
+  identifiedResponses Int             @default(0)
+  completionRate      Decimal         @default(0) @db.Decimal(5,2)
+  
+  // Sentiment Analytics
+  avgSentimentScore     Decimal?        @db.Decimal(3,2)
+  sentimentDistribution Json            @default("{}")
+  
+  // Rating Analytics
+  avgRating             Decimal?        @db.Decimal(3,2)
+  ratingDistribution    Json            @default("{}")
+  
+  // Response Time Analytics
+  avgResponseTime       Int?
+  fastestResponse       Int?
+  slowestResponse       Int?
+  
+  // Engagement Analytics
+  responsesByHour       Json            @default("{}")
+  responsesByDay        Json            @default("{}")
+  
+  // Field Analytics
+  fieldAnalytics        Json            @default("{}")
+  
+  // Cache Management
+  lastCalculatedAt      DateTime        @default(now())
+  isStale               Boolean         @default(false)
+  
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  
+  @@index([eventId])
+  @@index([lastCalculatedAt])
+  @@index([isStale])
+  @@map("event_feedback_analytics")
+}
+
+model EventFeedbackReminder {
+  id              String                @id @default(cuid())
+  feedbackFormId  String
+  feedbackForm    EventFeedbackForm     @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                  @relation("FeedbackReminders", fields: [userId], references: [id], onDelete: Cascade)
+  eventId         String
+  event           Event                 @relation("FeedbackReminders", fields: [eventId], references: [id], onDelete: Cascade)
+  
+  reminderType    String                @default("initial") // initial, followup
+  scheduledAt     DateTime
+  sentAt          DateTime?
+  isCompleted     Boolean               @default(false)
+  attempts        Int                   @default(0)
+  
+  emailSent       Boolean               @default(false)
+  pushSent        Boolean               @default(false)
+  
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  @@unique([feedbackFormId, userId, reminderType], name: "unique_user_reminder")
+  @@index([feedbackFormId])
+  @@index([userId])
+  @@index([scheduledAt])
+  @@index([isCompleted])
+  @@map("event_feedback_reminders")
 }
 
 // Payment Models
@@ -990,7 +1096,24 @@ enum EventFormFieldType {
   SELECT
   RADIO
   CHECKBOX
+  FILE
   RATING
+  LIKERT
+  SENTIMENT
+}
+
+enum FeedbackResponseStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+}
+
+enum SentimentScore {
+  VERY_NEGATIVE
+  NEGATIVE
+  NEUTRAL
+  POSITIVE
+  VERY_POSITIVE
 }
 
 enum EventRegistrationStatus {

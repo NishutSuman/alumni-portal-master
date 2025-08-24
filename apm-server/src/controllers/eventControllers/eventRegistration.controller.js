@@ -2,6 +2,7 @@
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
 const eventService = require('../../services/event.service');
+const emailManager = require('../../services/email/EmailManager');
 
 // ==========================================
 // ADMIN REGISTRATION MANAGEMENT
@@ -288,6 +289,7 @@ const registerForEvent = async (req, res) => {
       paymentRequired: feeCalculation.totalAmount > 0,
       paymentAmount: feeCalculation.totalAmount,
     }, 'Successfully registered for event');
+
     
   } catch (error) {
     console.error('Register for event error:', error);

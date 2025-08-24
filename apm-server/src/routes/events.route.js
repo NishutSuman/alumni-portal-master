@@ -100,6 +100,32 @@ const {
 } = require('../middleware/event.validation.middleware');
 
 // ==========================================
+// FEEDBACK MIDDLEWARE IMPORTS 
+// ==========================================
+const {
+  validateCreateOrUpdateFeedbackForm,
+  validateAddFeedbackField,
+  validateUpdateFeedbackField,
+  validateReorderFeedbackFields,
+  validateSubmitFeedback,
+  validateFeedbackFormAccess,
+  validateFeedbackSubmission,
+  validateFieldModification
+} = require('../middleware/feedback.validation.middleware');
+
+const {
+  cacheFeedbackForm,
+  cacheFeedbackAnalytics,
+  cacheFeedbackResponses,
+  cacheUserFeedbackResponse,
+  cacheFeedbackSummary,
+  cacheFeedbackExport,
+  invalidateFeedbackFormCache,
+  invalidateResponseCache,
+  invalidateAnalyticsCache
+} = require('../middleware/feedback.cache.middleware');
+
+// ==========================================
 // CONTROLLER IMPORTS (COMPLETE)
 // ==========================================
 const eventCategoryController = require('../controllers/eventControllers/eventCategory.controller');
@@ -110,6 +136,7 @@ const eventFormController = require('../controllers/eventControllers/eventForm.c
 const eventGuestController = require('../controllers/eventControllers/eventGuest.controller');
 const merchandiseController = require('../controllers/eventControllers/eventMerchandise.controller');
 const merchandiseCartController = require('../controllers/eventControllers/merchandiseCart.controller');
+const feedbackController = require('../controllers/eventControllers/eventFeedback.controller');
 
 
 // ==========================================
@@ -912,5 +939,474 @@ router.get(
   })
 );
 
+
+// =============================================================================
+// PHASE 6: FEEDBACK SYSTEM ROUTES (ADD AFTER MERCHANDISE ROUTES)
+// =============================================================================
+
+// ==========================================
+// ADMIN FEEDBACK FORM MANAGEMENT
+// ==========================================
+
+/**
+ * Create or update feedback form for an event
+ * POST /api/events/:eventId/feedback/form
+ * @access Admin only
+ */
+router.post('/:eventId/feedback/form',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateCreateOrUpdateFeedbackForm,
+  invalidateFeedbackFormCache,
+  asyncHandler(feedbackController.createOrUpdateFeedbackForm)
+);
+
+/**
+ * Get feedback form for an event
+ * GET /api/events/:eventId/feedback/form
+ * @access Public (with business rules) / Admin
+ * @cache 30 minutes
+ */
+router.get('/:eventId/feedback/form',
+  // Optional authentication - allows both authenticated and anonymous access
+  (req, res, next) => {
+    if (req.headers.authorization) {
+      authenticateToken(req, res, next);
+    } else {
+      req.user = null;
+      next();
+    }
+  },
+  validateEventIdParam,
+  validateFeedbackFormAccess,
+  cacheFeedbackForm,
+  asyncHandler(feedbackController.getFeedbackForm)
+);
+
+// ==========================================
+// ADMIN FEEDBACK FIELD MANAGEMENT
+// ==========================================
+
+/**
+ * Add field to feedback form
+ * POST /api/events/:eventId/feedback/fields
+ * @access Admin only
+ */
+router.post('/:eventId/feedback/fields',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateAddFeedbackField,
+  validateFieldModification,
+  invalidateFeedbackFormCache,
+  asyncHandler(feedbackController.addFeedbackField)
+);
+
+/**
+ * Update feedback field
+ * PUT /api/events/:eventId/feedback/fields/:fieldId
+ * @access Admin only
+ */
+router.put('/:eventId/feedback/fields/:fieldId',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateUpdateFeedbackField,
+  validateFieldModification,
+  invalidateFeedbackFormCache,
+  asyncHandler(feedbackController.updateFeedbackField)
+);
+
+/**
+ * Delete feedback field
+ * DELETE /api/events/:eventId/feedback/fields/:fieldId
+ * @access Admin only
+ */
+router.delete('/:eventId/feedback/fields/:fieldId',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateFieldModification,
+  invalidateFeedbackFormCache,
+  asyncHandler(feedbackController.deleteFeedbackField)
+);
+
+/**
+ * Reorder feedback fields
+ * POST /api/events/:eventId/feedback/fields/reorder
+ * @access Admin only
+ */
+router.post('/:eventId/feedback/fields/reorder',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  validateReorderFeedbackFields,
+  validateFieldModification,
+  invalidateFeedbackFormCache,
+  asyncHandler(feedbackController.reorderFeedbackFields)
+);
+
+// ==========================================
+// PUBLIC FEEDBACK SUBMISSION
+// ==========================================
+
+/**
+ * Submit feedback response
+ * POST /api/events/:eventId/feedback/submit
+ * @access Public (authenticated or anonymous based on form settings)
+ */
+router.post('/:eventId/feedback/submit',
+  // Optional authentication - allows anonymous submissions
+  (req, res, next) => {
+    if (req.headers.authorization) {
+      authenticateToken(req, res, next);
+    } else {
+      req.user = null;
+      next();
+    }
+  },
+  validateEventIdParam,
+  validateFeedbackFormAccess,
+  validateSubmitFeedback,
+  validateFeedbackSubmission,
+  invalidateResponseCache,
+  invalidateAnalyticsCache,
+  asyncHandler(feedbackController.submitFeedback)
+);
+
+/**
+ * Get user's own feedback response
+ * GET /api/events/:eventId/feedback/my-response
+ * @access Authenticated users only
+ * @cache 1 hour
+ */
+router.get('/:eventId/feedback/my-response',
+  authenticateToken,
+  validateEventIdParam,
+  cacheUserFeedbackResponse,
+  asyncHandler(feedbackController.getMyFeedbackResponse)
+);
+
+// ==========================================
+// ADMIN ANALYTICS & REPORTING
+// ==========================================
+
+/**
+ * Get comprehensive feedback analytics
+ * GET /api/events/:eventId/feedback/analytics
+ * @access Admin only
+ * @cache 2 hours
+ */
+router.get('/:eventId/feedback/analytics',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  cacheFeedbackAnalytics,
+  asyncHandler(feedbackController.getFeedbackAnalytics)
+);
+
+/**
+ * Get all feedback responses with filtering
+ * GET /api/events/:eventId/feedback/responses
+ * @access Admin only
+ * @cache 15 minutes
+ */
+router.get('/:eventId/feedback/responses',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  cacheFeedbackResponses,
+  asyncHandler(feedbackController.getFeedbackResponses)
+);
+
+/**
+ * Export feedback responses
+ * GET /api/events/:eventId/feedback/export
+ * @access Admin only
+ * @cache 5 minutes
+ */
+router.get('/:eventId/feedback/export',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  cacheFeedbackExport,
+  asyncHandler(feedbackController.exportFeedbackResponses)
+);
+
+/**
+ * Get feedback summary statistics
+ * GET /api/events/:eventId/feedback/summary
+ * @access Admin only
+ * @cache 30 minutes
+ */
+router.get('/:eventId/feedback/summary',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  cacheFeedbackSummary,
+  asyncHandler(async (req, res) => {
+    const { eventId } = req.params;
+    
+    try {
+      // Get basic feedback statistics
+      const { prisma } = require('../config/database');
+      const feedbackForm = await prisma.eventFeedbackForm.findFirst({
+        where: { eventId },
+        include: {
+          _count: {
+            select: { responses: true }
+          }
+        }
+      });
+
+      if (!feedbackForm) {
+        return res.status(404).json({
+          success: false,
+          message: 'Feedback form not found'
+        });
+      }
+
+      // Get analytics summary
+      const FeedbackAnalyticsService = require('../services/feedback/FeedbackAnalyticsService');
+      const analytics = await FeedbackAnalyticsService.getAnalytics(feedbackForm.id);
+
+      const summary = {
+        formId: feedbackForm.id,
+        totalResponses: analytics.totalResponses || 0,
+        completionRate: analytics.completionRate || 0,
+        avgRating: analytics.avgRating || null,
+        avgSentimentScore: analytics.avgSentimentScore || null,
+        isActive: feedbackForm.isActive,
+        lastUpdated: analytics.lastCalculatedAt || feedbackForm.updatedAt
+      };
+
+      return res.json({
+        success: true,
+        data: summary,
+        message: 'Feedback summary retrieved successfully'
+      });
+
+    } catch (error) {
+      console.error('Get feedback summary error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve feedback summary'
+      });
+    }
+  })
+);
+
+// ==========================================
+// ADMIN UTILITY ROUTES
+// ==========================================
+
+/**
+ * Refresh analytics cache manually
+ * POST /api/events/:eventId/feedback/refresh-analytics
+ * @access Admin only
+ */
+router.post('/:eventId/feedback/refresh-analytics',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  asyncHandler(async (req, res) => {
+    const { eventId } = req.params;
+    
+    try {
+      const { prisma } = require('../config/database');
+      
+      // Get feedback form ID
+      const feedbackForm = await prisma.eventFeedbackForm.findFirst({
+        where: { eventId },
+        select: { id: true }
+      });
+      
+      if (!feedbackForm) {
+        return res.status(404).json({
+          success: false,
+          message: 'Feedback form not found'
+        });
+      }
+      
+      // Force refresh analytics
+      const FeedbackAnalyticsService = require('../services/feedback/FeedbackAnalyticsService');
+      const analytics = await FeedbackAnalyticsService.getAnalytics(feedbackForm.id, true);
+      
+      return res.json({
+        success: true,
+        data: analytics,
+        message: 'Analytics refreshed successfully'
+      });
+      
+    } catch (error) {
+      console.error('Refresh analytics error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to refresh analytics'
+      });
+    }
+  })
+);
+
+/**
+ * Schedule feedback reminders for event
+ * POST /api/events/:eventId/feedback/schedule-reminders
+ * @access Admin only
+ */
+router.post('/:eventId/feedback/schedule-reminders',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateEventIdParam,
+  asyncHandler(async (req, res) => {
+    const { eventId } = req.params;
+    
+    try {
+      const { prisma } = require('../config/database');
+      
+      // Get feedback form
+      const feedbackForm = await prisma.eventFeedbackForm.findFirst({
+        where: { eventId },
+        select: { id: true }
+      });
+      
+      if (!feedbackForm) {
+        return res.status(404).json({
+          success: false,
+          message: 'Feedback form not found'
+        });
+      }
+      
+      // Schedule reminders
+      const FeedbackService = require('../services/feedback/FeedbackService');
+      await FeedbackService.scheduleFeedbackReminders(feedbackForm.id);
+      
+      return res.json({
+        success: true,
+        message: 'Feedback reminders scheduled successfully'
+      });
+      
+    } catch (error) {
+      console.error('Schedule reminders error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to schedule reminders'
+      });
+    }
+  })
+);
+
+// ==========================================
+// BULK OPERATIONS (ADMIN ONLY)
+// ==========================================
+
+/**
+ * Create feedback forms for multiple events
+ * POST /api/events/feedback/bulk-create
+ * @access Admin only
+ */
+router.post('/feedback/bulk-create',
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  asyncHandler(async (req, res) => {
+    const { eventIds, formTemplate } = req.body;
+    
+    try {
+      if (!Array.isArray(eventIds) || eventIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Event IDs array is required'
+        });
+      }
+      
+      const { prisma } = require('../config/database');
+      const results = [];
+      
+      for (const eventId of eventIds) {
+        try {
+          // Check if event exists
+          const event = await prisma.event.findUnique({
+            where: { id: eventId },
+            select: { id: true, title: true }
+          });
+          
+          if (!event) {
+            results.push({ 
+              eventId, 
+              success: false, 
+              error: 'Event not found' 
+            });
+            continue;
+          }
+          
+          // Create feedback form
+          const form = await prisma.eventFeedbackForm.create({
+            data: {
+              eventId,
+              title: formTemplate?.title || 'Event Feedback',
+              description: formTemplate?.description,
+              allowAnonymous: formTemplate?.allowAnonymous ?? true,
+              showAfterEvent: formTemplate?.showAfterEvent ?? true,
+              autoSendReminders: formTemplate?.autoSendReminders ?? false,
+              reminderDelayHours: formTemplate?.reminderDelayHours ?? 24,
+              closeAfterHours: formTemplate?.closeAfterHours ?? 168
+            }
+          });
+          
+          results.push({ 
+            eventId, 
+            success: true, 
+            formId: form.id,
+            eventTitle: event.title
+          });
+          
+        } catch (error) {
+          results.push({ 
+            eventId, 
+            success: false, 
+            error: error.message 
+          });
+        }
+      }
+      
+      // Log bulk operation
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user.id,
+          action: 'bulk_feedback_forms_create',
+          details: {
+            eventIds,
+            totalProcessed: eventIds.length,
+            successful: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length,
+            results
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        }
+      });
+      
+      return res.json({
+        success: true,
+        data: {
+          results,
+          summary: {
+            totalProcessed: eventIds.length,
+            successful: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length
+          }
+        },
+        message: 'Bulk feedback form creation completed'
+      });
+      
+    } catch (error) {
+      console.error('Bulk create feedback forms error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Bulk operation failed'
+      });
+    }
+  })
+);
 
 module.exports = router;
