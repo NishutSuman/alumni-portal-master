@@ -86,6 +86,14 @@ model User {
   checkInsProcessed   EventCheckIn[]      @relation("CheckInStaff")
   deliveriesProcessed MerchandiseDelivery[] @relation("DeliveryStaff")
 
+   // Treasury Relations 
+  yearlyBalancesCreated    YearlyBalance[]     @relation("YearlyBalanceCreator")
+  expensesCreated          Expense[]           @relation("ExpenseCreator") 
+  expensesApproved         Expense[]           @relation("ExpenseApprover")
+  collectionsCreated       ManualCollection[]  @relation("CollectionCreator")
+  collectionsVerified      ManualCollection[]  @relation("CollectionVerifier")
+  accountBalancesUpdated   AccountBalance[]    @relation("BalanceUpdater")
+
   
   
   @@index([batch])
@@ -458,6 +466,10 @@ model Event {
   feedbackAnalytics EventFeedbackAnalytics? @relation("FeedbackAnalytics")
   feedbackReminders EventFeedbackReminder[] @relation("FeedbackReminders")
   analytics             EventAnalytics?
+
+  // Treasury Relations (add to Event model)
+  expenses         Expense[]          @relation("ExpenseEvent")
+  manualCollections ManualCollection[] @relation("CollectionEvent")
 
   // Dashboard Privacy
   privacySettings       EventPrivacySettings?
@@ -1198,6 +1210,166 @@ model EventPrivacySettings {
 }
 
 
+// ============================================
+// TREASURY MANAGEMENT MODELS
+// ============================================
+
+model YearlyBalance {
+  id             String   @id @default(cuid())
+  year           Int      @unique
+  openingBalance Decimal  @db.Decimal(15, 2) @default(0)
+  closingBalance Decimal? @db.Decimal(15, 2)
+  notes          String?  @db.Text
+  
+  // Relations
+  createdBy      String
+  creator        User     @relation("YearlyBalanceCreator", fields: [createdBy], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([year])
+  @@index([createdBy])
+  @@map("yearly_balances")
+}
+
+model ExpenseCategory {
+  id           String               @id @default(cuid())
+  name         String               @unique
+  description  String?              @db.Text
+  isActive     Boolean              @default(true)
+  displayOrder Int                  @default(0)
+  
+  // Relations
+  subcategories ExpenseSubcategory[]
+  expenses      Expense[]
+  
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  
+  @@index([name])
+  @@index([isActive])
+  @@index([displayOrder])
+  @@map("expense_categories")
+}
+
+model ExpenseSubcategory {
+  id           String          @id @default(cuid())
+  name         String
+  description  String?         @db.Text
+  isActive     Boolean         @default(true)
+  displayOrder Int             @default(0)
+  
+  // Relations
+  categoryId   String
+  category     ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  expenses     Expense[]
+  
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  
+  @@unique([categoryId, name])
+  @@index([categoryId])
+  @@index([displayOrder])
+  @@map("expense_subcategories")
+}
+
+model Expense {
+  id            String              @id @default(cuid())
+  amount        Decimal             @db.Decimal(12, 2)
+  description   String              @db.Text
+  expenseDate   DateTime
+  receiptUrl    String?
+  vendorName    String?
+  vendorContact String?
+  
+  // Category Relations
+  categoryId    String
+  category      ExpenseCategory     @relation(fields: [categoryId], references: [id])
+  subcategoryId String?
+  subcategory   ExpenseSubcategory? @relation(fields: [subcategoryId], references: [id])
+  
+  // Event Relation (Optional)
+  linkedEventId String?
+  linkedEvent   Event?              @relation("ExpenseEvent", fields: [linkedEventId], references: [id])
+  
+  // Admin Relations
+  createdBy     String
+  creator       User                @relation("ExpenseCreator", fields: [createdBy], references: [id])
+  approvedBy    String?
+  approver      User?               @relation("ExpenseApprover", fields: [approvedBy], references: [id])
+  
+  isApproved    Boolean             @default(false)
+  approvedAt    DateTime?
+  
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  
+  @@index([expenseDate])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([linkedEventId])
+  @@index([createdBy])
+  @@index([isApproved])
+  @@map("expenses")
+}
+
+model ManualCollection {
+  id             String                @id @default(cuid())
+  amount         Decimal               @db.Decimal(12, 2)
+  description    String                @db.Text
+  collectionDate DateTime
+  collectionMode ManualCollectionMode  @default(CASH)
+  receiptUrl     String?
+  donorName      String?
+  donorContact   String?
+  
+  // Category (Optional)
+  category       String?
+  
+  // Event Relation (Optional)
+  linkedEventId  String?
+  linkedEvent    Event?                @relation("CollectionEvent", fields: [linkedEventId], references: [id])
+  
+  // Admin Relations
+  createdBy      String
+  creator        User                  @relation("CollectionCreator", fields: [createdBy], references: [id])
+  verifiedBy     String?
+  verifier       User?                 @relation("CollectionVerifier", fields: [verifiedBy], references: [id])
+  
+  isVerified     Boolean               @default(true)
+  verifiedAt     DateTime?
+  
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  
+  @@index([collectionDate])
+  @@index([collectionMode])
+  @@index([linkedEventId])
+  @@index([createdBy])
+  @@index([category])
+  @@map("manual_collections")
+}
+
+model AccountBalance {
+  id               String   @id @default(cuid())
+  currentBalance   Decimal  @db.Decimal(15, 2)
+  balanceDate      DateTime
+  notes            String?  @db.Text
+  bankStatementUrl String?
+  
+  // Admin tracking
+  updatedBy        String
+  updater          User     @relation("BalanceUpdater", fields: [updatedBy], references: [id])
+  
+  createdAt        DateTime @default(now())
+  
+  @@index([balanceDate])
+  @@index([updatedBy])
+  @@map("account_balances")
+}
+
+
 // Enums
 enum UserRole {
   USER
@@ -1389,4 +1561,16 @@ enum DeliveryStatus {
   DELIVERED
   FAILED
   RETURNED
+}
+
+// ============================================
+// ENUMS FOR TREASURY SYSTEM
+// ============================================
+
+enum ManualCollectionMode {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  UPI_OFFLINE
+  OTHER
 }
