@@ -1,7 +1,7 @@
 // src/controllers/group.controller.js
-const { PrismaClient } = require('@prisma/client');
-const { successResponse, errorResponse } = require('../utils/response');
-const { setCacheData } = require('../middleware/group.cache.middleware');
+const { PrismaClient } = require("@prisma/client");
+const { successResponse, errorResponse } = require("../utils/response");
+const { CacheService } = require("../config/redis");
 
 const prisma = new PrismaClient();
 
@@ -11,49 +11,56 @@ const prisma = new PrismaClient();
 
 // Get role validation for group type
 const getRolesByGroupType = (groupType) => {
-  const roleMapping = {
-    CELL: ['CONVENER', 'CO_CONVENER', 'STAKE_HOLDER'],
-    COMMITTEE: ['CONVENER', 'CO_CONVENER', 'STAKE_HOLDER'],
-    OFFICE_BEARERS: ['PRESIDENT', 'VICE_PRESIDENT', 'SECRETARY', 'JOINT_SECRETARY', 'TREASURER', 'JOINT_TREASURER'],
-    ADVISORS: ['CHIEF_ADVISOR', 'JOINT_ADVISOR']
-  };
-  return roleMapping[groupType] || [];
+	const roleMapping = {
+		CELL: ["CONVENER", "CO_CONVENER", "STAKE_HOLDER"],
+		COMMITTEE: ["CONVENER", "CO_CONVENER", "STAKE_HOLDER"],
+		OFFICE_BEARERS: [
+			"PRESIDENT",
+			"VICE_PRESIDENT",
+			"SECRETARY",
+			"JOINT_SECRETARY",
+			"TREASURER",
+			"JOINT_TREASURER",
+		],
+		ADVISORS: ["CHIEF_ADVISOR", "JOINT_ADVISOR"],
+	};
+	return roleMapping[groupType] || [];
 };
 
 // Format group data for response
 const formatGroupData = (group, includeMembers = false) => {
-  const formatted = {
-    id: group.id,
-    name: group.name,
-    type: group.type,
-    description: group.description,
-    isActive: group.isActive,
-    displayOrder: group.displayOrder,
-    createdBy: group.createdBy,
-    createdAt: group.createdAt,
-    updatedAt: group.updatedAt,
-    membersCount: group.members?.length || group._count?.members || 0,
-    allowedRoles: getRolesByGroupType(group.type)
-  };
+	const formatted = {
+		id: group.id,
+		name: group.name,
+		type: group.type,
+		description: group.description,
+		isActive: group.isActive,
+		displayOrder: group.displayOrder,
+		createdBy: group.createdBy,
+		createdAt: group.createdAt,
+		updatedAt: group.updatedAt,
+		membersCount: group.members?.length || group._count?.members || 0,
+		allowedRoles: getRolesByGroupType(group.type),
+	};
 
-  if (includeMembers && group.members) {
-    formatted.members = group.members.map(member => ({
-      id: member.id,
-      role: member.role,
-      isActive: member.isActive,
-      addedAt: member.createdAt,
-      user: {
-        id: member.user.id,
-        firstName: member.user.firstName,
-        lastName: member.user.lastName,
-        profilePhoto: member.user.profilePhoto,
-        batchYear: member.user.batchYear,
-        email: member.user.email
-      }
-    }));
-  }
+	if (includeMembers && group.members) {
+		formatted.members = group.members.map((member) => ({
+			id: member.id,
+			role: member.role,
+			isActive: member.isActive,
+			addedAt: member.createdAt,
+			user: {
+				id: member.user.id,
+				firstName: member.user.firstName,
+				lastName: member.user.lastName,
+				profilePhoto: member.user.profilePhoto,
+				batchYear: member.user.batchYear,
+				email: member.user.email,
+			},
+		}));
+	}
 
-  return formatted;
+	return formatted;
 };
 
 // ============================================
@@ -66,112 +73,112 @@ const formatGroupData = (group, includeMembers = false) => {
  * Access: SUPER_ADMIN
  */
 const getGroups = async (req, res) => {
-  try {
-    const {
-      type,
-      isActive,
-      search,
-      page = 1,
-      limit = 10,
-      sortBy = 'displayOrder',
-      sortOrder = 'asc',
-      includeMembers = 'false'
-    } = req.query;
+	try {
+		const {
+			type,
+			isActive,
+			search,
+			page = 1,
+			limit = 10,
+			sortBy = "displayOrder",
+			sortOrder = "asc",
+			includeMembers = "false",
+		} = req.query;
 
-    // Build where clause
-    const where = {};
-    
-    if (type) {
-      where.type = type;
-    }
-    
-    if (isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
-    
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+		// Build where clause
+		const where = {};
 
-    // Build order clause
-    const orderBy = {};
-    orderBy[sortBy] = sortOrder;
+		if (type) {
+			where.type = type;
+		}
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+		if (isActive !== undefined) {
+			where.isActive = isActive === "true";
+		}
 
-    // Build include clause
-    const include = {
-      _count: { select: { members: true } }
-    };
+		if (search) {
+			where.OR = [
+				{ name: { contains: search, mode: "insensitive" } },
+				{ description: { contains: search, mode: "insensitive" } },
+			];
+		}
 
-    if (includeMembers === 'true') {
-      include.members = {
-        where: { isActive: true },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              profilePhoto: true,
-              batchYear: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      };
-    }
+		// Build order clause
+		const orderBy = {};
+		orderBy[sortBy] = sortOrder;
 
-    // Execute queries
-    const [groups, totalCount] = await Promise.all([
-      prisma.organizationGroup.findMany({
-        where,
-        include,
-        orderBy,
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.organizationGroup.count({ where })
-    ]);
+		// Calculate pagination
+		const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Format response data
-    const formattedGroups = groups.map(group => 
-      formatGroupData(group, includeMembers === 'true')
-    );
+		// Build include clause
+		const include = {
+			_count: { select: { members: true } },
+		};
 
-    const responseData = {
-      groups: formattedGroups,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / parseInt(limit)),
-        totalCount,
-        hasNext: parseInt(page) * parseInt(limit) < totalCount,
-        hasPrev: parseInt(page) > 1
-      },
-      filters: {
-        type,
-        isActive,
-        search,
-        sortBy,
-        sortOrder
-      }
-    };
+		if (includeMembers === "true") {
+			include.members = {
+				where: { isActive: true },
+				include: {
+					user: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							profilePhoto: true,
+							batchYear: true,
+							email: true,
+						},
+					},
+				},
+				orderBy: { createdAt: "desc" },
+			};
+		}
 
-    // Cache the result
-    if (req.cacheKey && req.cacheTTL) {
-      await setCacheData(req.cacheKey, responseData, req.cacheTTL);
-    }
+		// Execute queries
+		const [groups, totalCount] = await Promise.all([
+			prisma.organizationGroup.findMany({
+				where,
+				include,
+				orderBy,
+				skip,
+				take: parseInt(limit),
+			}),
+			prisma.organizationGroup.count({ where }),
+		]);
 
-    return successResponse(res, responseData, 'Groups retrieved successfully');
-  } catch (error) {
-    console.error('Get groups error:', error);
-    return errorResponse(res, 'Failed to retrieve groups', 500);
-  }
+		// Format response data
+		const formattedGroups = groups.map((group) =>
+			formatGroupData(group, includeMembers === "true")
+		);
+
+		const responseData = {
+			groups: formattedGroups,
+			pagination: {
+				currentPage: parseInt(page),
+				totalPages: Math.ceil(totalCount / parseInt(limit)),
+				totalCount,
+				hasNext: parseInt(page) * parseInt(limit) < totalCount,
+				hasPrev: parseInt(page) > 1,
+			},
+			filters: {
+				type,
+				isActive,
+				search,
+				sortBy,
+				sortOrder,
+			},
+		};
+
+		// Cache the result
+		if (req.cacheKey && req.cacheTTL) {
+			await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+		}
+
+		return successResponse(res, responseData, "Groups retrieved successfully");
+	} catch (error) {
+		console.error("Get groups error:", error);
+		return errorResponse(res, "Failed to retrieve groups", 500);
+	}
 };
 
 /**
@@ -180,71 +187,71 @@ const getGroups = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const getGroup = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { includeMembers = 'true' } = req.query;
+	try {
+		const { groupId } = req.params;
+		const { includeMembers = "true" } = req.query;
 
-    const include = {
-      creator: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true
-        }
-      },
-      _count: { select: { members: true } }
-    };
+		const include = {
+			creator: {
+				select: {
+					id: true,
+					firstName: true,
+					lastName: true,
+				},
+			},
+			_count: { select: { members: true } },
+		};
 
-    if (includeMembers === 'true') {
-      include.members = {
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              profilePhoto: true,
-              batchYear: true,
-              email: true,
-              isActive: true
-            }
-          },
-          adder: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      };
-    }
+		if (includeMembers === "true") {
+			include.members = {
+				include: {
+					user: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							profilePhoto: true,
+							batchYear: true,
+							email: true,
+							isActive: true,
+						},
+					},
+					adder: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+						},
+					},
+				},
+				orderBy: { createdAt: "desc" },
+			};
+		}
 
-    const group = await prisma.organizationGroup.findUnique({
-      where: { id: groupId },
-      include
-    });
+		const group = await prisma.organizationGroup.findUnique({
+			where: { id: groupId },
+			include,
+		});
 
-    if (!group) {
-      return errorResponse(res, 'Group not found', 404);
-    }
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
-    const responseData = {
-      ...formatGroupData(group, includeMembers === 'true'),
-      creator: group.creator
-    };
+		const responseData = {
+			...formatGroupData(group, includeMembers === "true"),
+			creator: group.creator,
+		};
 
-    // Cache the result
-    if (req.cacheKey && req.cacheTTL) {
-      await setCacheData(req.cacheKey, responseData, req.cacheTTL);
-    }
+		// Cache the result
+		if (req.cacheKey && req.cacheTTL) {
+			await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+		}
 
-    return successResponse(res, responseData, 'Group retrieved successfully');
-  } catch (error) {
-    console.error('Get group error:', error);
-    return errorResponse(res, 'Failed to retrieve group', 500);
-  }
+		return successResponse(res, responseData, "Group retrieved successfully");
+	} catch (error) {
+		console.error("Get group error:", error);
+		return errorResponse(res, "Failed to retrieve group", 500);
+	}
 };
 
 /**
@@ -253,72 +260,72 @@ const getGroup = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const createGroup = async (req, res) => {
-  try {
-    const { name, type, description, displayOrder } = req.body;
-    const userId = req.user.id;
+	try {
+		const { name, type, description, displayOrder } = req.body;
+		const userId = req.user.id;
 
-    // Get next display order if not provided
-    let finalDisplayOrder = displayOrder;
-    if (finalDisplayOrder === undefined) {
-      const lastGroup = await prisma.organizationGroup.findFirst({
-        where: { type },
-        orderBy: { displayOrder: 'desc' },
-        select: { displayOrder: true }
-      });
-      finalDisplayOrder = (lastGroup?.displayOrder || 0) + 1;
-    }
+		// Get next display order if not provided
+		let finalDisplayOrder = displayOrder;
+		if (finalDisplayOrder === undefined) {
+			const lastGroup = await prisma.organizationGroup.findFirst({
+				where: { type },
+				orderBy: { displayOrder: "desc" },
+				select: { displayOrder: true },
+			});
+			finalDisplayOrder = (lastGroup?.displayOrder || 0) + 1;
+		}
 
-    // Create group
-    const group = await prisma.organizationGroup.create({
-      data: {
-        name: name.trim(),
-        type,
-        description: description?.trim() || null,
-        displayOrder: finalDisplayOrder,
-        createdBy: userId
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        _count: { select: { members: true } }
-      }
-    });
+		// Create group
+		const group = await prisma.organizationGroup.create({
+			data: {
+				name: name.trim(),
+				type,
+				description: description?.trim() || null,
+				displayOrder: finalDisplayOrder,
+				createdBy: userId,
+			},
+			include: {
+				creator: {
+					select: {
+						id: true,
+						firstName: true,
+						lastName: true,
+					},
+				},
+				_count: { select: { members: true } },
+			},
+		});
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'group_create',
-        details: {
-          groupId: group.id,
-          groupName: group.name,
-          groupType: group.type
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId,
+				action: "group_create",
+				details: {
+					groupId: group.id,
+					groupName: group.name,
+					groupType: group.type,
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    const responseData = {
-      ...formatGroupData(group),
-      creator: group.creator
-    };
+		const responseData = {
+			...formatGroupData(group),
+			creator: group.creator,
+		};
 
-    return successResponse(
-      res,
-      responseData,
-      'Group created successfully',
-      201
-    );
-  } catch (error) {
-    console.error('Create group error:', error);
-    return errorResponse(res, 'Failed to create group', 500);
-  }
+		return successResponse(
+			res,
+			responseData,
+			"Group created successfully",
+			201
+		);
+	} catch (error) {
+		console.error("Create group error:", error);
+		return errorResponse(res, "Failed to create group", 500);
+	}
 };
 
 /**
@@ -327,59 +334,60 @@ const createGroup = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const updateGroup = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { name, description, isActive, displayOrder } = req.body;
-    const userId = req.user.id;
+	try {
+		const { groupId } = req.params;
+		const { name, description, isActive, displayOrder } = req.body;
+		const userId = req.user.id;
 
-    // Build update data
-    const updateData = {};
-    if (name !== undefined) updateData.name = name.trim();
-    if (description !== undefined) updateData.description = description?.trim() || null;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+		// Build update data
+		const updateData = {};
+		if (name !== undefined) updateData.name = name.trim();
+		if (description !== undefined)
+			updateData.description = description?.trim() || null;
+		if (isActive !== undefined) updateData.isActive = isActive;
+		if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
 
-    // Update group
-    const group = await prisma.organizationGroup.update({
-      where: { id: groupId },
-      data: updateData,
-      include: {
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        _count: { select: { members: true } }
-      }
-    });
+		// Update group
+		const group = await prisma.organizationGroup.update({
+			where: { id: groupId },
+			data: updateData,
+			include: {
+				creator: {
+					select: {
+						id: true,
+						firstName: true,
+						lastName: true,
+					},
+				},
+				_count: { select: { members: true } },
+			},
+		});
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'group_update',
-        details: {
-          groupId: group.id,
-          groupName: group.name,
-          updatedFields: Object.keys(updateData)
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId,
+				action: "group_update",
+				details: {
+					groupId: group.id,
+					groupName: group.name,
+					updatedFields: Object.keys(updateData),
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    const responseData = {
-      ...formatGroupData(group),
-      creator: group.creator
-    };
+		const responseData = {
+			...formatGroupData(group),
+			creator: group.creator,
+		};
 
-    return successResponse(res, responseData, 'Group updated successfully');
-  } catch (error) {
-    console.error('Update group error:', error);
-    return errorResponse(res, 'Failed to update group', 500);
-  }
+		return successResponse(res, responseData, "Group updated successfully");
+	} catch (error) {
+		console.error("Update group error:", error);
+		return errorResponse(res, "Failed to update group", 500);
+	}
 };
 
 /**
@@ -388,55 +396,55 @@ const updateGroup = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const deleteGroup = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const userId = req.user.id;
+	try {
+		const { groupId } = req.params;
+		const userId = req.user.id;
 
-    // Get group details for logging
-    const group = await prisma.organizationGroup.findUnique({
-      where: { id: groupId },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        _count: { select: { members: true } }
-      }
-    });
+		// Get group details for logging
+		const group = await prisma.organizationGroup.findUnique({
+			where: { id: groupId },
+			select: {
+				id: true,
+				name: true,
+				type: true,
+				_count: { select: { members: true } },
+			},
+		});
 
-    if (!group) {
-      return errorResponse(res, 'Group not found', 404);
-    }
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
-    // Delete group (cascade will handle members)
-    await prisma.organizationGroup.delete({
-      where: { id: groupId }
-    });
+		// Delete group (cascade will handle members)
+		await prisma.organizationGroup.delete({
+			where: { id: groupId },
+		});
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'group_delete',
-        details: {
-          groupId: group.id,
-          groupName: group.name,
-          groupType: group.type,
-          memberCount: group._count.members
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId,
+				action: "group_delete",
+				details: {
+					groupId: group.id,
+					groupName: group.name,
+					groupType: group.type,
+					memberCount: group._count.members,
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    return successResponse(
-      res,
-      { deletedGroup: { id: group.id, name: group.name } },
-      'Group deleted successfully'
-    );
-  } catch (error) {
-    console.error('Delete group error:', error);
-    return errorResponse(res, 'Failed to delete group', 500);
-  }
+		return successResponse(
+			res,
+			{ deletedGroup: { id: group.id, name: group.name } },
+			"Group deleted successfully"
+		);
+	} catch (error) {
+		console.error("Delete group error:", error);
+		return errorResponse(res, "Failed to delete group", 500);
+	}
 };
 
 /**
@@ -445,55 +453,55 @@ const deleteGroup = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const reorderGroups = async (req, res) => {
-  try {
-    const { groups } = req.body;
-    const userId = req.user.id;
+	try {
+		const { groups } = req.body;
+		const userId = req.user.id;
 
-    // Validate all group IDs exist
-    const existingGroups = await prisma.organizationGroup.findMany({
-      where: {
-        id: { in: groups.map(g => g.id) }
-      },
-      select: { id: true, name: true }
-    });
+		// Validate all group IDs exist
+		const existingGroups = await prisma.organizationGroup.findMany({
+			where: {
+				id: { in: groups.map((g) => g.id) },
+			},
+			select: { id: true, name: true },
+		});
 
-    if (existingGroups.length !== groups.length) {
-      return errorResponse(res, 'One or more groups not found', 404);
-    }
+		if (existingGroups.length !== groups.length) {
+			return errorResponse(res, "One or more groups not found", 404);
+		}
 
-    // Update display orders in transaction
-    await prisma.$transaction(
-      groups.map(group =>
-        prisma.organizationGroup.update({
-          where: { id: group.id },
-          data: { displayOrder: group.displayOrder }
-        })
-      )
-    );
+		// Update display orders in transaction
+		await prisma.$transaction(
+			groups.map((group) =>
+				prisma.organizationGroup.update({
+					where: { id: group.id },
+					data: { displayOrder: group.displayOrder },
+				})
+			)
+		);
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'groups_reorder',
-        details: {
-          reorderedGroups: groups.length,
-          groupIds: groups.map(g => g.id)
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId,
+				action: "groups_reorder",
+				details: {
+					reorderedGroups: groups.length,
+					groupIds: groups.map((g) => g.id),
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    return successResponse(
-      res,
-      { reorderedCount: groups.length },
-      'Groups reordered successfully'
-    );
-  } catch (error) {
-    console.error('Reorder groups error:', error);
-    return errorResponse(res, 'Failed to reorder groups', 500);
-  }
+		return successResponse(
+			res,
+			{ reorderedCount: groups.length },
+			"Groups reordered successfully"
+		);
+	} catch (error) {
+		console.error("Reorder groups error:", error);
+		return errorResponse(res, "Failed to reorder groups", 500);
+	}
 };
 
 // ============================================
@@ -506,116 +514,120 @@ const reorderGroups = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const getGroupMembers = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const {
-      isActive,
-      role,
-      search,
-      page = 1,
-      limit = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
+	try {
+		const { groupId } = req.params;
+		const {
+			isActive,
+			role,
+			search,
+			page = 1,
+			limit = 20,
+			sortBy = "createdAt",
+			sortOrder = "desc",
+		} = req.query;
 
-    // Build where clause
-    const where = { groupId };
-    
-    if (isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
-    
-    if (role) {
-      where.role = role;
-    }
+		// Build where clause
+		const where = { groupId };
 
-    if (search) {
-      where.user = {
-        OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } }
-        ]
-      };
-    }
+		if (isActive !== undefined) {
+			where.isActive = isActive === "true";
+		}
 
-    // Build order clause
-    const orderBy = {};
-    if (sortBy === 'name') {
-      orderBy.user = { firstName: sortOrder };
-    } else {
-      orderBy[sortBy] = sortOrder;
-    }
+		if (role) {
+			where.role = role;
+		}
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+		if (search) {
+			where.user = {
+				OR: [
+					{ firstName: { contains: search, mode: "insensitive" } },
+					{ lastName: { contains: search, mode: "insensitive" } },
+					{ email: { contains: search, mode: "insensitive" } },
+				],
+			};
+		}
 
-    // Execute queries
-    const [members, totalCount] = await Promise.all([
-      prisma.groupMember.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              profilePhoto: true,
-              batchYear: true,
-              isActive: true
-            }
-          },
-          adder: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          }
-        },
-        orderBy,
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.groupMember.count({ where })
-    ]);
+		// Build order clause
+		const orderBy = {};
+		if (sortBy === "name") {
+			orderBy.user = { firstName: sortOrder };
+		} else {
+			orderBy[sortBy] = sortOrder;
+		}
 
-    const responseData = {
-      members: members.map(member => ({
-        id: member.id,
-        role: member.role,
-        isActive: member.isActive,
-        addedAt: member.createdAt,
-        user: member.user,
-        addedBy: member.adder
-      })),
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / parseInt(limit)),
-        totalCount,
-        hasNext: parseInt(page) * parseInt(limit) < totalCount,
-        hasPrev: parseInt(page) > 1
-      },
-      filters: {
-        isActive,
-        role,
-        search,
-        sortBy,
-        sortOrder
-      }
-    };
+		// Calculate pagination
+		const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Cache the result
-    if (req.cacheKey && req.cacheTTL) {
-      await setCacheData(req.cacheKey, responseData, req.cacheTTL);
-    }
+		// Execute queries
+		const [members, totalCount] = await Promise.all([
+			prisma.groupMember.findMany({
+				where,
+				include: {
+					user: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							email: true,
+							profilePhoto: true,
+							batchYear: true,
+							isActive: true,
+						},
+					},
+					adder: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+						},
+					},
+				},
+				orderBy,
+				skip,
+				take: parseInt(limit),
+			}),
+			prisma.groupMember.count({ where }),
+		]);
 
-    return successResponse(res, responseData, 'Group members retrieved successfully');
-  } catch (error) {
-    console.error('Get group members error:', error);
-    return errorResponse(res, 'Failed to retrieve group members', 500);
-  }
+		const responseData = {
+			members: members.map((member) => ({
+				id: member.id,
+				role: member.role,
+				isActive: member.isActive,
+				addedAt: member.createdAt,
+				user: member.user,
+				addedBy: member.adder,
+			})),
+			pagination: {
+				currentPage: parseInt(page),
+				totalPages: Math.ceil(totalCount / parseInt(limit)),
+				totalCount,
+				hasNext: parseInt(page) * parseInt(limit) < totalCount,
+				hasPrev: parseInt(page) > 1,
+			},
+			filters: {
+				isActive,
+				role,
+				search,
+				sortBy,
+				sortOrder,
+			},
+		};
+
+		// Cache the result
+		if (req.cacheKey && req.cacheTTL) {
+			await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+		}
+
+		return successResponse(
+			res,
+			responseData,
+			"Group members retrieved successfully"
+		);
+	} catch (error) {
+		console.error("Get group members error:", error);
+		return errorResponse(res, "Failed to retrieve group members", 500);
+	}
 };
 
 /**
@@ -624,116 +636,118 @@ const getGroupMembers = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const addGroupMember = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { userId, role } = req.body;
-    const adminId = req.user.id;
+	try {
+		const { groupId } = req.params;
+		const { userId, role } = req.body;
+		const adminId = req.user.id;
 
-    // Check if member already exists (including inactive ones)
-    const existingMember = await prisma.groupMember.findUnique({
-      where: {
-        groupId_userId: { groupId, userId }
-      }
-    });
+		// Check if member already exists (including inactive ones)
+		const existingMember = await prisma.groupMember.findUnique({
+			where: {
+				groupId_userId: { groupId, userId },
+			},
+		});
 
-    let member;
-    
-    if (existingMember) {
-      // Reactivate existing member with new role
-      member = await prisma.groupMember.update({
-        where: { id: existingMember.id },
-        data: {
-          role,
-          isActive: true,
-          addedBy: adminId
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              profilePhoto: true,
-              batchYear: true
-            }
-          },
-          adder: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          }
-        }
-      });
-    } else {
-      // Create new member
-      member = await prisma.groupMember.create({
-        data: {
-          groupId,
-          userId,
-          role,
-          addedBy: adminId
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              profilePhoto: true,
-              batchYear: true
-            }
-          },
-          adder: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          }
-        }
-      });
-    }
+		let member;
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: adminId,
-        action: 'group_member_add',
-        details: {
-          groupId,
-          memberId: member.id,
-          memberUserId: userId,
-          role,
-          wasReactivated: !!existingMember
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		if (existingMember) {
+			// Reactivate existing member with new role
+			member = await prisma.groupMember.update({
+				where: { id: existingMember.id },
+				data: {
+					role,
+					isActive: true,
+					addedBy: adminId,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							email: true,
+							profilePhoto: true,
+							batchYear: true,
+						},
+					},
+					adder: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+						},
+					},
+				},
+			});
+		} else {
+			// Create new member
+			member = await prisma.groupMember.create({
+				data: {
+					groupId,
+					userId,
+					role,
+					addedBy: adminId,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							email: true,
+							profilePhoto: true,
+							batchYear: true,
+						},
+					},
+					adder: {
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+						},
+					},
+				},
+			});
+		}
 
-    const responseData = {
-      id: member.id,
-      role: member.role,
-      isActive: member.isActive,
-      addedAt: member.createdAt,
-      user: member.user,
-      addedBy: member.adder
-    };
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId: adminId,
+				action: "group_member_add",
+				details: {
+					groupId,
+					memberId: member.id,
+					memberUserId: userId,
+					role,
+					wasReactivated: !!existingMember,
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    return successResponse(
-      res,
-      responseData,
-      existingMember ? 'Member reactivated successfully' : 'Member added successfully',
-      201
-    );
-  } catch (error) {
-    console.error('Add group member error:', error);
-    return errorResponse(res, 'Failed to add group member', 500);
-  }
+		const responseData = {
+			id: member.id,
+			role: member.role,
+			isActive: member.isActive,
+			addedAt: member.createdAt,
+			user: member.user,
+			addedBy: member.adder,
+		};
+
+		return successResponse(
+			res,
+			responseData,
+			existingMember
+				? "Member reactivated successfully"
+				: "Member added successfully",
+			201
+		);
+	} catch (error) {
+		console.error("Add group member error:", error);
+		return errorResponse(res, "Failed to add group member", 500);
+	}
 };
 
 /**
@@ -742,73 +756,73 @@ const addGroupMember = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const updateGroupMember = async (req, res) => {
-  try {
-    const { groupId, userId } = req.params;
-    const { role, isActive } = req.body;
-    const adminId = req.user.id;
+	try {
+		const { groupId, userId } = req.params;
+		const { role, isActive } = req.body;
+		const adminId = req.user.id;
 
-    // Build update data
-    const updateData = {};
-    if (role !== undefined) updateData.role = role;
-    if (isActive !== undefined) updateData.isActive = isActive;
+		// Build update data
+		const updateData = {};
+		if (role !== undefined) updateData.role = role;
+		if (isActive !== undefined) updateData.isActive = isActive;
 
-    // Update member
-    const member = await prisma.groupMember.update({
-      where: {
-        groupId_userId: { groupId, userId }
-      },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            profilePhoto: true,
-            batchYear: true
-          }
-        },
-        adder: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    });
+		// Update member
+		const member = await prisma.groupMember.update({
+			where: {
+				groupId_userId: { groupId, userId },
+			},
+			data: updateData,
+			include: {
+				user: {
+					select: {
+						id: true,
+						firstName: true,
+						lastName: true,
+						email: true,
+						profilePhoto: true,
+						batchYear: true,
+					},
+				},
+				adder: {
+					select: {
+						id: true,
+						firstName: true,
+						lastName: true,
+					},
+				},
+			},
+		});
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: adminId,
-        action: 'group_member_update',
-        details: {
-          groupId,
-          memberId: member.id,
-          memberUserId: userId,
-          updatedFields: Object.keys(updateData)
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId: adminId,
+				action: "group_member_update",
+				details: {
+					groupId,
+					memberId: member.id,
+					memberUserId: userId,
+					updatedFields: Object.keys(updateData),
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    const responseData = {
-      id: member.id,
-      role: member.role,
-      isActive: member.isActive,
-      addedAt: member.createdAt,
-      user: member.user,
-      addedBy: member.adder
-    };
+		const responseData = {
+			id: member.id,
+			role: member.role,
+			isActive: member.isActive,
+			addedAt: member.createdAt,
+			user: member.user,
+			addedBy: member.adder,
+		};
 
-    return successResponse(res, responseData, 'Member updated successfully');
-  } catch (error) {
-    console.error('Update group member error:', error);
-    return errorResponse(res, 'Failed to update group member', 500);
-  }
+		return successResponse(res, responseData, "Member updated successfully");
+	} catch (error) {
+		console.error("Update group member error:", error);
+		return errorResponse(res, "Failed to update group member", 500);
+	}
 };
 
 /**
@@ -817,68 +831,68 @@ const updateGroupMember = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const removeGroupMember = async (req, res) => {
-  try {
-    const { groupId, userId } = req.params;
-    const adminId = req.user.id;
+	try {
+		const { groupId, userId } = req.params;
+		const adminId = req.user.id;
 
-    // Get member details for logging
-    const member = await prisma.groupMember.findUnique({
-      where: {
-        groupId_userId: { groupId, userId }
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    });
+		// Get member details for logging
+		const member = await prisma.groupMember.findUnique({
+			where: {
+				groupId_userId: { groupId, userId },
+			},
+			include: {
+				user: {
+					select: {
+						id: true,
+						firstName: true,
+						lastName: true,
+					},
+				},
+			},
+		});
 
-    if (!member) {
-      return errorResponse(res, 'Member not found in this group', 404);
-    }
+		if (!member) {
+			return errorResponse(res, "Member not found in this group", 404);
+		}
 
-    // Soft delete - set as inactive
-    await prisma.groupMember.update({
-      where: { id: member.id },
-      data: { isActive: false }
-    });
+		// Soft delete - set as inactive
+		await prisma.groupMember.update({
+			where: { id: member.id },
+			data: { isActive: false },
+		});
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId: adminId,
-        action: 'group_member_remove',
-        details: {
-          groupId,
-          memberId: member.id,
-          memberUserId: userId,
-          memberName: `${member.user.firstName} ${member.user.lastName}`,
-          role: member.role
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log activity
+		await prisma.activityLog.create({
+			data: {
+				userId: adminId,
+				action: "group_member_remove",
+				details: {
+					groupId,
+					memberId: member.id,
+					memberUserId: userId,
+					memberName: `${member.user.firstName} ${member.user.lastName}`,
+					role: member.role,
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    return successResponse(
-      res,
-      { 
-        removedMember: {
-          id: member.user.id,
-          name: `${member.user.firstName} ${member.user.lastName}`,
-          role: member.role
-        }
-      },
-      'Member removed successfully'
-    );
-  } catch (error) {
-    console.error('Remove group member error:', error);
-    return errorResponse(res, 'Failed to remove group member', 500);
-  }
+		return successResponse(
+			res,
+			{
+				removedMember: {
+					id: member.user.id,
+					name: `${member.user.firstName} ${member.user.lastName}`,
+					role: member.role,
+				},
+			},
+			"Member removed successfully"
+		);
+	} catch (error) {
+		console.error("Remove group member error:", error);
+		return errorResponse(res, "Failed to remove group member", 500);
+	}
 };
 
 /**
@@ -887,90 +901,86 @@ const removeGroupMember = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const bulkMemberOperations = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { action, members } = req.body;
-    const adminId = req.user.id;
+	try {
+		const { groupId } = req.params;
+		const { action, members } = req.body;
+		const adminId = req.user.id;
 
-    const results = {
-      successful: [],
-      failed: []
-    };
+		const results = {
+			successful: [],
+			failed: [],
+		};
 
-    // Process each member
-    for (const memberData of members) {
-      try {
-        const { userId, role } = memberData;
+		// Process each member
+		for (const memberData of members) {
+			try {
+				const { userId, role } = memberData;
 
-        switch (action) {
-          case 'add':
-            const existingMember = await prisma.groupMember.findUnique({
-              where: { groupId_userId: { groupId, userId } }
-            });
+				switch (action) {
+					case "add":
+						const existingMember = await prisma.groupMember.findUnique({
+							where: { groupId_userId: { groupId, userId } },
+						});
 
-            if (existingMember) {
-              await prisma.groupMember.update({
-                where: { id: existingMember.id },
-                data: { role, isActive: true, addedBy: adminId }
-              });
-            } else {
-              await prisma.groupMember.create({
-                data: { groupId, userId, role, addedBy: adminId }
-              });
-            }
-            results.successful.push({ userId, action: 'added', role });
-            break;
+						if (existingMember) {
+							await prisma.groupMember.update({
+								where: { id: existingMember.id },
+								data: { role, isActive: true, addedBy: adminId },
+							});
+						} else {
+							await prisma.groupMember.create({
+								data: { groupId, userId, role, addedBy: adminId },
+							});
+						}
+						results.successful.push({ userId, action: "added", role });
+						break;
 
-          case 'remove':
-            await prisma.groupMember.updateMany({
-              where: { groupId, userId },
-              data: { isActive: false }
-            });
-            results.successful.push({ userId, action: 'removed' });
-            break;
+					case "remove":
+						await prisma.groupMember.updateMany({
+							where: { groupId, userId },
+							data: { isActive: false },
+						});
+						results.successful.push({ userId, action: "removed" });
+						break;
 
-          case 'update':
-            await prisma.groupMember.update({
-              where: { groupId_userId: { groupId, userId } },
-              data: { role }
-            });
-            results.successful.push({ userId, action: 'updated', role });
-            break;
-        }
-      } catch (error) {
-        results.failed.push({
-          userId: memberData.userId,
-          error: error.message
-        });
-      }
-    }
+					case "update":
+						await prisma.groupMember.update({
+							where: { groupId_userId: { groupId, userId } },
+							data: { role },
+						});
+						results.successful.push({ userId, action: "updated", role });
+						break;
+				}
+			} catch (error) {
+				results.failed.push({
+					userId: memberData.userId,
+					error: error.message,
+				});
+			}
+		}
 
-    // Log bulk activity
-    await prisma.activityLog.create({
-      data: {
-        userId: adminId,
-        action: 'group_members_bulk',
-        details: {
-          groupId,
-          action,
-          totalProcessed: members.length,
-          successful: results.successful.length,
-          failed: results.failed.length
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+		// Log bulk activity
+		await prisma.activityLog.create({
+			data: {
+				userId: adminId,
+				action: "group_members_bulk",
+				details: {
+					groupId,
+					action,
+					totalProcessed: members.length,
+					successful: results.successful.length,
+					failed: results.failed.length,
+				},
+				ipAddress: req.ip,
+				userAgent: req.get("User-Agent"),
+			},
+		});
 
-    return successResponse(
-      res,
-      results,
-      `Bulk ${action} operation completed`
-    );
-  } catch (error) {
-    console.error('Bulk member operations error:', error);
-    return errorResponse(res, 'Failed to process bulk member operations', 500);
-  }
+		return successResponse(res, results, `Bulk ${action} operation completed`);
+	} catch (error) {
+		console.error("Bulk member operations error:", error);
+		return errorResponse(res, "Failed to process bulk member operations", 500);
+	}
 };
 
 // ============================================
@@ -983,63 +993,67 @@ const bulkMemberOperations = async (req, res) => {
  * Access: SUPER_ADMIN
  */
 const getGroupStatistics = async (req, res) => {
-  try {
-    const [
-      totalGroups,
-      activeGroups,
-      groupsByType,
-      totalMembers,
-      activeMembers,
-      membersByRole
-    ] = await Promise.all([
-      prisma.organizationGroup.count(),
-      prisma.organizationGroup.count({ where: { isActive: true } }),
-      prisma.organizationGroup.groupBy({
-        by: ['type'],
-        _count: { id: true },
-        where: { isActive: true }
-      }),
-      prisma.groupMember.count(),
-      prisma.groupMember.count({ where: { isActive: true } }),
-      prisma.groupMember.groupBy({
-        by: ['role'],
-        _count: { id: true },
-        where: { isActive: true }
-      })
-    ]);
+	try {
+		const [
+			totalGroups,
+			activeGroups,
+			groupsByType,
+			totalMembers,
+			activeMembers,
+			membersByRole,
+		] = await Promise.all([
+			prisma.organizationGroup.count(),
+			prisma.organizationGroup.count({ where: { isActive: true } }),
+			prisma.organizationGroup.groupBy({
+				by: ["type"],
+				_count: { id: true },
+				where: { isActive: true },
+			}),
+			prisma.groupMember.count(),
+			prisma.groupMember.count({ where: { isActive: true } }),
+			prisma.groupMember.groupBy({
+				by: ["role"],
+				_count: { id: true },
+				where: { isActive: true },
+			}),
+		]);
 
-    const responseData = {
-      groups: {
-        total: totalGroups,
-        active: activeGroups,
-        inactive: totalGroups - activeGroups,
-        byType: groupsByType.reduce((acc, item) => {
-          acc[item.type] = item._count.id;
-          return acc;
-        }, {})
-      },
-      members: {
-        total: totalMembers,
-        active: activeMembers,
-        inactive: totalMembers - activeMembers,
-        byRole: membersByRole.reduce((acc, item) => {
-          acc[item.role] = item._count.id;
-          return acc;
-        }, {})
-      },
-      generatedAt: new Date().toISOString()
-    };
+		const responseData = {
+			groups: {
+				total: totalGroups,
+				active: activeGroups,
+				inactive: totalGroups - activeGroups,
+				byType: groupsByType.reduce((acc, item) => {
+					acc[item.type] = item._count.id;
+					return acc;
+				}, {}),
+			},
+			members: {
+				total: totalMembers,
+				active: activeMembers,
+				inactive: totalMembers - activeMembers,
+				byRole: membersByRole.reduce((acc, item) => {
+					acc[item.role] = item._count.id;
+					return acc;
+				}, {}),
+			},
+			generatedAt: new Date().toISOString(),
+		};
 
-    // Cache the result
-    if (req.cacheKey && req.cacheTTL) {
-      await setCacheData(req.cacheKey, responseData, req.cacheTTL);
-    }
+		// Cache the result
+		if (req.cacheKey && req.cacheTTL) {
+			await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+		}
 
-    return successResponse(res, responseData, 'Group statistics retrieved successfully');
-  } catch (error) {
-    console.error('Get group statistics error:', error);
-    return errorResponse(res, 'Failed to retrieve group statistics', 500);
-  }
+		return successResponse(
+			res,
+			responseData,
+			"Group statistics retrieved successfully"
+		);
+	} catch (error) {
+		console.error("Get group statistics error:", error);
+		return errorResponse(res, "Failed to retrieve group statistics", 500);
+	}
 };
 
 /**
@@ -1048,63 +1062,64 @@ const getGroupStatistics = async (req, res) => {
  * Access: Public
  */
 const getPublicGroups = async (req, res) => {
-  try {
-    const groups = await prisma.organizationGroup.findMany({
-      where: { isActive: true },
-      include: {
-        members: {
-          where: { isActive: true },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                profilePhoto: true,
-                batchYear: true
-                // Note: Not including email for privacy
-              }
-            }
-          },
-          orderBy: [
-            { role: 'asc' }, // Order by role hierarchy
-            { createdAt: 'desc' }
-          ]
-        }
-      },
-      orderBy: [
-        { type: 'asc' },
-        { displayOrder: 'asc' }
-      ]
-    });
+	try {
+		const groups = await prisma.organizationGroup.findMany({
+			where: { isActive: true },
+			include: {
+				members: {
+					where: { isActive: true },
+					include: {
+						user: {
+							select: {
+								id: true,
+								firstName: true,
+								lastName: true,
+								profilePhoto: true,
+								batchYear: true,
+								// Note: Not including email for privacy
+							},
+						},
+					},
+					orderBy: [
+						{ role: "asc" }, // Order by role hierarchy
+						{ createdAt: "desc" },
+					],
+				},
+			},
+			orderBy: [{ type: "asc" }, { displayOrder: "asc" }],
+		});
 
-    const responseData = {
-      groups: groups.map(group => ({
-        id: group.id,
-        name: group.name,
-        type: group.type,
-        description: group.description,
-        members: group.members.map(member => ({
-          id: member.user.id,
-          name: `${member.user.firstName} ${member.user.lastName}`,
-          role: member.role,
-          profilePhoto: member.user.profilePhoto,
-          batchYear: member.user.batchYear
-        }))
-      })),
-      generatedAt: new Date().toISOString()
-    };
+		const responseData = {
+			groups: groups.map((group) => ({
+				id: group.id,
+				name: group.name,
+				type: group.type,
+				description: group.description,
+				members: group.members.map((member) => ({
+					id: member.user.id,
+					name: `${member.user.firstName} ${member.user.lastName}`,
+					role: member.role,
+					profilePhoto: member.user.profilePhoto,
+					batchYear: member.user.batchYear,
+				})),
+			})),
+			generatedAt: new Date().toISOString(),
+		};
 
-    // Cache the result
-    if (req.cacheKey && req.cacheTTL) {
-      await setCacheData(req.cacheKey, responseData, req.cacheTTL);
-    }
+		// Cache the result
+		if (req.cacheKey && req.cacheTTL) {
+			await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+		}
 
-    return successResponse(res, responseData, 'Public groups retrieved successfully');
-  } catch (error) {
-    console.error('Get public groups error:', error);
-    return errorResponse(res, 'Failed to retrieve public groups', 500);
-  }
+		return successResponse(
+			res,
+			responseData,
+			"Public groups retrieved successfully"
+		);
+	} catch (error) {
+		console.error("Get public groups error:", error);
+		return errorResponse(res, "Failed to retrieve public groups", 500);
+	}
 };
 
 // ============================================
@@ -1112,22 +1127,22 @@ const getPublicGroups = async (req, res) => {
 // ============================================
 
 module.exports = {
-  // Group management
-  getGroups,
-  getGroup,
-  createGroup,
-  updateGroup,
-  deleteGroup,
-  reorderGroups,
+	// Group management
+	getGroups,
+	getGroup,
+	createGroup,
+	updateGroup,
+	deleteGroup,
+	reorderGroups,
 
-  // Member management
-  getGroupMembers,
-  addGroupMember,
-  updateGroupMember,
-  removeGroupMember,
-  bulkMemberOperations,
+	// Member management
+	getGroupMembers,
+	addGroupMember,
+	updateGroupMember,
+	removeGroupMember,
+	bulkMemberOperations,
 
-  // Statistics and public
-  getGroupStatistics,
-  getPublicGroups
+	// Statistics and public
+	getGroupStatistics,
+	getPublicGroups,
 };

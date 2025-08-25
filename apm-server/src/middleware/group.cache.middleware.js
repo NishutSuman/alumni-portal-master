@@ -1,15 +1,5 @@
-// src/middleware/group.cache.middleware.js
-const Redis = require('ioredis');
+const { CacheService } = require('../config/redis');
 const { successResponse } = require('../utils/response');
-
-// Initialize Redis client (assuming same pattern as existing cache middleware)
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: 3,
-  retryDelayOnFailover: 100
-});
 
 // ============================================
 // CACHE KEY GENERATORS
@@ -62,13 +52,12 @@ const generatePublicGroupsCacheKey = () => {
 const cacheGroupsList = async (req, res, next) => {
   try {
     const cacheKey = generateGroupsCacheKey(req.query);
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Groups retrieved successfully (cached)',
         200,
         { cached: true }
@@ -85,20 +74,19 @@ const cacheGroupsList = async (req, res, next) => {
   }
 };
 
-// Cache group details with members
+// Cache group details
 const cacheGroupDetails = async (req, res, next) => {
   try {
     const { groupId } = req.params;
     const includeMembers = req.query.includeMembers !== 'false';
     const cacheKey = generateGroupDetailsCacheKey(groupId, includeMembers);
     
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Group details retrieved successfully (cached)',
         200,
         { cached: true }
@@ -120,13 +108,12 @@ const cacheGroupMembers = async (req, res, next) => {
     const { groupId } = req.params;
     const cacheKey = generateGroupMembersCacheKey(groupId, req.query);
     
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Group members retrieved successfully (cached)',
         200,
         { cached: true }
@@ -146,13 +133,12 @@ const cacheGroupMembers = async (req, res, next) => {
 const cacheGroupStats = async (req, res, next) => {
   try {
     const cacheKey = generateGroupStatsCacheKey();
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Group statistics retrieved successfully (cached)',
         200,
         { cached: true }
@@ -172,13 +158,12 @@ const cacheGroupStats = async (req, res, next) => {
 const cachePublicGroups = async (req, res, next) => {
   try {
     const cacheKey = generatePublicGroupsCacheKey();
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Public groups retrieved successfully (cached)',
         200,
         { cached: true }
@@ -238,12 +223,9 @@ const invalidateGroupCaches = async (req) => {
       patterns.push(`groups:${groupId}:members:*`);
     }
 
-    // Delete cache keys by pattern
+    // Delete cache keys by pattern using CacheService
     for (const pattern of patterns) {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
+      await CacheService.delPattern(pattern);
     }
 
     console.log(`Invalidated group caches for patterns:`, patterns);
@@ -268,10 +250,7 @@ const invalidateGroupMemberCaches = async (req) => {
     ];
 
     for (const pattern of patterns) {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
+      await CacheService.delPattern(pattern);
     }
 
     console.log(`Invalidated group member caches for group: ${groupId}`);
@@ -305,11 +284,7 @@ const autoInvalidateGroupMemberCaches = async (req, res, next) => {
 
 // Set cache after successful response (to be used in controllers)
 const setCacheData = async (cacheKey, data, ttl = 300) => {
-  try {
-    await redis.setex(cacheKey, ttl, JSON.stringify(data));
-  } catch (error) {
-    console.error('Failed to set cache:', error);
-  }
+  await CacheService.set(cacheKey, data, ttl);
 };
 
 // ============================================

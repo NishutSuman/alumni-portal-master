@@ -1,15 +1,7 @@
 // src/middleware/sponsor.cache.middleware.js
-const Redis = require('ioredis');
+// FIXED VERSION - Uses existing Redis instance
+const { CacheService } = require('../config/redis');
 const { successResponse } = require('../utils/response');
-
-// Initialize Redis client (following existing pattern)
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: 3,
-  retryDelayOnFailover: 100
-});
 
 // ============================================
 // CACHE KEY GENERATORS
@@ -53,13 +45,12 @@ const generateSponsorsByCategoryCacheKey = () => {
 const cacheSponsorsList = async (req, res, next) => {
   try {
     const cacheKey = generateSponsorsCacheKey(req.query);
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Sponsors retrieved successfully (cached)',
         200,
         { cached: true }
@@ -82,13 +73,12 @@ const cacheSponsorDetails = async (req, res, next) => {
     const { sponsorId } = req.params;
     const cacheKey = generateSponsorDetailsCacheKey(sponsorId);
     
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Sponsor details retrieved successfully (cached)',
         200,
         { cached: true }
@@ -108,13 +98,12 @@ const cacheSponsorDetails = async (req, res, next) => {
 const cacheSponsorStats = async (req, res, next) => {
   try {
     const cacheKey = generateSponsorStatsCacheKey();
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Sponsor statistics retrieved successfully (cached)',
         200,
         { cached: true }
@@ -135,13 +124,12 @@ const cachePublicSponsors = async (req, res, next) => {
   try {
     const { category } = req.query;
     const cacheKey = generatePublicSponsorsCacheKey(category);
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Public sponsors retrieved successfully (cached)',
         200,
         { cached: true }
@@ -161,13 +149,12 @@ const cachePublicSponsors = async (req, res, next) => {
 const cacheSponsorsByCategory = async (req, res, next) => {
   try {
     const cacheKey = generateSponsorsByCategoryCacheKey();
-    const cached = await redis.get(cacheKey);
+    const cached = await CacheService.get(cacheKey);
 
     if (cached) {
-      const data = JSON.parse(cached);
       return successResponse(
         res,
-        data,
+        cached,
         'Sponsors by category retrieved successfully (cached)',
         200,
         { cached: true }
@@ -227,12 +214,9 @@ const invalidateSponsorCaches = async (req) => {
       patterns.push(`sponsors:details:${sponsorId}`);
     }
 
-    // Delete cache keys by pattern
+    // Delete cache keys by pattern using CacheService
     for (const pattern of patterns) {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
+      await CacheService.delPattern(pattern);
     }
 
     console.log(`Invalidated sponsor caches for patterns:`, patterns);
@@ -256,10 +240,7 @@ const invalidateSponsorImageCaches = async (req) => {
     ];
 
     for (const pattern of patterns) {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
+      await CacheService.delPattern(pattern);
     }
 
     console.log(`Invalidated sponsor image caches for sponsor: ${sponsorId}`);
@@ -293,11 +274,7 @@ const autoInvalidateSponsorImageCaches = async (req, res, next) => {
 
 // Set cache after successful response (to be used in controllers)
 const setCacheData = async (cacheKey, data, ttl = 300) => {
-  try {
-    await redis.setex(cacheKey, ttl, JSON.stringify(data));
-  } catch (error) {
-    console.error('Failed to set cache:', error);
-  }
+  await CacheService.set(cacheKey, data, ttl);
 };
 
 // ============================================

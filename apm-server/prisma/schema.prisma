@@ -94,6 +94,10 @@ model User {
   collectionsVerified      ManualCollection[]  @relation("CollectionVerifier")
   accountBalancesUpdated   AccountBalance[]    @relation("BalanceUpdater")
 
+  // Poll relations
+  createdPolls    Poll[]       @relation("PollCreator")
+  pollVotes       PollVote[]
+
   
   createdGroups     OrganizationGroup[] @relation("GroupCreator")
   groupMemberships  GroupMember[]
@@ -1448,6 +1452,75 @@ model Sponsor {
   @@index([displayOrder])
   @@index([createdBy])
   @@map("sponsors")
+}
+
+// ============================================
+// POLL MANAGEMENT MODELS - ADD TO schema.prisma
+// ============================================
+
+// Add these new models to your schema.prisma file
+
+model Poll {
+  id              String      @id @default(cuid())
+  title           String
+  description     String?     @db.Text
+  isActive        Boolean     @default(true)
+  allowMultiple   Boolean     @default(false)  // Allow multiple option selection
+  expiresAt       DateTime?   // Optional poll expiry
+  isAnonymous     Boolean     @default(false)  // Hide voter names in results
+  
+  // Relations
+  createdBy       String
+  creator         User        @relation("PollCreator", fields: [createdBy], references: [id])
+  options         PollOption[]
+  votes           PollVote[]
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@index([createdBy])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("polls")
+}
+
+model PollOption {
+  id        String      @id @default(cuid())
+  text      String      @db.Text
+  displayOrder Int      @default(0)
+  
+  // Relations
+  pollId    String
+  poll      Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+  
+  createdAt DateTime    @default(now())
+  
+  @@index([pollId])
+  @@index([displayOrder])
+  @@map("poll_options")
+}
+
+model PollVote {
+  id        String      @id @default(cuid())
+  
+  // Relations
+  pollId    String
+  poll      Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime    @default(now())
+  
+  // Prevent duplicate votes for same poll/option combination
+  @@unique([pollId, userId, optionId])
+  @@index([pollId])
+  @@index([userId])
+  @@index([optionId])
+  @@map("poll_votes")
 }
 
 
