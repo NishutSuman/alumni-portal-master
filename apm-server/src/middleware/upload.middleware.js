@@ -448,6 +448,130 @@ const cleanupUploadedFiles = (files) => {
   });
 };
 
+// Sponsor logo upload (single file, 3MB limit)
+const uploadSponsorLogo = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = './public/uploads/sponsors/logos/';
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `sponsor_logo_${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, JPG, PNG, and WebP images are allowed for sponsor logos'), false);
+    }
+  },
+  limits: {
+    fileSize: 3 * 1024 * 1024, // 3MB for sponsor logos
+    files: 1
+  }
+}).single('logoFile');
+
+// ============================================
+// SPONSOR UPLOAD CONFIGURATIONS
+// ============================================
+
+// Sponsor head photo upload (single file, 3MB limit)
+const uploadSponsorHeadPhoto = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = './public/uploads/sponsors/heads/';
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `sponsor_head_${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, JPG, PNG, and WebP images are allowed for head photos'), false);
+    }
+  },
+  limits: {
+    fileSize: 3 * 1024 * 1024, // 3MB for head photos
+    files: 1
+  }
+}).single('headPhotoFile');
+
+// Combined sponsor files upload (logo + head photo)
+const uploadSponsorFiles = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      let uploadPath = './public/uploads/sponsors/';
+      
+      // Determine subfolder based on fieldname
+      if (file.fieldname === 'logoFile') {
+        uploadPath += 'logos/';
+      } else if (file.fieldname === 'headPhotoFile') {
+        uploadPath += 'heads/';
+      } else {
+        uploadPath += 'general/';
+      }
+      
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const extension = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, extension);
+      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      
+      let prefix = 'sponsor_';
+      if (file.fieldname === 'logoFile') {
+        prefix = 'sponsor_logo_';
+      } else if (file.fieldname === 'headPhotoFile') {
+        prefix = 'sponsor_head_';
+      }
+      
+      const filename = `${prefix}${cleanBaseName}_${uniqueSuffix}${extension}`;
+      cb(null, filename);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (imageTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Only JPEG, JPG, PNG, and WebP images are allowed for ${file.fieldname}`), false);
+    }
+  },
+  limits: {
+    fileSize: 3 * 1024 * 1024, // 3MB per file
+    files: 2 // Maximum 2 files (logo + head photo)
+  }
+}).fields([
+  { name: 'logoFile', maxCount: 1 },
+  { name: 'headPhotoFile', maxCount: 1 }
+]);
+
 module.exports = {
   upload,
   uploadProfilePicture,
@@ -472,4 +596,9 @@ module.exports = {
   generatePhotoUrl,
   validatePhotoFile,
   cleanupUploadedFiles,
+
+  // Sponsor uploads
+  uploadSponsorLogo,
+  uploadSponsorHeadPhoto,
+  uploadSponsorFiles,
 };

@@ -95,6 +95,12 @@ model User {
   accountBalancesUpdated   AccountBalance[]    @relation("BalanceUpdater")
 
   
+  createdGroups     OrganizationGroup[] @relation("GroupCreator")
+  groupMemberships  GroupMember[]
+  addedGroupMembers GroupMember[]       @relation("GroupMemberAdder")
+
+
+createdSponsors  Sponsor[]  @relation("SponsorCreator")
   
   @@index([batch])
   @@index([fullName])
@@ -1369,6 +1375,81 @@ model AccountBalance {
   @@map("account_balances")
 }
 
+// Cell/Committee/OfficeBearers model
+
+model OrganizationGroup {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  type        GroupType   
+  description String?     @db.Text
+  isActive    Boolean     @default(true)
+  displayOrder Int        @default(0)
+  
+  // Relations
+  members     GroupMember[]
+  createdBy   String
+  creator     User        @relation("GroupCreator", fields: [createdBy], references: [id])
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  @@index([type])
+  @@index([isActive])
+  @@index([createdBy])
+  @@map("organization_groups")
+}
+
+model GroupMember {
+  id       String              @id @default(cuid())
+  groupId  String
+  group    OrganizationGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String  
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     GroupMemberRole
+  isActive Boolean             @default(true)
+  
+  // Admin tracking
+  addedBy  String
+  adder    User                @relation("GroupMemberAdder", fields: [addedBy], references: [id])
+  
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([role])
+  @@map("group_members")
+}
+
+model Sponsor {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  category      SponsorCategory
+  description   String?         @db.Text
+  logoUrl       String?         // Sponsor company logo
+  headPhotoUrl  String?         // Photo of head of sponsor organization
+  isActive      Boolean         @default(true)
+  displayOrder  Int             @default(0)
+  
+  // Website and contact info
+  website       String?
+  contactEmail  String?
+  
+  // Admin tracking
+  createdBy     String
+  creator       User            @relation("SponsorCreator", fields: [createdBy], references: [id])
+  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  @@index([category])
+  @@index([isActive])
+  @@index([displayOrder])
+  @@index([createdBy])
+  @@map("sponsors")
+}
+
 
 // Enums
 enum UserRole {
@@ -1573,4 +1654,36 @@ enum ManualCollectionMode {
   BANK_TRANSFER
   UPI_OFFLINE
   OTHER
+}
+
+enum GroupType {
+  CELL
+  COMMITTEE  
+  OFFICE_BEARERS
+  ADVISORS
+}
+
+enum GroupMemberRole {
+  // Cell/Committee Roles
+  CONVENER
+  CO_CONVENER
+  STAKE_HOLDER
+  
+  // Office Bearer Roles
+  PRESIDENT
+  VICE_PRESIDENT
+  SECRETARY
+  JOINT_SECRETARY
+  TREASURER
+  JOINT_TREASURER
+  
+  // Advisor Roles
+  CHIEF_ADVISOR
+  JOINT_ADVISOR
+}
+
+enum SponsorCategory {
+  GOLD
+  SILVER
+  BRONZE
 }
