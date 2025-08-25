@@ -135,6 +135,7 @@ app.use('/api/albums', require('./routes/albums.route'));
 app.use('/api/photos', require('./routes/photos.route'));
 app.use("/api/groups", require("./routes/group.route"));
 app.use("/api/polls", require("./routes/polls.route"));
+app.use("/api/lifelink", require("./routes/lifelink.route"));
 
 // PAYMENT ROUTES - ENABLED (was commented out)
 try {

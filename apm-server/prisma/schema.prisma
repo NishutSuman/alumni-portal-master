@@ -47,6 +47,13 @@ model User {
   
   // Role and Permissions
   role              UserRole @default(USER)
+
+   // LifeLink Fields (NEW)
+  bloodGroup         BloodGroup?
+  isBloodDonor       Boolean     @default(false)
+  lastDonationDate   DateTime?
+  totalDonations     Int         @default(0)
+
   
   // Timestamps
   createdAt         DateTime @default(now())
@@ -97,6 +104,12 @@ model User {
   // Poll relations
   createdPolls    Poll[]       @relation("PollCreator")
   pollVotes       PollVote[]
+
+  // LifeLink Relations (NEW)
+  donationHistory    BloodDonation[]     @relation("DonorHistory")
+  bloodRequisitions  BloodRequisition[]  @relation("RequesterHistory") 
+  donorNotifications DonorNotification[]
+  donorResponses     DonorResponse[]
 
   
   createdGroups     OrganizationGroup[] @relation("GroupCreator")
@@ -1524,6 +1537,129 @@ model PollVote {
 }
 
 
+// ============================================
+// NEW LIFELINK MODELS
+// ============================================
+
+model BloodDonation {
+  id            String   @id @default(cuid())
+  donationDate  DateTime
+  location      String?  // Hospital/blood bank name
+  units         Int      @default(1)
+  notes         String?  @db.Text
+  
+  // Relations
+  donorId       String
+  donor         User     @relation("DonorHistory", fields: [donorId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([donorId])
+  @@index([donationDate])
+  @@map("blood_donations")
+}
+
+model BloodRequisition {
+  id                    String            @id @default(cuid())
+  patientName           String
+  hospitalName          String
+  contactNumber         String
+  alternateNumber       String?
+  requiredBloodGroup    BloodGroup
+  unitsNeeded           Int               @default(1)
+  urgencyLevel          String            @default("HIGH") // HIGH, MEDIUM, LOW
+  medicalCondition      String?           @db.Text
+  location              String            // Area/city
+  additionalNotes       String?           @db.Text
+  
+  // Status and timing
+  status                RequisitionStatus @default(ACTIVE)
+  requiredByDate        DateTime
+  expiresAt             DateTime?
+  
+  // Contact revelation settings
+  allowContactReveal    Boolean           @default(true)
+  
+  // Relations
+  requesterId           String
+  requester             User              @relation("RequesterHistory", fields: [requesterId], references: [id])
+  notifications         DonorNotification[]
+  responses             DonorResponse[]
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  
+  @@index([requesterId])
+  @@index([requiredBloodGroup])
+  @@index([status])
+  @@index([location])
+  @@index([requiredByDate])
+  @@map("blood_requisitions")
+}
+
+model DonorNotification {
+  id                String             @id @default(cuid())
+  title             String
+  message           String             @db.Text
+  notificationType  String             @default("EMERGENCY") // EMERGENCY, REMINDER, INFO
+  
+  // Notification delivery
+  status            NotificationStatus @default(PENDING)
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  
+  // Push notification data
+  pushNotificationId String?
+  deviceToken       String?
+  
+  // Relations
+  donorId           String
+  donor             User               @relation(fields: [donorId], references: [id])
+  requisitionId     String?
+  requisition       BloodRequisition?  @relation(fields: [requisitionId], references: [id])
+  
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  
+  @@index([donorId])
+  @@index([status])
+  @@index([notificationType])
+  @@index([requisitionId])
+  @@map("donor_notifications")
+}
+
+model DonorResponse {
+  id            String              @id @default(cuid())
+  response      DonorResponseStatus @default(NO_RESPONSE)
+  message       String?             @db.Text
+  
+  // Contact information (revealed based on privacy settings)
+  contactPhone  String?
+  isContactRevealed Boolean         @default(false)
+  
+  // Response timing
+  respondedAt   DateTime?
+  
+  // Relations
+  donorId       String
+  donor         User                @relation(fields: [donorId], references: [id])
+  requisitionId String
+  requisition   BloodRequisition    @relation(fields: [requisitionId], references: [id])
+  
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  
+  @@unique([donorId, requisitionId]) // One response per donor per requisition
+  @@index([donorId])
+  @@index([requisitionId])
+  @@index([response])
+  @@map("donor_responses")
+}
+
+
+
 // Enums
 enum UserRole {
   USER
@@ -1759,4 +1895,47 @@ enum SponsorCategory {
   GOLD
   SILVER
   BRONZE
+}
+
+// LifeLink enums
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+
+  @@map("blood_groups")
+}
+
+enum RequisitionStatus {
+  ACTIVE
+  FULFILLED
+  EXPIRED
+  CANCELLED
+
+  @@map("requisition_statuses")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  EXPIRED
+
+  @@map("notification_statuses")
+}
+
+enum DonorResponseStatus {
+  WILLING
+  NOT_AVAILABLE
+  NOT_SUITABLE
+  NO_RESPONSE
+
+  @@map("donor_response_statuses")
 }
