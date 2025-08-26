@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Support Ticket - {{ticketNumber}}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+        <h1 style="margin: 0; font-size: 24px;">🎫 New Support Ticket</h1>
+        <p style="margin: 10px 0 0 0; opacity: 0.9;">{{ticketNumber}}</p>
+    </div>
+
+    <!-- Content -->
+    <div style="background: white; padding: 30px; border: 1px solid #ddd; border-top: none;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hi <strong>{{adminName}}</strong>,
+        </p>
+        
+        <p>A new support ticket has been assigned to you:</p>
+
+        <!-- Ticket Details Box -->
+        <div style="background: #f8f9fa; border-left: 4px solid #007bff; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3 style="color: #007bff; margin: 0 0 15px 0;">{{subject}}</h3>
+            
+            <div style="margin-bottom: 10px;">
+                <strong>From:</strong> {{userFullName}} ({{userEmail}})
+            </div>
+            <div style="margin-bottom: 10px;">
+                <strong>Category:</strong> {{category}}
+            </div>
+            <div style="margin-bottom: 10px;">
+                <strong>Priority:</strong> 
+                <span style="background: {{#if (eq priority 'URGENT')}}#dc3545{{else if (eq priority 'HIGH')}}#fd7e14{{else if (eq priority 'MEDIUM')}}#ffc107{{else}}#28a745{{/if}}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">{{priority}}</span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Created:</strong> {{createdAt}}
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                <strong>Description:</strong><br>
+                <div style="margin-top: 10px; white-space: pre-wrap;">{{description}}</div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ticketUrl}}" style="background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                📋 View & Respond to Ticket
+            </a>
+        </div>
+
+        <p style="color: #666; font-size: 14px; margin-top: 20px;">
+            Please respond to this ticket as soon as possible. The user will be notified when you reply.
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #666;">
+        Alumni Portal Support System | Do not reply to this email
+    </div>
+</body>
+</html>

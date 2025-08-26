@@ -23,9 +23,18 @@ const ticketSearchController = require('../controllers/support/ticketSearch.cont
 const ticketBulkController = require('../controllers/support/ticketBulk.controller');
 const ticketAdvancedController = require('../controllers/support/ticketAdvanced.controller');
 
+const ticketAnalyticsController = require('../controllers/support/ticketAnalytics.controller');
+const ticketExportController = require('../controllers/support/ticketExport.controller');
+const ticketPerformanceController = require('../controllers/support/ticketPerformance.controller');
+
 // Import middleware
 const { authenticateToken, requireRole, optionalAuth } = require('../middleware/auth.middleware');
-const { uploadGeneral, handleUploadError } = require('../middleware/upload.middleware');
+const { 
+  uploadGeneral, 
+  uploadTicketAttachments, 
+  uploadMessageAttachments, 
+  handleUploadError 
+} = require('../middleware/upload.middleware');
 
 // Import Phase 1-2 validation middleware
 const {
@@ -82,6 +91,15 @@ const {
   cacheCategories,
   cacheAvailableAdmins,
   invalidateTicketCaches
+} = require('../middleware/ticket.cache.middleware');
+
+const { 
+  cacheAnalyticsOverview,
+  cacheCategoryAnalysis, 
+  cacheWeeklyTrends,
+  cacheAdminPerformance,
+  cacheCompleteAnalytics,
+  autoInvalidateAnalyticsCaches
 } = require('../middleware/ticket.cache.middleware');
 
 // Import Phase 2 cache middleware
@@ -166,12 +184,13 @@ router.post(
   '/',
   [
     authenticateToken,
-    uploadGeneral.array('attachments', 5),
+    uploadTicketAttachments,
     handleUploadError,
     validateCreateTicket,
     validateCategoryExists,
     validateAssignedAdminExists,
-    invalidateTicketCaches
+    invalidateTicketCaches,
+    autoInvalidateAnalyticsCaches
   ],
   asyncHandler(ticketController.createTicket)
 );
@@ -204,7 +223,8 @@ router.put(
     validateUserCanUpdateTicket,
     validateUpdateTicket,
     validateCategoryExists,
-    invalidateTicketCaches
+    invalidateTicketCaches,
+    autoInvalidateAnalyticsCaches
   ],
   asyncHandler(ticketController.updateTicket)
 );
@@ -268,7 +288,7 @@ router.post(
   '/:ticketId/messages',
   [
     authenticateToken,
-    uploadGeneral.array('attachments', 3),
+    uploadMessageAttachments,
     handleUploadError,
     validateTicketIdParam,
     validateTicketAccess,
@@ -658,11 +678,12 @@ router.post(
   [
     authenticateToken,
     requireRole('SUPER_ADMIN'),
-    uploadGeneral.array('attachments', 5),
+    uploadTicketAttachments,
     handleUploadError,
     validateTicketIdParam,
     validateAdminResponse,
-    invalidateTicketCaches
+    invalidateTicketCaches,
+    autoInvalidateAnalyticsCaches
   ],
   asyncHandler(ticketAdminController.respondToTicket)
 );
@@ -694,7 +715,8 @@ router.post(
     requireRole('SUPER_ADMIN'),
     validateTicketIdParam,
     validateCloseTicket,
-    invalidateTicketCaches
+    invalidateTicketCaches,
+    autoInvalidateAnalyticsCaches
   ],
   asyncHandler(ticketAdminController.closeTicket)
 );
@@ -905,6 +927,265 @@ router.get(
   ],
   asyncHandler(ticketAuditController.getUserAuditHistory)
 );
+
+// ============================================
+// PHASE 4 ROUTES: ANALYTICS DASHBOARD
+// ============================================
+
+/**
+ * Get dashboard overview analytics
+ * GET /api/tickets/admin/analytics/overview
+ */
+router.get(
+  '/admin/analytics/overview',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    // cacheTicketStatistics
+    cacheAnalyticsOverview 
+  ],
+  asyncHandler(ticketAnalyticsController.getDashboardOverview)
+);
+
+/**
+ * Get category analysis
+ * GET /api/tickets/admin/analytics/categories
+ */
+router.get(
+  '/admin/analytics/categories',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    // cacheTicketStatistics
+    cacheCategoryAnalysis
+  ],
+  asyncHandler(ticketAnalyticsController.getCategoryAnalysis)
+);
+
+/**
+ * Get weekly trends
+ * GET /api/tickets/admin/analytics/trends
+ */
+router.get(
+  '/admin/analytics/trends',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    // cacheTicketStatistics
+    cacheWeeklyTrends
+  ],
+  asyncHandler(ticketAnalyticsController.getWeeklyTrends)
+);
+
+/**
+ * Get admin performance metrics
+ * GET /api/tickets/admin/analytics/performance
+ */
+router.get(
+  '/admin/analytics/performance',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    // cacheTicketStatistics
+    cacheAdminPerformance 
+  ],
+  asyncHandler(ticketAnalyticsController.getAdminPerformance)
+);
+
+/**
+ * Get priority distribution
+ * GET /api/tickets/admin/analytics/priority-distribution
+ */
+router.get(
+  '/admin/analytics/priority-distribution',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    cacheTicketStatistics
+  ],
+  asyncHandler(ticketAnalyticsController.getPriorityDistribution)
+);
+
+/**
+ * Get complete analytics dashboard
+ * GET /api/tickets/admin/analytics/complete
+ */
+router.get(
+  '/admin/analytics/complete',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    // cacheTicketStatistics
+    cacheCompleteAnalytics
+  ],
+  asyncHandler(ticketAnalyticsController.getCompleteAnalytics)
+);
+
+/**
+ * Refresh analytics cache
+ * POST /api/tickets/admin/analytics/refresh
+ */
+router.post(
+  '/admin/analytics/refresh',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketAnalyticsController.refreshAnalyticsCache)
+);
+
+// ============================================
+// PHASE 4 ROUTES: EXPORT FUNCTIONALITY
+// ============================================
+
+/**
+ * Export ticket conversation as PDF
+ * GET /api/tickets/:ticketId/export/pdf
+ */
+router.get(
+  '/:ticketId/export/pdf',
+  [
+    authenticateToken,
+    validateTicketIdParam,
+    validateTicketAccess
+  ],
+  asyncHandler(ticketExportController.exportTicketPDF)
+);
+
+/**
+ * Export tickets list as CSV (Admin)
+ * POST /api/tickets/admin/export/csv
+ */
+router.post(
+  '/admin/export/csv',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketExportController.exportTicketsCSV)
+);
+
+/**
+ * Get export history (Admin)
+ * GET /api/tickets/admin/export/history
+ */
+router.get(
+  '/admin/export/history',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketExportController.getExportHistory)
+);
+
+/**
+ * Get export statistics (Admin)
+ * GET /api/tickets/admin/export/stats
+ */
+router.get(
+  '/admin/export/stats',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketExportController.getExportStats)
+);
+
+// ============================================
+// PHASE 4 ROUTES: PERFORMANCE OPTIMIZATION
+// ============================================
+
+/**
+ * Get database performance metrics
+ * GET /api/tickets/admin/performance/metrics
+ */
+router.get(
+  '/admin/performance/metrics',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketPerformanceController.getDatabaseMetrics)
+);
+
+/**
+ * Run manual performance cleanup
+ * POST /api/tickets/admin/performance/cleanup
+ */
+router.post(
+  '/admin/performance/cleanup',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketPerformanceController.runManualCleanup)
+);
+
+/**
+ * Get cleanup history
+ * GET /api/tickets/admin/performance/cleanup-history
+ */
+router.get(
+  '/admin/performance/cleanup-history',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketPerformanceController.getCleanupHistory)
+);
+
+/**
+ * Get performance recommendations
+ * GET /api/tickets/admin/performance/recommendations
+ */
+router.get(
+  '/admin/performance/recommendations',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketPerformanceController.getPerformanceRecommendations)
+);
+
+/**
+ * Test notification system
+ * POST /api/tickets/admin/performance/test-notification
+ */
+router.post(
+  '/admin/performance/test-notification',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN')
+  ],
+  asyncHandler(ticketPerformanceController.testNotificationSystem)
+);
+
+router.post('/admin/test-notifications', [
+  authenticateToken,
+  requireRole('SUPER_ADMIN')
+], asyncHandler(async (req, res) => {
+  try {
+    const { testType } = req.body;
+    const TicketNotificationService = require('../../services/ticketNotification.service');
+    
+    let result;
+    switch (testType) {
+      case 'delayed_check':
+        result = await TicketNotificationService.checkAndSendDelayedNotifications();
+        break;
+      case 'notification_stats':
+        result = await TicketNotificationService.getNotificationStats();
+        break;
+      default:
+        return errorResponse(res, 'Invalid test type', 400);
+    }
+    
+    return successResponse(res, result, 'Notification test completed');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+}));
+
 
 module.exports = router;
 

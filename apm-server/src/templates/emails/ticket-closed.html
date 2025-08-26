@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Resolved - {{ticketNumber}}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+        <h1 style="margin: 0; font-size: 24px;">✅ Ticket Resolved</h1>
+        <p style="margin: 10px 0 0 0; opacity: 0.9;">{{ticketNumber}}</p>
+    </div>
+
+    <!-- Content -->
+    <div style="background: white; padding: 30px; border: 1px solid #ddd; border-top: none;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hi <strong>{{userName}}</strong>,
+        </p>
+        
+        <p>Great news! Your support ticket has been resolved by our team.</p>
+
+        <!-- Ticket Summary -->
+        <div style="background: #f0f0ff; border-left: 4px solid #6f42c1; padding: 20px; margin: 20px 0; border-radius: 4px;">
+            <h3 style="color: #6f42c1; margin: 0 0 15px 0;">{{subject}}</h3>
+            
+            <div style="margin-bottom: 8px;">
+                <strong>Category:</strong> {{category}}
+            </div>
+            <div style="margin-bottom: 8px;">
+                <strong>Resolved by:</strong> {{resolverName}}
+            </div>
+            <div style="margin-bottom: 8px;">
+                <strong>Closed on:</strong> {{closedAt}}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ticketUrl}}" style="background: #6f42c1; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-right: 10px;">
+                📋 View Conversation
+            </a>
+            <a href="{{satisfactionUrl}}" style="background: #28a745; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                ⭐ Rate Experience
+            </a>
+        </div>
+
+        <!-- Satisfaction Section -->
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="color: #856404; margin: 0 0 10px 0;">📊 Help Us Improve</h4>
+            <p style="margin: 0; color: #856404;">
+                Your feedback is valuable! Please take a moment to rate your experience and help us serve you better.
+            </p>
+        </div>
+
+        <p style="color: #666; font-size: 14px; margin-top: 20px;">
+            If you need further assistance with this issue, you can reopen the ticket by replying to the conversation.
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #666;">
+        Alumni Portal Support System | Do not reply to this email
+    </div>
+</body>
+</html>

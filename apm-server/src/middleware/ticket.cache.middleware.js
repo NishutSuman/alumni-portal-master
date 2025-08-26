@@ -26,6 +26,16 @@ const TicketCacheKeys = {
   availableAdmins: () => 'tickets:admins:available'
 };
 
+const ANALYTICS_CACHE_KEYS = {
+  OVERVIEW: 'tickets:analytics:overview',
+  CATEGORIES: 'tickets:analytics:categories',
+  TRENDS: 'tickets:analytics:trends:weekly',
+  ADMIN_PERFORMANCE: 'tickets:analytics:admin:performance',
+  PRIORITY_DISTRIBUTION: 'tickets:analytics:priority:distribution',
+  COMPLETE: 'tickets:analytics:complete'
+};
+
+
 // ==========================================
 // GENERIC CACHE MIDDLEWARE
 // ==========================================
@@ -151,6 +161,175 @@ const cacheAvailableAdmins = cache(
 );
 
 // ==========================================
+// Ticket Analysis  MIDDLEWARE
+// ==========================================
+
+const cacheTicketAnalytics = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = `${ANALYTICS_CACHE_KEYS.OVERVIEW}:${req.originalUrl}`;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 900; // 15 minutes for analytics
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Cache analytics overview data
+ */
+const cacheAnalyticsOverview = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = ANALYTICS_CACHE_KEYS.OVERVIEW;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    // Store cache key for response caching
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 900; // 15 minutes
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Cache category analysis data
+ */
+const cacheCategoryAnalysis = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = ANALYTICS_CACHE_KEYS.CATEGORIES;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 1800; // 30 minutes (categories change less frequently)
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Cache weekly trends data
+ */
+const cacheWeeklyTrends = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = ANALYTICS_CACHE_KEYS.TRENDS;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 600; // 10 minutes (trends change frequently)
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Cache admin performance data
+ */
+const cacheAdminPerformance = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = ANALYTICS_CACHE_KEYS.ADMIN_PERFORMANCE;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 1200; // 20 minutes
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Cache complete analytics data
+ */
+const cacheCompleteAnalytics = async (req, res, next) => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    const cacheKey = ANALYTICS_CACHE_KEYS.COMPLETE;
+    
+    const cached = await CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+    
+    res.cacheKey = cacheKey;
+    res.cacheTTL = 900; // 15 minutes
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+/**
+ * Invalidate all analytics caches when tickets are modified
+ */
+const invalidateAnalyticsCaches = async () => {
+  try {
+    const CacheService = require('../../services/cache.service');
+    
+    await Promise.all([
+      CacheService.del(ANALYTICS_CACHE_KEYS.OVERVIEW),
+      CacheService.del(ANALYTICS_CACHE_KEYS.CATEGORIES),
+      CacheService.del(ANALYTICS_CACHE_KEYS.TRENDS),
+      CacheService.del(ANALYTICS_CACHE_KEYS.ADMIN_PERFORMANCE),
+      CacheService.del(ANALYTICS_CACHE_KEYS.PRIORITY_DISTRIBUTION),
+      CacheService.del(ANALYTICS_CACHE_KEYS.COMPLETE)
+    ]);
+    
+    console.log('✅ Analytics caches invalidated');
+  } catch (error) {
+    console.error('Analytics cache invalidation error:', error);
+  }
+};
+
+/**
+ * Auto-invalidate analytics caches middleware
+ * Use this on any route that modifies ticket data
+ */
+const autoInvalidateAnalyticsCaches = async (req, res, next) => {
+  try {
+    res.on('finish', async () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        await invalidateAnalyticsCaches();
+      }
+    });
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+
+
+// ==========================================
 // CACHE INVALIDATION MIDDLEWARE
 // ==========================================
 
@@ -189,6 +368,7 @@ const invalidateTicketCaches = invalidateCache(async (req) => {
   }
   
   await Promise.all(patterns.map(pattern => CacheService.delPattern(pattern)));
+  await invalidateAnalyticsCaches();
 });
 
 // ==========================================
@@ -209,5 +389,15 @@ module.exports = {
   invalidateTicketCaches,
   
   // Cache utilities
-  TicketCacheKeys
+  TicketCacheKeys,
+  ANALYTICS_CACHE_KEYS,
+
+  cacheTicketAnalytics,
+  cacheAnalyticsOverview,
+  cacheCategoryAnalysis,
+  cacheWeeklyTrends,
+  cacheAdminPerformance,
+  cacheCompleteAnalytics,
+  invalidateAnalyticsCaches,
+  autoInvalidateAnalyticsCaches
 };

@@ -10,7 +10,9 @@ const createUploadDirs = () => {
     './public/uploads/profiles',
     './public/uploads/posts',
     './public/uploads/events',
-    './public/uploads/documents'
+    './public/uploads/documents',
+    './public/uploads/tickets',           
+    './public/uploads/tickets/messages' 
   ];
   
   dirs.forEach(dir => {
@@ -189,6 +191,26 @@ const uploadGeneral = multer({
     files: 5
   }
 }).array('files', 5);
+
+// 🎫 TICKET ATTACHMENTS - Add to existing upload configurations
+const uploadTicketAttachments = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB per attachment
+    files: 5
+  }
+}).array('attachments', 5);  // Uses 'attachments' field name for tickets
+
+// 🎫 MESSAGE ATTACHMENTS - Add to existing upload configurations  
+const uploadMessageAttachments = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 3 * 1024 * 1024, // 3MB per message attachment
+    files: 3
+  }
+}).array('attachments', 3);  // Uses 'attachments' field name for messages
 
 // Error handling middleware for multer errors
 const handleUploadError = (err, req, res, next) => {
@@ -601,4 +623,8 @@ module.exports = {
   uploadSponsorLogo,
   uploadSponsorHeadPhoto,
   uploadSponsorFiles,
+
+  // Ticket Uploads
+  uploadTicketAttachments,     // For ticket creation & admin responses
+  uploadMessageAttachments,    // For message attachments
 };

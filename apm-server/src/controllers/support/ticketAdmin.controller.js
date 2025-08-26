@@ -118,6 +118,17 @@ const respondToTicket = async (req, res) => {
       statusUpdate,
       isInternalNote
     );
+
+    // 🎫 ADD THIS NOTIFICATION HOOK:
+    try {
+      const TicketNotificationService = require('../../services/ticketNotification.service');
+      await TicketNotificationService.handleTicketLifecycleEvent('ADMIN_RESPONSE', ticketId, { 
+        messageId: response.id 
+      });
+    } catch (notificationError) {
+      console.error('Admin response notification failed:', notificationError);
+      // Don't break response if notification fails
+    }
     
     // Log activity
     await prisma.activityLog.create({
@@ -199,6 +210,15 @@ const closeTicket = async (req, res) => {
     const adminId = req.user.id;
     
     const closedTicket = await TicketService.closeTicket(ticketId, adminId, resolutionNote);
+
+    // 🎫 ADD THIS NOTIFICATION HOOK:
+    try {
+      const TicketNotificationService = require('../../services/ticketNotification.service');
+      await TicketNotificationService.handleTicketLifecycleEvent('CLOSED', ticketId);
+    } catch (notificationError) {
+      console.error('Ticket closed notification failed:', notificationError);
+      // Don't break closure if notification fails
+    }
     
     // Log activity
     await prisma.activityLog.create({

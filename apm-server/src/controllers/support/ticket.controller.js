@@ -36,6 +36,15 @@ const createTicket = async (req, res) => {
     
     const ticket = await TicketService.createTicket(userId, ticketData);
     
+    // 🎫 ADD THIS NOTIFICATION HOOK:
+    try {
+      const TicketNotificationService = require('../../services/ticketNotification.service');
+      await TicketNotificationService.handleTicketLifecycleEvent('CREATED', ticket.id);
+    } catch (notificationError) {
+      console.error('New ticket notification failed:', notificationError);
+      // Don't break ticket creation if notification fails
+    }
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -208,6 +217,26 @@ const addMessage = async (req, res) => {
     }
     
     const newMessage = await TicketService.addMessage(ticketId, userId, message, attachments);
+
+    // 🎫 ADD THIS NOTIFICATION HOOK (only for admin responses):
+    try {
+      const TicketNotificationService = require('../../services/ticketNotification.service');
+      
+      if (req.user.role === 'SUPER_ADMIN') {
+        // Admin response - notify user
+        await TicketNotificationService.handleTicketLifecycleEvent('ADMIN_RESPONSE', ticketId, { 
+          messageId: newMessage.id 
+        });
+      } else {
+        // User reply - notify admin  
+        await TicketNotificationService.handleTicketLifecycleEvent('USER_REPLY', ticketId, { 
+          messageId: newMessage.id 
+        });
+      }
+    } catch (notificationError) {
+      console.error('Message notification failed:', notificationError);
+      // Don't break message creation if notification fails
+    }
     
     return successResponse(
       res,
