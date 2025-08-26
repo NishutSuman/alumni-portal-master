@@ -111,6 +111,12 @@ model User {
   donorNotifications DonorNotification[]
   donorResponses     DonorResponse[]
 
+  createdTemplates    TicketTemplate[]      @relation("CreatedTemplates")
+  savedFilters        TicketSavedFilter[]   @relation("SavedTicketFilters")
+  bulkOperations      TicketBulkOperation[] @relation("PerformedBulkOps")
+  searchHistory       TicketSearchHistory[] @relation("SearchHistory")
+  quickActions        TicketQuickAction[]   @relation("QuickActions")
+
   
   createdGroups     OrganizationGroup[] @relation("GroupCreator")
   groupMemberships  GroupMember[]
@@ -118,6 +124,28 @@ model User {
 
 
 createdSponsors  Sponsor[]  @relation("SponsorCreator")
+
+// NEW TICKET RELATIONS (ADD THESE TO EXISTING USER MODEL)
+  
+  // User's own tickets
+  tickets              Ticket[]               @relation("UserTickets")
+  
+  // Tickets assigned to this admin
+  assignedTickets      Ticket[]               @relation("AssignedTickets")
+  
+  // Tickets resolved by this admin (might be different from assigned)
+  resolvedTickets      Ticket[]               @relation("ResolvedTickets") 
+  
+  // Messages sent by this user (in any tickets)
+  ticketMessages       TicketMessage[]        @relation("TicketMessages")
+  
+  // Files uploaded by this user
+  ticketAttachments    TicketAttachment[]     @relation("TicketAttachments")
+
+   messageReactions    TicketMessageReaction[]  @relation("MessageReactions")
+  messageEdits        TicketMessageEdit[]      @relation("MessageEdits")
+  messageDrafts       TicketMessageDraft[]     @relation("MessageDrafts")
+  auditLogsPerformed  TicketAuditLog[]         @relation("PerformedAudits")
   
   @@index([batch])
   @@index([fullName])
@@ -1659,6 +1687,447 @@ model DonorResponse {
 }
 
 
+// Ticket Categories (for organization)
+model TicketCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique // "TECHNICAL", "ACCOUNT", "EVENT", "GENERAL", "BILLING", "LIFELINK"
+  description String?
+  icon        String?  // For UI display
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0) // For sorting in UI
+  
+  // Relations
+  tickets     Ticket[]
+   templates   TicketTemplate[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("ticket_categories")
+}
+
+// Main Ticket Model
+model Ticket {
+  id           String        @id @default(cuid())
+  ticketNumber String        @unique // Auto-generated: TKT-2025-000001
+  
+  // User Information
+  userId       String
+  user         User          @relation("UserTickets", fields: [userId], references: [id])
+  
+  // Admin Assignment (NEW FEATURE)
+  assignedToId String?       // Admin ID selected by user
+  assignedTo   User?         @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedAt   DateTime?     // When ticket was assigned
+  
+  // Ticket Details
+  categoryId   String
+  category     TicketCategory @relation(fields: [categoryId], references: [id])
+  subject      String        // 5-200 characters
+  description  String        @db.Text // 10-5000 characters
+  priority     TicketPriority @default(MEDIUM)
+  status       TicketStatus   @default(OPEN)
+  tags        String[] 
+
+  // Template tracking
+  createdFromTemplate Boolean @default(false)
+  templateId          String?
+  
+  // Resolution Information
+  resolvedAt   DateTime?
+  resolvedBy   String?       // Admin who actually resolved (might be different from assigned)
+  resolver     User?         @relation("ResolvedTickets", fields: [resolvedBy], references: [id])
+  resolutionNote String?     @db.Text // Admin's final resolution note
+  
+  // User Feedback
+  satisfaction TicketSatisfaction?
+  satisfactionNote String?   // User's satisfaction feedback
+  ratedAt      DateTime?
+  
+  // Tracking
+  lastActivity DateTime      @default(now()) // Updated on any new message/status change
+  reopenCount  Int           @default(0)
+
+  auditLogs     TicketAuditLog[]
+  messageDrafts TicketMessageDraft[]
+  
+  // Relations
+  messages     TicketMessage[]
+  attachments  TicketAttachment[]
+  
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  // Optimized indexes for performance
+  @@index([userId, status])           // User's tickets by status
+  @@index([assignedToId, status])     // Admin's assigned tickets
+  @@index([status, createdAt])        // All tickets by status and date
+  @@index([categoryId, status])       // Tickets by category
+  @@index([ticketNumber])             // Quick lookup by ticket number
+  @@index([lastActivity])             // Recently active tickets
+  @@index([priority, status])         // Priority-based filtering
+  
+  @@map("tickets")
+}
+
+// Ticket Messages (conversation thread)
+model TicketMessage {
+  id         String      @id @default(cuid())
+  ticketId   String
+  ticket     Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  // Message Details
+  senderId   String
+  sender     User        @relation("TicketMessages", fields: [senderId], references: [id])
+  message    String      @db.Text
+  isFromAdmin Boolean    @default(false) // Auto-set based on sender role
+  
+  // Message Status (for read receipts)
+  isRead     Boolean     @default(false)
+  readAt     DateTime?
+  
+  // Internal Admin Notes (visible only to admins)
+  isInternalNote Boolean @default(false) // Admin-to-admin communication
+
+  // NEW FIELDS FOR PHASE 2:
+  isEdited      Boolean   @default(false)
+  editedAt      DateTime?
+  
+  // Enhanced content support
+  contentType   MessageContentType @default(PLAIN_TEXT)
+  formattedContent Json? // Rich text formatting data
+  
+  // Relations to new models
+  reactions     TicketMessageReaction[]
+  editHistory   TicketMessageEdit[]
+  
+  // Relations
+  attachments TicketMessageAttachment[]
+  
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  
+  @@index([ticketId, createdAt])  // Messages in chronological order
+  @@index([senderId])             // Messages by sender
+  @@index([isFromAdmin])          // Filter admin vs user messages
+  
+  @@map("ticket_messages")
+}
+
+// File Attachments for Initial Ticket
+model TicketAttachment {
+  id           String   @id @default(cuid())
+  ticketId     String
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  // File Information
+  filename     String   // Stored filename (with timestamp)
+  originalName String   // Original uploaded filename
+  fileSize     Int      // Size in bytes
+  mimeType     String   // File MIME type
+  filePath     String   // Relative path from uploads directory
+  
+  // Upload Information
+  uploadedBy   String
+  uploader     User     @relation("TicketAttachments", fields: [uploadedBy], references: [id])
+  
+  createdAt    DateTime @default(now())
+  
+  @@index([ticketId])
+  @@index([uploadedBy])
+  
+  @@map("ticket_attachments")
+}
+
+// Message-specific Attachments
+model TicketMessageAttachment {
+  id           String        @id @default(cuid())
+  messageId    String
+  message      TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  // File Information  
+  filename     String
+  originalName String
+  fileSize     Int
+  mimeType     String
+  filePath     String
+  
+  createdAt    DateTime      @default(now())
+  
+  @@index([messageId])
+  
+  @@map("ticket_message_attachments")
+}
+
+// Message Reactions (helpful, solved, needs clarification)
+model TicketMessageReaction {
+  id        String        @id @default(cuid())
+  messageId String
+  message   TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User          @relation("MessageReactions", fields: [userId], references: [id])
+  
+  reaction  MessageReactionType
+  
+  createdAt DateTime      @default(now())
+  
+  @@unique([messageId, userId, reaction]) // One reaction type per user per message
+  @@index([messageId])
+  @@index([userId])
+  @@map("ticket_message_reactions")
+}
+
+// Message Edit History (track message changes)
+model TicketMessageEdit {
+  id              String        @id @default(cuid())
+  messageId       String
+  message         TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  previousContent String        @db.Text
+  editReason      String?       // Optional reason for edit
+  editedBy        String
+  editor          User          @relation("MessageEdits", fields: [editedBy], references: [id])
+  
+  createdAt       DateTime      @default(now())
+  
+  @@index([messageId, createdAt])
+  @@map("ticket_message_edits")
+}
+
+// Message Drafts (auto-save while typing)
+model TicketMessageDraft {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation("MessageDrafts", fields: [userId], references: [id])
+  
+  content   String   @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([ticketId, userId]) // One draft per user per ticket
+  @@map("ticket_message_drafts")
+}
+
+// Enhanced Audit Trail for detailed tracking
+model TicketAuditLog {
+  id          String          @id @default(cuid())
+  ticketId    String
+  ticket      Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  // Action Details
+  actionType  AuditActionType
+  fieldName   String?         // Which field changed (status, priority, etc.)
+  oldValue    String?         // Previous value (JSON serialized)
+  newValue    String?         // New value (JSON serialized)  
+  description String          // Human readable description
+  
+  // Actor Information
+  performedBy String?
+  performer   User?           @relation("PerformedAudits", fields: [performedBy], references: [id])
+  isSystem    Boolean         @default(false) // System-generated vs user action
+  
+  // Context
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?           // Additional context data
+  
+  createdAt   DateTime        @default(now())
+  
+  @@index([ticketId, createdAt])
+  @@index([performedBy])
+  @@index([actionType])
+  @@map("ticket_audit_logs")
+}
+
+// Enhanced File Metadata (for better file management)
+model TicketFileMetadata {
+  id             String   @id @default(cuid())
+  attachmentId   String   @unique
+  // This can reference either TicketAttachment or TicketMessageAttachment
+  
+  // File Analysis
+  isImage        Boolean  @default(false)
+  imageWidth     Int?
+  imageHeight    Int?
+  thumbnailPath  String?  // Generated thumbnail path
+  
+  // File Properties
+  compressedSize Int?     // Size after compression
+  checksum       String?  // File integrity check
+  
+  // Access Tracking
+  downloadCount  Int      @default(0)
+  lastAccessed   DateTime?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("ticket_file_metadata")
+}
+
+// Ticket Templates for common issues
+model TicketTemplate {
+  id          String         @id @default(cuid())
+  name        String         // "Login Issues", "Event Registration Problem"
+  description String?        // Template description
+  categoryId  String
+  category    TicketCategory @relation(fields: [categoryId], references: [id])
+  
+  // Template Content
+  subjectTemplate     String          // "Unable to login - {issue_type}"
+  descriptionTemplate String @db.Text // Pre-filled description with placeholders
+  priorityDefault     TicketPriority  @default(MEDIUM)
+  
+  // Dynamic Fields Configuration
+  hasCustomFields     Boolean @default(false)
+  customFields        Json?   // Configuration for dynamic fields
+  
+  // Template Management
+  isActive     Boolean @default(true)
+  isPublic     Boolean @default(true)  // Public templates vs admin-only
+  sortOrder    Int     @default(0)
+  
+  // Usage Statistics  
+  usageCount   Int      @default(0)
+  lastUsedAt   DateTime?
+  
+  // Management
+  createdBy    String
+  creator      User     @relation("CreatedTemplates", fields: [createdBy], references: [id])
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([categoryId, isActive, isPublic])
+  @@index([isActive, sortOrder])
+  @@map("ticket_templates")
+}
+
+// Saved Search Filters for users and admins
+model TicketSavedFilter {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("SavedTicketFilters", fields: [userId], references: [id])
+  
+  // Filter Details
+  name        String   // "My Urgent Tickets", "This Week's Tech Issues"
+  description String?
+  filterConfig Json    // Serialized filter criteria
+  
+  // Filter Settings
+  isDefault   Boolean  @default(false) // Default filter for user
+  isShared    Boolean  @default(false) // Admin can share filters with all users
+  shareWith   String[] // Array of user IDs to share with
+  
+  // Usage Stats
+  usageCount  Int      @default(0)
+  lastUsedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@index([isShared])
+  @@map("ticket_saved_filters")
+}
+
+// Bulk Operation Tracking
+model TicketBulkOperation {
+  id           String              @id @default(cuid())
+  operationId  String              @unique // For tracking async operations
+  
+  // Operation Details
+  operationType BulkOperationType
+  description   String             // Human readable description
+  targetCount   Int                // Number of tickets targeted
+  successCount  Int      @default(0)
+  failureCount  Int      @default(0)
+  
+  // Operation Data
+  ticketIds     String[]           // Array of ticket IDs
+  operationData Json?              // Operation parameters
+  results       Json?              // Success/failure details
+  
+  // Status Tracking
+  status        BulkOperationStatus @default(PENDING)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  failureReason String?
+  
+  // Actor Information
+  performedBy   String
+  performer     User               @relation("PerformedBulkOps", fields: [performedBy], references: [id])
+  
+  // Context
+  ipAddress     String?
+  userAgent     String?
+  
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  
+  @@index([performedBy, createdAt])
+  @@index([status, createdAt])
+  @@index([operationType])
+  @@map("ticket_bulk_operations")
+}
+
+// Advanced Search History (for suggestions and analytics)
+model TicketSearchHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("SearchHistory", fields: [userId], references: [id])
+  
+  // Search Details
+  searchQuery String   // User's search terms
+  searchType  SearchType @default(BASIC)
+  filterConfig Json?   // Applied filters
+  resultsCount Int     // Number of results returned
+  
+  // Usage Analytics
+  clicked     Boolean  @default(false) // Did user click any results
+  clickedTicketId String? // Which ticket they opened from search
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([searchQuery])
+  @@map("ticket_search_history")
+}
+
+// Quick Actions (for frequently used operations)
+model TicketQuickAction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("QuickActions", fields: [userId], references: [id])
+  
+  // Action Details
+  actionType  String   // "close_with_template", "assign_to_me", "priority_high"
+  actionName  String   // Display name
+  actionData  Json     // Action parameters
+  
+  // Settings
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  
+  // Usage Stats
+  usageCount  Int      @default(0)
+  lastUsedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, actionType])
+  @@index([userId, isEnabled, sortOrder])
+  @@map("ticket_quick_actions")
+}
+
+
 
 // Enums
 enum UserRole {
@@ -1938,4 +2407,86 @@ enum DonorResponseStatus {
   NO_RESPONSE
 
   @@map("donor_response_statuses")
+}
+
+// Ticket Enums
+
+enum TicketStatus {
+  OPEN           // Just created, waiting for admin response
+  IN_PROGRESS    // Admin is working on it
+  WAITING_FOR_USER // Admin responded, waiting for user reply
+  RESOLVED       // Admin marked as resolved
+  CLOSED         // Ticket is closed (by admin or auto-closed)
+  REOPENED       // User reopened a closed/resolved ticket
+}
+
+enum TicketPriority {
+  LOW     // General questions, non-urgent
+  MEDIUM  // Default priority
+  HIGH    // Important issues affecting user experience
+  URGENT  // Critical issues requiring immediate attention
+}
+
+enum TicketSatisfaction {
+  VERY_SATISFIED
+  SATISFIED
+  NEUTRAL
+  DISSATISFIED
+  VERY_DISSATISFIED
+}
+
+enum MessageReactionType {
+  HELPFUL
+  SOLVED  
+  NEEDS_CLARIFICATION
+  THUMBS_UP
+  THUMBS_DOWN
+}
+
+enum AuditActionType {
+  CREATED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  CATEGORY_CHANGED
+  ASSIGNED
+  REASSIGNED
+  MESSAGE_ADDED
+  MESSAGE_EDITED
+  MESSAGE_REACTION_ADDED
+  ATTACHMENT_ADDED
+  ATTACHMENT_REMOVED
+  SATISFACTION_RATED
+  REOPENED
+  CLOSED
+  BULK_OPERATION
+}
+
+enum MessageContentType {
+  PLAIN_TEXT
+  RICH_TEXT
+  HTML
+}
+
+enum BulkOperationType {
+  ASSIGN_TO_ADMIN
+  CHANGE_STATUS
+  CHANGE_PRIORITY
+  CHANGE_CATEGORY
+  CLOSE_WITH_RESOLUTION
+  ADD_TAG
+  EXPORT_SELECTED
+}
+
+enum BulkOperationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  PARTIALLY_COMPLETED
+}
+
+enum SearchType {
+  BASIC       // Simple text search
+  ADVANCED    // Complex filters
+  FILTER_PRESET // Using saved filter
 }

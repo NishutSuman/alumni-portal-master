@@ -44,6 +44,8 @@
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "redis": "^5.8.1",
+    "sharp": "^0.34.3",
+    "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
