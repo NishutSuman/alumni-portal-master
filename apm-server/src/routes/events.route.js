@@ -134,6 +134,26 @@ const {
 	invalidateAnalyticsCache,
 } = require("../middleware/feedback.cache.middleware");
 
+const {
+  validateEventIdParam: validateEventId,
+  validateBatchYearParam,
+  validateCreateBatchCollection,
+  validateBatchAdminPayment,
+  validateApproveRejectCollection,
+  requireBatchAdminForBatch,
+  validateNoDuplicateBatchCollection,
+  validateBatchHasActiveAdmins,
+  batchCollectionRateLimit
+} = require('../middleware/batchCollection.validation.middleware');
+
+const batchCollectionController = require('../controllers/batchCollection.controller');
+
+// Import registration mode middleware
+const { 
+  checkRegistrationMode, 
+  preventDuplicateRegistration 
+} = require('../middleware/registrationMode.middleware');
+
 // ==========================================
 // CONTROLLER IMPORTS (COMPLETE)
 // ==========================================
@@ -492,6 +512,8 @@ router.post(
 	"/:eventId/register",
 	authenticateToken,
 	checkMembershipStatus,
+	checkRegistrationMode,  // Check batch collection mode
+	preventDuplicateRegistration,
 	validateEventIdParam,
 	validateUserRegistration,
 	validateRegistrationBusinessRules,
@@ -1684,6 +1706,45 @@ router.post('/:eventId/toggle-payment-visibility',
   requireRole('SUPER_ADMIN'),
   validateEventIdParam,
   asyncHandler(RegistrationDashboardController.togglePaymentVisibility)
+);
+
+// ==========================================
+// BATCH COLLECTION SYSTEM ROUTES (PHASE 2)
+// ==========================================
+
+// PUBLIC: Get batch collection progress
+router.get('/:eventId/batch-collections/:batchYear/progress',
+  validateEventIdParam,
+  validateBatchYearParam,
+  asyncHandler(batchCollectionController.getBatchCollectionProgress)
+);
+
+// USER: Get batch collection status  
+router.get('/:eventId/batch-collections/:batchYear/status',
+  authenticateToken,
+  validateEventIdParam,
+  validateBatchYearParam,
+  asyncHandler(batchCollectionController.getBatchCollectionStatus)
+);
+
+// BATCH ADMIN: Initiate payment
+router.post('/:eventId/batch-collections/:batchYear/pay',
+  authenticateToken,
+  batchCollectionRateLimit,
+  validateEventIdParam,
+  validateBatchYearParam,
+  validateBatchAdminPayment,
+  requireBatchAdminForBatch,
+  asyncHandler(batchCollectionController.initiateBatchAdminPayment)
+);
+
+// BATCH ADMIN: Get payments
+router.get('/:eventId/batch-collections/:batchYear/payments',
+  authenticateToken,
+  validateEventIdParam,
+  validateBatchYearParam,
+  requireBatchAdminForBatch,
+  asyncHandler(batchCollectionController.getBatchCollectionPayments)
 );
 
 module.exports = router;

@@ -1,5 +1,6 @@
 // src/controllers/admin/membershipAdmin.controller.js
 const MembershipService = require("../services/membership.service");
+const MembershipAdminService = require("../services/membershipAdmin.service");
 const { prisma } = require("../config/database");
 const {
 	successResponse,
@@ -566,6 +567,38 @@ const sendMembershipReminders = async (req, res) => {
 	}
 };
 
+/**
+ * BONUS: Auto-expire memberships that have passed their expiry date
+ * POST /api/admin/membership/auto-expire
+ * NEW METHOD: Uses MembershipAdminService
+ */
+const autoExpireMemberships = async (req, res) => {
+	try {
+		const expiredCount = await MembershipAdminService.autoExpireMemberships();
+		
+		// Log admin action
+		await prisma.activityLog.create({
+			data: {
+				userId: req.user.id,
+				action: "membership_auto_expire_triggered",
+				details: {
+					expiredCount,
+					triggeredAt: new Date(),
+				},
+			},
+		});
+
+		return successResponse(
+			res,
+			{ expiredCount },
+			`Successfully auto-expired ${expiredCount} memberships`
+		);
+	} catch (error) {
+		console.error("Auto-expire memberships error:", error);
+		return errorResponse(res, "Failed to auto-expire memberships", 500);
+	}
+};
+
 module.exports = {
 	setBatchMembershipSettings,
 	setGlobalMembershipSettings,
@@ -574,4 +607,5 @@ module.exports = {
 	bulkUpdateMembershipStatus,
 	updateUserMembershipStatus,
 	sendMembershipReminders,
+	autoExpireMemberships,
 };

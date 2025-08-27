@@ -8,6 +8,7 @@ const PaymentProviderFactory = require("./PaymentProviderFactory");
 const paymentConfig = require("../../config/payment");
 const emailManager = require("../email/EmailManager");
 const MembershipService = require("../membership.service");
+const BatchPaymentService = require("./batchPayment.service");
 
 const prisma = new PrismaClient();
 
@@ -612,6 +613,14 @@ class PaymentService {
 				// Log membership activation
 				console.log(`✅ Membership activated for user: ${transaction.userId}`);
 				break;
+
+			case "BATCH_ADMIN_PAYMENT":
+				await BatchPaymentService.processBatchPaymentSuccess(
+					transaction.id,
+					data
+				);
+				console.log(`✅ Batch admin payment processed: ${transaction.userId}`);
+				break;
 		}
 	}
 
@@ -638,6 +647,15 @@ class PaymentService {
 				// Update related records
 				await this.updateRelatedRecords(prisma, transaction, data);
 			}
+		}
+		if (
+			action === "payment_failed" &&
+			transaction.referenceType === "BATCH_ADMIN_PAYMENT"
+		) {
+			await BatchPaymentService.processBatchPaymentFailure(
+				transaction.id,
+				data
+			);
 		}
 	}
 

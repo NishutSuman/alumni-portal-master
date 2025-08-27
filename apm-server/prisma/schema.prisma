@@ -83,6 +83,10 @@ model User {
   batch_            Batch   @relation("BatchMembers", fields: [batch], references: [year])
   addresses         UserAddress[]
 
+  // Batch Collection Relation
+  batchCollectionsCreated BatchEventCollection[] @relation("BatchCollectionCreator")
+  batchCollectionsApproved BatchEventCollection[] @relation("BatchCollectionApprover")
+  batchAdminPayments      BatchAdminPayment[] @relation("BatchPaymentAdmin")
 
 
   // NEW MEMBERSHIP RELATIONS (Add these to existing User model relations)
@@ -131,6 +135,11 @@ model User {
   bulkOperations      TicketBulkOperation[] @relation("PerformedBulkOps")
   searchHistory       TicketSearchHistory[] @relation("SearchHistory")
   quickActions        TicketQuickAction[]   @relation("QuickActions")
+
+  // Separate Merchandise Relation
+  merchandiseCreated     Merchandise[] @relation("MerchandiseCreator")
+  merchandiseOrders      MerchandiseOrder[] @relation("MerchandiseOrders")  
+  merchandiseCart        MerchandiseCartItem[] @relation("MerchandiseCart")
 
   
   createdGroups     OrganizationGroup[] @relation("GroupCreator")
@@ -254,6 +263,8 @@ model Batch {
 
   membershipSettings      BatchMembershipSettings[]
   adminAssignments        BatchAdminAssignment[]   @relation("BatchAdminAssignments")
+
+  batchCollections        BatchEventCollection[] @relation("BatchCollections")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -561,6 +572,8 @@ model Event {
   endTime           String?     // Store as "HH:MM" format
   registrationStartDate DateTime?
   registrationEndDate   DateTime?
+
+  defaultRegistrationMode RegistrationMode @default(INDIVIDUAL)
   
   // Location and mode
   venue             String?
@@ -603,6 +616,9 @@ model Event {
   feedbackAnalytics EventFeedbackAnalytics? @relation("FeedbackAnalytics")
   feedbackReminders EventFeedbackReminder[] @relation("FeedbackReminders")
   analytics             EventAnalytics?
+
+  // Batch Collection Relation
+  batchCollections        BatchEventCollection[] @relation("EventBatchCollections")
 
   // Treasury Relations (add to Event model)
   expenses         Expense[]          @relation("ExpenseEvent")
@@ -1021,6 +1037,63 @@ model EventFeedbackReminder {
   @@index([isCompleted])
   @@map("event_feedback_reminders")
 }
+// ===============================================
+// BATCH MODE COLLECTION
+// ===============================================
+
+model BatchEventCollection {
+  id                String   @id @default(cuid())
+  eventId          String
+  batchYear        Int
+  targetAmount     Decimal  @db.Decimal(10, 2)
+  collectedAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  isTargetMet      Boolean  @default(false)
+  isApproved       Boolean  @default(false)
+  approvedBy       String?
+  approvedAt       DateTime?
+  registrationMode String   @default("BATCH_COLLECTION")
+  status           String   @default("ACTIVE")
+  description      String?
+  createdBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  event            Event     @relation("EventBatchCollections", fields: [eventId], references: [id], onDelete: Cascade)
+  batch            Batch     @relation("BatchCollections", fields: [batchYear], references: [year])
+  creator          User      @relation("BatchCollectionCreator", fields: [createdBy], references: [id])
+  approver         User?     @relation("BatchCollectionApprover", fields: [approvedBy], references: [id])
+  payments         BatchAdminPayment[]
+
+  @@unique([eventId, batchYear])
+  @@index([eventId])
+  @@index([batchYear])
+  @@index([status])
+  @@map("batch_event_collections")
+}
+
+model BatchAdminPayment {
+  id                    String    @id @default(cuid())
+  batchCollectionId     String
+  paidByAdmin          String
+  amount               Decimal   @db.Decimal(10, 2)
+  paymentTransactionId String?
+  paymentStatus        String    @default("PENDING")
+  paymentDate          DateTime?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  batchCollection      BatchEventCollection @relation(fields: [batchCollectionId], references: [id], onDelete: Cascade)
+  admin                User                 @relation("BatchPaymentAdmin", fields: [paidByAdmin], references: [id])
+  paymentTransaction   PaymentTransaction?  @relation("BatchAdminPayments", fields: [paymentTransactionId], references: [id])
+
+  @@index([batchCollectionId])
+  @@index([paidByAdmin])
+  @@index([paymentStatus])
+  @@map("batch_admin_payments")
+}
 
 // Payment Models
 
@@ -1068,6 +1141,10 @@ model PaymentTransaction {
   invoices            PaymentInvoice[]
   eventRegistrations  EventRegistration[]
   merchandiseOrders   EventMerchandiseOrder[]
+
+  batchAdminPayments      BatchAdminPayment[] @relation("BatchAdminPayments")
+
+  merchandisePayments    MerchandiseOrder[] @relation("MerchandisePayments")
   
   // Timestamps
   createdAt           DateTime             @default(now())
@@ -2214,6 +2291,111 @@ model TicketQuickAction {
 }
 
 
+//==============================
+// STANDALONE MERCHANDISE SYSTEM - Not Integrated with Event
+//==============================
+
+model Merchandise {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?  @db.Text
+  price           Decimal  @db.Decimal(10, 2)
+  images          String[] // Array of image URLs
+  availableSizes  String[] // ["S", "M", "L", "XL", "XXL"] 
+  stock           Int      @default(0)
+  category        String?  // "T-Shirts", "Mugs", "Accessories"
+  isActive        Boolean  @default(true)
+  
+  // Admin tracking
+  createdBy       String
+  creator         User     @relation("MerchandiseCreator", fields: [createdBy], references: [id])
+  
+  // Relations
+  orderItems      MerchandiseOrderItem[]
+  cartItems       MerchandiseCartItem[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([category])
+  @@index([isActive])
+  @@map("merchandise")
+}
+
+model MerchandiseOrder {
+  id               String   @id @default(cuid())
+  orderNumber      String   @unique // "ORD-2025-001"
+  userId           String
+  user             User     @relation("MerchandiseOrders", fields: [userId], references: [id])
+  
+  // Order details
+  totalAmount      Decimal  @db.Decimal(10, 2)
+  status           String   @default("PENDING") // PENDING, CONFIRMED, DELIVERED, CANCELLED
+  
+  // Payment information
+  paymentTransactionId String?
+  paymentTransaction   PaymentTransaction? @relation("MerchandisePayments", fields: [paymentTransactionId], references: [id])
+  paymentStatus        String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  
+  // Delivery information  
+  deliveryStatus   String   @default("PENDING") // PENDING, SHIPPED, DELIVERED
+  deliveredBy      String?
+  deliveredAt      DateTime?
+  deliveryNotes    String?
+  
+  // QR Code for order tracking
+  qrCode           String?  @unique
+  qrData           Json?    // QR code data
+  
+  // Relations
+  items            MerchandiseOrderItem[]
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([deliveryStatus])
+  @@map("merchandise_orders")
+}
+
+model MerchandiseOrderItem {
+  id               String   @id @default(cuid())
+  orderId          String
+  order            MerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  merchandiseId    String
+  merchandise      Merchandise @relation(fields: [merchandiseId], references: [id])
+  
+  quantity         Int
+  selectedSize     String?
+  unitPrice        Decimal  @db.Decimal(10, 2)
+  totalPrice       Decimal  @db.Decimal(10, 2)
+  
+  createdAt        DateTime @default(now())
+  
+  @@index([orderId])
+  @@index([merchandiseId])
+  @@map("merchandise_order_items")
+}
+
+model MerchandiseCartItem {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("MerchandiseCart", fields: [userId], references: [id])
+  merchandiseId    String
+  merchandise      Merchandise @relation(fields: [merchandiseId], references: [id])
+  
+  quantity         Int
+  selectedSize     String?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@unique([userId, merchandiseId, selectedSize])
+  @@index([userId])
+  @@map("merchandise_cart_items")
+}
 
 // Enums
 enum UserRole {
@@ -2366,7 +2548,8 @@ enum PaymentReferenceType {
   ADDITIONAL_FEES     // Any additional fees
   DONATION           // Donation payment
   MEMBERSHIP              // NEW
-  BATCH_ADMIN_PAYMENT   
+  BATCH_ADMIN_PAYMENT
+  MERCHANDISE_PAYMENT
 }
 
 enum PaymentStatus {
@@ -2585,4 +2768,11 @@ enum MembershipStatus {
   PENDING     // Payment initiated but not completed
   SUSPENDED   // Admin suspended
   INACTIVE    // Never paid or deactivated
+}
+
+enum RegistrationMode {
+  INDIVIDUAL           // Normal individual registration
+  BATCH_COLLECTION     // Batch collection system active
+  MIXED               // Both modes allowed (future feature)
+  DISABLED            // Registration disabled
 }

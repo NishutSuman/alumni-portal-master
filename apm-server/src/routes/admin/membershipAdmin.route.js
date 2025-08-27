@@ -1,6 +1,4 @@
-
-
-// File 2: src/routes/admin/membershipAdmin.route.js
+// src/routes/admin/membershipAdmin.route.js
 const express = require('express');
 const router = express.Router();
 
@@ -25,6 +23,7 @@ const {
 
 // Import controllers
 const membershipAdminController = require('../../controllers/membershipAdmin.controller');
+
 // All routes require SUPER_ADMIN role
 router.use(authenticateToken);
 router.use(requireRole('SUPER_ADMIN'));
@@ -140,6 +139,16 @@ router.post('/send-reminders',
     validateSendReminders
   ],
   asyncHandler(membershipAdminController.sendMembershipReminders)
+);
+
+/**
+ * AUTO-EXPIRE MEMBERSHIPS (NEW ENDPOINT)
+ * Manually trigger auto-expiry of memberships that have passed their expiry date
+ * POST /api/admin/membership/auto-expire
+ * Access: SUPER_ADMIN
+ */
+router.post('/auto-expire',
+  asyncHandler(membershipAdminController.autoExpireMemberships)
 );
 
 module.exports = router;
