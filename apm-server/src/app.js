@@ -137,6 +137,8 @@ app.use("/api/groups", require("./routes/group.route"));
 app.use("/api/polls", require("./routes/polls.route"));
 app.use("/api/lifelink", require("./routes/lifelink.route"));
 app.use("/api/tickets", require("./routes/tickets.route"));
+app.use('/api/membership', require('./routes/membership.route'));
+app.use('/api/admin/membership', require('./routes/admin/membershipAdmin.route'));
 
 
 // 🎫 TICKET SYSTEM BACKGROUND JOBS INITIALIZATION

@@ -19,12 +19,13 @@ const paymentSchemas = {
 				"MERCHANDISE",
 				"GUEST_FEES",
 				"ADDITIONAL_FEES",
-				"DONATION"
+				"DONATION",
+				"MEMBERSHIP"
 			)
 			.required()
 			.messages({
 				"any.only":
-					"Reference type must be one of: EVENT_REGISTRATION, MERCHANDISE, GUEST_FEES, ADDITIONAL_FEES, DONATION",
+					"Reference type must be one of: EVENT_REGISTRATION, MERCHANDISE, GUEST_FEES, ADDITIONAL_FEES, DONATION, MEMBERSHIP",
 				"any.required": "Reference type is required",
 			}),
 
@@ -99,7 +100,8 @@ const paymentSchemas = {
 				"MERCHANDISE",
 				"GUEST_FEES",
 				"ADDITIONAL_FEES",
-				"DONATION"
+				"DONATION",
+				"MEMBERSHIP"
 			)
 			.optional(),
 

@@ -48,6 +48,13 @@ model User {
   // Role and Permissions
   role              UserRole @default(USER)
 
+  // NEW MEMBERSHIP FIELDS (Add these to existing User model)
+  membershipStatus        MembershipStatus @default(ACTIVE) // ACTIVE, EXPIRED, PENDING, INACTIVE
+  currentMembershipYear   Int?      
+  membershipPaidAt        DateTime?
+  membershipExpiresAt     DateTime?
+  membershipAmountPaid    Decimal?  @db.Decimal(10, 2)
+
    // LifeLink Fields (NEW)
   bloodGroup         BloodGroup?
   isBloodDonor       Boolean     @default(false)
@@ -75,6 +82,14 @@ model User {
   workHistory       UserWorkExperience[]
   batch_            Batch   @relation("BatchMembers", fields: [batch], references: [year])
   addresses         UserAddress[]
+
+
+
+  // NEW MEMBERSHIP RELATIONS (Add these to existing User model relations)
+  batchMembershipSettings BatchMembershipSettings[] @relation("BatchMembershipCreator")
+  globalMembershipSettings GlobalMembershipSettings[] @relation("GlobalMembershipCreator")
+  batchAdminAssignments   BatchAdminAssignment[]    @relation("BatchAdminAssignments")
+  assignedBatchAdmins     BatchAdminAssignment[]    @relation("BatchAdminAssigner")
   
   // Event Relations
   eventRegistrations    EventRegistration[]
@@ -236,6 +251,9 @@ model Batch {
   
   // All members of this batch
   members     User[] @relation("BatchMembers")
+
+  membershipSettings      BatchMembershipSettings[]
+  adminAssignments        BatchAdminAssignment[]   @relation("BatchAdminAssignments")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -243,6 +261,74 @@ model Batch {
   @@index([year])
   @@map("batches")
 }
+
+model BatchMembershipSettings {
+  id              String   @id @default(cuid())
+  batchYear       Int      
+  batch           Batch    @relation(fields: [batchYear], references: [year], onDelete: Cascade)
+  membershipFee   Decimal  @db.Decimal(10, 2)
+  membershipYear  Int      
+  isActive        Boolean  @default(true)
+  description     String?
+  
+  // Admin tracking
+  createdBy       String
+  creator         User     @relation("BatchMembershipCreator", fields: [createdBy], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([batchYear, membershipYear])
+  @@index([batchYear])
+  @@index([membershipYear])
+  @@index([isActive])
+  @@map("batch_membership_settings")
+}
+
+model GlobalMembershipSettings {
+  id              String   @id @default(cuid())
+  membershipFee   Decimal  @db.Decimal(10, 2)
+  membershipYear  Int      
+  isActive        Boolean  @default(false)
+  applyToAll      Boolean  @default(false)
+  description     String?
+  
+  // Admin tracking
+  createdBy       String
+  creator         User     @relation("GlobalMembershipCreator", fields: [createdBy], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([membershipYear])
+  @@index([membershipYear])
+  @@index([isActive, applyToAll])
+  @@map("global_membership_settings")
+}
+
+model BatchAdminAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("BatchAdminAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  batchYear   Int
+  batch       Batch    @relation("BatchAdminAssignments", fields: [batchYear], references: [year], onDelete: Cascade)
+  
+  // Assignment tracking
+  assignedBy  String
+  assigner    User     @relation("BatchAdminAssigner", fields: [assignedBy], references: [id])
+  assignedAt  DateTime @default(now())
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, batchYear])
+  @@index([userId])
+  @@index([batchYear])
+  @@index([isActive])
+  @@map("batch_admin_assignments")
+}
+
 
 model Post {
   id          String      @id @default(cuid())
@@ -2279,6 +2365,8 @@ enum PaymentReferenceType {
   GUEST_FEES          // Guest fees only payment
   ADDITIONAL_FEES     // Any additional fees
   DONATION           // Donation payment
+  MEMBERSHIP              // NEW
+  BATCH_ADMIN_PAYMENT   
 }
 
 enum PaymentStatus {
@@ -2489,4 +2577,12 @@ enum SearchType {
   BASIC       // Simple text search
   ADVANCED    // Complex filters
   FILTER_PRESET // Using saved filter
+}
+
+enum MembershipStatus {
+  ACTIVE      // Paid and valid
+  EXPIRED     // Membership period ended
+  PENDING     // Payment initiated but not completed
+  SUSPENDED   // Admin suspended
+  INACTIVE    // Never paid or deactivated
 }

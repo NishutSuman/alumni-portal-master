@@ -16,6 +16,8 @@ const {
 	handleUploadError,
 } = require("../middleware/upload.middleware");
 
+const { checkMembershipStatus } = require('../middleware/membership.middleware');
+
 // ==========================================
 // CACHING MIDDLEWARE IMPORTS (MISSING!)
 // ==========================================
@@ -489,6 +491,7 @@ router.get(
 router.post(
 	"/:eventId/register",
 	authenticateToken,
+	checkMembershipStatus,
 	validateEventIdParam,
 	validateUserRegistration,
 	validateRegistrationBusinessRules,

@@ -4,6 +4,7 @@
 const { asyncHandler } = require('../utils/response');
 const PaymentService = require('../services/payment/PaymentService');
 const { PrismaClient } = require('@prisma/client');
+const MembershipPaymentService = require('../services/payment/membershipPayment.service');
 
 const prisma = new PrismaClient();
 

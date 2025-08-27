@@ -7,6 +7,7 @@ const { PrismaClient } = require("@prisma/client");
 const PaymentProviderFactory = require("./PaymentProviderFactory");
 const paymentConfig = require("../../config/payment");
 const emailManager = require("../email/EmailManager");
+const MembershipService = require("../membership.service");
 
 const prisma = new PrismaClient();
 
@@ -206,6 +207,9 @@ class PaymentService {
 				case "MERCHANDISE":
 					calculation = await this.calculateMerchandiseTotal(referenceId);
 					break;
+				case "MEMBERSHIP":
+					calculation = await this.calculateMembershipTotal(userId);
+					break;
 				default:
 					throw new Error(`Unsupported reference type: ${referenceType}`);
 			}
@@ -314,6 +318,42 @@ class PaymentService {
 			};
 		} catch (error) {
 			console.error("Payment initiation failed:", error);
+			throw error;
+		}
+	}
+
+	// Calculate Membership Total
+	async calculateMembershipTotal(userId) {
+		try {
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { batch: true, fullName: true, email: true },
+			});
+
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			const feeInfo = await MembershipService.getMembershipFee(user.batch);
+
+			if (feeInfo.fee <= 0) {
+				throw new Error("Membership fee not configured for your batch");
+			}
+
+			return {
+				breakdown: {
+					membershipFee: parseFloat(feeInfo.fee),
+					total: parseFloat(feeInfo.fee),
+				},
+				user: user,
+				metadata: {
+					membershipYear: new Date().getFullYear(),
+					batchYear: user.batch,
+					feeType: feeInfo.type,
+				},
+			};
+		} catch (error) {
+			console.error("Membership payment calculation failed:", error);
 			throw error;
 		}
 	}
@@ -559,6 +599,18 @@ class PaymentService {
 						},
 					});
 				}
+				break;
+
+			case "MEMBERSHIP":
+				// Process membership payment
+				await MembershipService.processMembershipPayment(
+					transaction.userId,
+					transaction.id,
+					transaction.amount
+				);
+
+				// Log membership activation
+				console.log(`✅ Membership activated for user: ${transaction.userId}`);
 				break;
 		}
 	}
