@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Low Stock Alert - {{merchandiseName}}</title>
+    <style>
+        .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+        .header { background: #dc3545; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .alert { background: #f8d7da; padding: 15px; margin: 15px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚠️ Low Stock Alert</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear Admin,</p>
+            
+            <div class="alert">
+                <h3>{{#if isOutOfStock}}OUT OF STOCK{{else}}LOW STOCK{{/if}}</h3>
+                <p><strong>Item:</strong> {{merchandiseName}}</p>
+                <p><strong>Current Stock:</strong> {{currentStock}}</p>
+                <p><strong>Alert Threshold:</strong> {{threshold}}</p>
+                <p><strong>Category:</strong> {{category}}</p>
+            </div>
+            
+            {{#if isOutOfStock}}
+            <p><strong>URGENT:</strong> This item is completely out of stock. New orders cannot be fulfilled.</p>
+            {{else}}
+            <p>This item is running low on stock. Please consider restocking soon.</p>
+            {{/if}}
+            
+            <p><a href="{{adminUrl}}" style="background: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Update Stock</a></p>
+        </div>
+    </div>
+</body>
+</html>

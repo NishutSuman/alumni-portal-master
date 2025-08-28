@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Delivered - {{orderNumber}}</title>
+    <style>
+        .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+        .header { background: #28a745; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .delivery-info { background: #d4edda; padding: 15px; margin: 15px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Order Delivered!</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear {{customerName}},</p>
+            
+            <p>Great news! Your order has been successfully delivered.</p>
+            
+            <div class="delivery-info">
+                <h3>Delivery Details</h3>
+                <p><strong>Order Number:</strong> {{orderNumber}}</p>
+                <p><strong>Delivered At:</strong> {{deliveredAt}}</p>
+                <p><strong>Delivered By:</strong> {{deliveredBy}}</p>
+                {{#if deliveryNotes}}<p><strong>Notes:</strong> {{deliveryNotes}}</p>{{/if}}
+            </div>
+            
+            <h3>Items Delivered:</h3>
+            {{#each items}}
+            <p>• {{name}} ({{size}}) - Quantity: {{quantity}}</p>
+            {{/each}}
+            
+            <p>Thank you for your purchase! We hope you enjoy your merchandise.</p>
+        </div>
+        
+        <div class="footer" style="background: #f8f9fa; padding: 15px; text-align: center;">
+            <p>For any issues, contact us at: {{supportEmail}}</p>
+        </div>
+    </div>
+</body>
+</html>

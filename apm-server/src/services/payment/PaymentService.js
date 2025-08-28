@@ -194,6 +194,79 @@ class PaymentService {
 		}
 	}
 
+	// Standalone Merchandise Calculation
+	async calculateStandaloneMerchandiseTotal(userId) {
+		try {
+			// Get user's cart items from standalone merchandise system
+			const cartItems = await prisma.merchandiseCartItem.findMany({
+				where: { userId },
+				include: {
+					merchandise: {
+						select: {
+							id: true,
+							name: true,
+							price: true,
+							stock: true,
+							isActive: true,
+						},
+					},
+				},
+			});
+
+			if (cartItems.length === 0) {
+				throw new Error("Cart is empty");
+			}
+
+			// Validate cart items
+			for (const item of cartItems) {
+				if (!item.merchandise.isActive) {
+					throw new Error(`${item.merchandise.name} is no longer available`);
+				}
+				if (item.merchandise.stock < item.quantity) {
+					throw new Error(`Insufficient stock for ${item.merchandise.name}`);
+				}
+			}
+
+			// Calculate totals
+			const subtotal = cartItems.reduce((sum, item) => {
+				return sum + item.merchandise.price * item.quantity;
+			}, 0);
+
+			const processingFee = this.calculateProcessingFee(subtotal);
+			const total = subtotal + processingFee;
+
+			return {
+				success: true,
+				breakdown: {
+					subtotal: parseFloat(subtotal.toFixed(2)),
+					processingFee: parseFloat(processingFee.toFixed(2)),
+					total: parseFloat(total.toFixed(2)),
+				},
+				items: cartItems.map((item) => ({
+					type: "merchandise",
+					description: `${item.merchandise.name} ${item.selectedSize ? `(${item.selectedSize})` : ""} x${item.quantity}`,
+					amount: parseFloat(
+						(item.merchandise.price * item.quantity).toFixed(2)
+					),
+					merchandiseId: item.merchandise.id,
+					quantity: item.quantity,
+					selectedSize: item.selectedSize,
+				})),
+				user: await prisma.user.findUnique({
+					where: { id: userId },
+					select: {
+						fullName: true,
+						email: true,
+						whatsappNumber: true,
+					},
+				}),
+			};
+		} catch (error) {
+			console.error("Calculate standalone merchandise total error:", error);
+			throw error;
+		}
+	}
+
 	// Initiate payment transaction
 	async initiatePayment(paymentData) {
 		try {
@@ -210,6 +283,10 @@ class PaymentService {
 					break;
 				case "MEMBERSHIP":
 					calculation = await this.calculateMembershipTotal(userId);
+					break;
+				case "MERCHANDISE_ORDER": // STANDALONE MERCHANDISE
+					calculation =
+						await this.calculateStandaloneMerchandiseTotal(referenceId); // referenceId = userId for standalone
 					break;
 				default:
 					throw new Error(`Unsupported reference type: ${referenceType}`);
@@ -620,6 +697,60 @@ class PaymentService {
 					data
 				);
 				console.log(`✅ Batch admin payment processed: ${transaction.userId}`);
+				break;
+
+			// STANDALONE MERCHANDISE
+			case "MERCHANDISE_ORDER": // ADD THIS NEW CASE
+				// Find the order by ID
+				const order = await tx.merchandiseOrder.findUnique({
+					where: { id: referenceId },
+					include: {
+						items: {
+							include: {
+								merchandise: { select: { id: true } },
+							},
+						},
+					},
+				});
+
+				if (order) {
+					// Update order status
+					await tx.merchandiseOrder.update({
+						where: { id: referenceId },
+						data: {
+							status: "CONFIRMED",
+							paymentStatus: "COMPLETED",
+							paymentTransactionId: transaction.id,
+						},
+					});
+
+					// Update stock quantities
+					for (const item of order.items) {
+						await tx.merchandise.update({
+							where: { id: item.merchandiseId },
+							data: {
+								stock: { decrement: item.quantity },
+							},
+						});
+					}
+
+					// Clear user cart
+					await tx.merchandiseCartItem.deleteMany({
+						where: { userId: transaction.userId },
+					});
+
+					// Send confirmation email (async, don't wait)
+					setTimeout(async () => {
+						try {
+							const MerchandiseNotificationService = require("../../merchandiseNotification.service");
+							await MerchandiseNotificationService.sendOrderConfirmationEmail(
+								referenceId
+							);
+						} catch (emailError) {
+							console.error("Order confirmation email failed:", emailError);
+						}
+					}, 100);
+				}
 				break;
 		}
 	}

@@ -2550,6 +2550,7 @@ enum PaymentReferenceType {
   MEMBERSHIP              // NEW
   BATCH_ADMIN_PAYMENT
   MERCHANDISE_PAYMENT
+  MERCHANDISE_ORDER
 }
 
 enum PaymentStatus {

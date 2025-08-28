@@ -1,53 +1,500 @@
 // src/controllers/merchandiseAdmin.controller.js
-// Standalone Merchandise Admin Controller - Independent of Events
+// Admin Controller for Standalone Merchandise Management
 
-const MerchandiseService = require('../services/merchandise.service');
 const { prisma } = require('../config/database');
-const {
-  successResponse,
-  errorResponse,
+const MerchandiseService = require('../services/merchandise.service');
+const { 
+  successResponse, 
+  errorResponse, 
   paginatedResponse,
-  getPaginationParams,
-  calculatePagination
+  getPaginationParams 
 } = require('../utils/response');
 
 /**
- * Get all merchandise orders (admin)
+ * Create new merchandise (admin only)
+ * POST /api/admin/merchandise
+ * Access: SUPER_ADMIN
+ */
+const createMerchandise = async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      price,
+      category,
+      availableSizes,
+      stock,
+      isActive = false, // Default to inactive until admin releases
+      lowStockThreshold = 5
+    } = req.body;
+    
+    const createdBy = req.user.id;
+
+    // Create merchandise
+    const merchandise = await prisma.merchandise.create({
+      data: {
+        name,
+        description,
+        price: parseFloat(price),
+        category: category || 'GENERAL',
+        availableSizes: availableSizes || ['FREE_SIZE'],
+        stock: parseInt(stock) || 0,
+        isActive,
+        lowStockThreshold: parseInt(lowStockThreshold),
+        createdBy,
+        images: []
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: createdBy,
+        action: 'merchandise_created',
+        details: {
+          merchandiseId: merchandise.id,
+          name: merchandise.name,
+          price: merchandise.price,
+          stock: merchandise.stock
+        }
+      }
+    });
+
+    return successResponse(
+      res,
+      { merchandise },
+      'Merchandise created successfully',
+      201
+    );
+
+  } catch (error) {
+    console.error('Create merchandise error:', error);
+    return errorResponse(res, 'Failed to create merchandise', 500);
+  }
+};
+
+/**
+ * Update merchandise
+ * PUT /api/admin/merchandise/:merchandiseId
+ * Access: SUPER_ADMIN
+ */
+const updateMerchandise = async (req, res) => {
+  try {
+    const { merchandiseId } = req.params;
+    const updateData = req.body;
+    const updatedBy = req.user.id;
+
+    // Check if merchandise exists
+    const existingMerchandise = await prisma.merchandise.findUnique({
+      where: { id: merchandiseId }
+    });
+
+    if (!existingMerchandise) {
+      return errorResponse(res, 'Merchandise not found', 404);
+    }
+
+    // Prepare update data
+    const dataToUpdate = {};
+    
+    if (updateData.name) dataToUpdate.name = updateData.name;
+    if (updateData.description) dataToUpdate.description = updateData.description;
+    if (updateData.price) dataToUpdate.price = parseFloat(updateData.price);
+    if (updateData.category) dataToUpdate.category = updateData.category;
+    if (updateData.availableSizes) dataToUpdate.availableSizes = updateData.availableSizes;
+    if (updateData.lowStockThreshold) dataToUpdate.lowStockThreshold = parseInt(updateData.lowStockThreshold);
+    if (typeof updateData.isActive === 'boolean') dataToUpdate.isActive = updateData.isActive;
+
+    // Update merchandise
+    const updatedMerchandise = await prisma.merchandise.update({
+      where: { id: merchandiseId },
+      data: dataToUpdate
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: updatedBy,
+        action: 'merchandise_updated',
+        details: {
+          merchandiseId,
+          changes: dataToUpdate,
+          previousValues: {
+            name: existingMerchandise.name,
+            price: existingMerchandise.price,
+            isActive: existingMerchandise.isActive
+          }
+        }
+      }
+    });
+
+    // Clear caches
+    await MerchandiseService.clearMerchandiseCaches(merchandiseId);
+
+    return successResponse(
+      res,
+      { merchandise: updatedMerchandise },
+      'Merchandise updated successfully'
+    );
+
+  } catch (error) {
+    console.error('Update merchandise error:', error);
+    return errorResponse(res, 'Failed to update merchandise', 500);
+  }
+};
+
+/**
+ * Delete merchandise (soft delete)
+ * DELETE /api/admin/merchandise/:merchandiseId
+ * Access: SUPER_ADMIN
+ */
+const deleteMerchandise = async (req, res) => {
+  try {
+    const { merchandiseId } = req.params;
+    const deletedBy = req.user.id;
+
+    // Check if merchandise exists
+    const merchandise = await prisma.merchandise.findUnique({
+      where: { id: merchandiseId },
+      include: {
+        _count: {
+          select: {
+            orders: { where: { status: { in: ['PENDING', 'CONFIRMED'] } } }
+          }
+        }
+      }
+    });
+
+    if (!merchandise) {
+      return errorResponse(res, 'Merchandise not found', 404);
+    }
+
+    // Check if there are pending orders
+    if (merchandise._count.orders > 0) {
+      return errorResponse(
+        res,
+        'Cannot delete merchandise with pending orders',
+        400
+      );
+    }
+
+    // Soft delete - mark as inactive
+    await prisma.merchandise.update({
+      where: { id: merchandiseId },
+      data: { 
+        isActive: false,
+        deletedAt: new Date()
+      }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: deletedBy,
+        action: 'merchandise_deleted',
+        details: {
+          merchandiseId,
+          name: merchandise.name,
+          reason: 'Admin deletion'
+        }
+      }
+    });
+
+    // Clear caches
+    await MerchandiseService.clearMerchandiseCaches(merchandiseId);
+
+    return successResponse(
+      res,
+      { merchandiseId },
+      'Merchandise deleted successfully'
+    );
+
+  } catch (error) {
+    console.error('Delete merchandise error:', error);
+    return errorResponse(res, 'Failed to delete merchandise', 500);
+  }
+};
+
+/**
+ * Update merchandise stock
+ * POST /api/admin/merchandise/:merchandiseId/stock
+ * Access: SUPER_ADMIN
+ */
+const updateMerchandiseStock = async (req, res) => {
+  try {
+    const { merchandiseId } = req.params;
+    const { stock, reason } = req.body;
+    const updatedBy = req.user.id;
+
+    // Validate stock value
+    const stockValue = parseInt(stock);
+    if (isNaN(stockValue) || stockValue < 0) {
+      return errorResponse(res, 'Invalid stock value', 400);
+    }
+
+    // Check if merchandise exists
+    const merchandise = await prisma.merchandise.findUnique({
+      where: { id: merchandiseId }
+    });
+
+    if (!merchandise) {
+      return errorResponse(res, 'Merchandise not found', 404);
+    }
+
+    const previousStock = merchandise.stock;
+
+    // Update stock
+    const updatedMerchandise = await prisma.merchandise.update({
+      where: { id: merchandiseId },
+      data: { stock: stockValue }
+    });
+
+    // Log stock change
+    await prisma.activityLog.create({
+      data: {
+        userId: updatedBy,
+        action: 'merchandise_stock_updated',
+        details: {
+          merchandiseId,
+          name: merchandise.name,
+          previousStock,
+          newStock: stockValue,
+          reason: reason || 'Manual stock update'
+        }
+      }
+    });
+
+    // Clear stock caches
+    await MerchandiseService.clearStockCaches(merchandiseId);
+
+    return successResponse(
+      res,
+      { 
+        merchandise: {
+          id: updatedMerchandise.id,
+          name: updatedMerchandise.name,
+          stock: updatedMerchandise.stock,
+          previousStock
+        }
+      },
+      'Stock updated successfully'
+    );
+
+  } catch (error) {
+    console.error('Update stock error:', error);
+    return errorResponse(res, 'Failed to update stock', 500);
+  }
+};
+
+/**
+ * Upload merchandise images
+ * POST /api/admin/merchandise/:merchandiseId/images
+ * Access: SUPER_ADMIN
+ */
+const uploadMerchandiseImages = async (req, res) => {
+  try {
+    const { merchandiseId } = req.params;
+    const files = req.files;
+    const uploadedBy = req.user.id;
+
+    if (!files || files.length === 0) {
+      return errorResponse(res, 'No files uploaded', 400);
+    }
+
+    // Check if merchandise exists
+    const merchandise = await prisma.merchandise.findUnique({
+      where: { id: merchandiseId },
+      select: { id: true, name: true, images: true }
+    });
+
+    if (!merchandise) {
+      return errorResponse(res, 'Merchandise not found', 404);
+    }
+
+    // Generate URLs for uploaded files
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const newImageUrls = files.map(file => {
+      const relativePath = file.path
+        .replace(process.cwd(), '')
+        .replace(/\\/g, '/');
+      return `${baseUrl}${relativePath}`;
+    });
+
+    // Update merchandise with new image URLs
+    const existingImages = merchandise.images || [];
+    const updatedImages = [...existingImages, ...newImageUrls];
+
+    const updatedMerchandise = await prisma.merchandise.update({
+      where: { id: merchandiseId },
+      data: { images: updatedImages }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: uploadedBy,
+        action: 'merchandise_images_uploaded',
+        details: {
+          merchandiseId,
+          merchandiseName: merchandise.name,
+          uploadedCount: files.length,
+          totalImages: updatedImages.length
+        }
+      }
+    });
+
+    // Clear merchandise caches
+    await MerchandiseService.clearMerchandiseCaches(merchandiseId);
+
+    return successResponse(
+      res,
+      {
+        merchandise: {
+          id: updatedMerchandise.id,
+          name: updatedMerchandise.name,
+          images: updatedMerchandise.images
+        },
+        uploadedImages: newImageUrls,
+        uploadCount: files.length
+      },
+      `${files.length} image(s) uploaded successfully`
+    );
+
+  } catch (error) {
+    console.error('Upload merchandise images error:', error);
+    return errorResponse(res, 'Failed to upload images', 500);
+  }
+};
+
+/**
+ * Release merchandise for sale (admin approval workflow)
+ * POST /api/admin/merchandise/:merchandiseId/release
+ * Access: SUPER_ADMIN
+ */
+const releaseMerchandise = async (req, res) => {
+  try {
+    const { merchandiseId } = req.params;
+    const { releaseNotes } = req.body;
+    const releasedBy = req.user.id;
+
+    // Check merchandise and validate for release
+    const merchandise = await prisma.merchandise.findUnique({
+      where: { id: merchandiseId }
+    });
+
+    if (!merchandise) {
+      return errorResponse(res, 'Merchandise not found', 404);
+    }
+
+    if (merchandise.isActive) {
+      return errorResponse(res, 'Merchandise is already released', 400);
+    }
+
+    // Validation before release
+    const validationErrors = [];
+    
+    if (!merchandise.name || merchandise.name.trim().length === 0) {
+      validationErrors.push('Name is required');
+    }
+    
+    if (!merchandise.price || merchandise.price <= 0) {
+      validationErrors.push('Valid price is required');
+    }
+    
+    if (!merchandise.stock || merchandise.stock <= 0) {
+      validationErrors.push('Stock must be set before release');
+    }
+    
+    if (!merchandise.images || merchandise.images.length === 0) {
+      validationErrors.push('At least one image is required');
+    }
+
+    if (validationErrors.length > 0) {
+      return errorResponse(
+        res,
+        'Cannot release merchandise. Please fix the following issues:',
+        400,
+        { validationErrors }
+      );
+    }
+
+    // Release merchandise
+    const updatedMerchandise = await prisma.merchandise.update({
+      where: { id: merchandiseId },
+      data: { 
+        isActive: true,
+        releasedAt: new Date(),
+        releasedBy
+      }
+    });
+
+    // Log release activity
+    await prisma.activityLog.create({
+      data: {
+        userId: releasedBy,
+        action: 'merchandise_released',
+        details: {
+          merchandiseId,
+          name: merchandise.name,
+          stock: merchandise.stock,
+          price: merchandise.price,
+          releaseNotes: releaseNotes || 'Merchandise released for sale'
+        }
+      }
+    });
+
+    // Clear all merchandise caches
+    await MerchandiseService.clearAllMerchandiseCaches();
+
+    return successResponse(
+      res,
+      { 
+        merchandise: {
+          id: updatedMerchandise.id,
+          name: updatedMerchandise.name,
+          isActive: updatedMerchandise.isActive,
+          releasedAt: updatedMerchandise.releasedAt
+        }
+      },
+      'Merchandise released successfully'
+    );
+
+  } catch (error) {
+    console.error('Release merchandise error:', error);
+    return errorResponse(res, 'Failed to release merchandise', 500);
+  }
+};
+
+/**
+ * Get all orders (admin)
  * GET /api/admin/merchandise/orders
  * Access: SUPER_ADMIN
  */
 const getAllOrders = async (req, res) => {
   try {
-    const { page, limit, skip } = getPaginationParams(req.query, 20);
-    const { search, status, deliveryStatus, startDate, endDate } = req.query;
+    const { page, limit, status, deliveryStatus, search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const { offset, pageSize } = getPaginationParams(page, limit);
 
     // Build where clause
-    let whereClause = {};
-
+    const whereClause = {};
+    
+    if (status) {
+      whereClause.status = status.toUpperCase();
+    }
+    
+    if (deliveryStatus) {
+      whereClause.deliveryStatus = deliveryStatus.toUpperCase();
+    }
+    
     if (search) {
       whereClause.OR = [
         { orderNumber: { contains: search, mode: 'insensitive' } },
-        { user: { fullName: { contains: search, mode: 'insensitive' } } },
-        { user: { email: { contains: search, mode: 'insensitive' } } }
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } }
       ];
     }
 
-    if (status && status !== 'ALL') {
-      whereClause.status = status;
-    }
-
-    if (deliveryStatus && deliveryStatus !== 'ALL') {
-      whereClause.deliveryStatus = deliveryStatus;
-    }
-
-    if (startDate || endDate) {
-      whereClause.createdAt = {};
-      if (startDate) whereClause.createdAt.gte = new Date(startDate);
-      if (endDate) whereClause.createdAt.lte = new Date(endDate);
-    }
-
-    const [total, orders] = await Promise.all([
-      prisma.merchandiseOrder.count({ where: whereClause }),
+    // Get orders with pagination
+    const [orders, totalCount] = await Promise.all([
       prisma.merchandiseOrder.findMany({
         where: whereClause,
         include: {
@@ -56,7 +503,7 @@ const getAllOrders = async (req, res) => {
               id: true,
               fullName: true,
               email: true,
-              batch: true
+              graduationYear: true
             }
           },
           items: {
@@ -65,60 +512,53 @@ const getAllOrders = async (req, res) => {
                 select: {
                   id: true,
                   name: true,
-                  category: true,
                   images: true
                 }
               }
             }
-          },
-          paymentTransaction: {
-            select: {
-              id: true,
-              status: true,
-              transactionNumber: true,
-              completedAt: true
-            }
           }
         },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
-      })
+        orderBy: { [sortBy]: sortOrder },
+        skip: offset,
+        take: pageSize
+      }),
+      prisma.merchandiseOrder.count({ where: whereClause })
     ]);
 
-    // Transform orders for admin view
-    const transformedOrders = orders.map(order => {
-      const itemCount = order.items.length;
-      const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
-      const categories = [...new Set(order.items.map(item => item.merchandise.category))];
-
-      return {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customer: {
-          name: order.user.fullName,
-          email: order.user.email,
-          batch: order.user.batch
-        },
-        totalAmount: order.totalAmount,
-        formattedAmount: `₹${order.totalAmount}`,
-        status: order.status,
-        deliveryStatus: order.deliveryStatus,
-        paymentStatus: order.paymentStatus,
-        itemCount,
-        totalQuantity,
-        categories,
-        paymentTransaction: order.paymentTransaction,
-        deliveredAt: order.deliveredAt,
-        deliveredBy: order.deliveredBy,
-        createdAt: order.createdAt,
-        canMarkDelivered: order.deliveryStatus === 'PENDING' && order.paymentStatus === 'COMPLETED'
-      };
+    // Calculate summary statistics
+    const statusCounts = await prisma.merchandiseOrder.groupBy({
+      by: ['status'],
+      _count: { status: true }
     });
 
-    const pagination = calculatePagination(total, page, limit);
+    const deliveryStatusCounts = await prisma.merchandiseOrder.groupBy({
+      by: ['deliveryStatus'],
+      _count: { deliveryStatus: true }
+    });
 
-    return paginatedResponse(res, transformedOrders, pagination, 'Orders retrieved successfully');
+    const summary = {
+      total: totalCount,
+      statusBreakdown: statusCounts.reduce((acc, item) => {
+        acc[item.status] = item._count.status;
+        return acc;
+      }, {}),
+      deliveryBreakdown: deliveryStatusCounts.reduce((acc, item) => {
+        acc[item.deliveryStatus] = item._count.deliveryStatus;
+        return acc;
+      }, {})
+    };
+
+    return paginatedResponse(
+      res,
+      orders,
+      {
+        page: parseInt(page) || 1,
+        limit: pageSize,
+        total: totalCount,
+        summary
+      },
+      'Orders retrieved successfully'
+    );
 
   } catch (error) {
     console.error('Get all orders error:', error);
@@ -127,411 +567,195 @@ const getAllOrders = async (req, res) => {
 };
 
 /**
- * Mark order as delivered (admin)
+ * Mark order as delivered
  * POST /api/admin/merchandise/orders/:orderId/delivered
  * Access: SUPER_ADMIN
  */
 const markOrderDelivered = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { deliveryNotes, confirmationPhoto } = req.body;
-    const adminId = req.user.id;
+    const { deliveryNotes, confirmationPhoto, recipientName } = req.body;
+    const deliveredBy = req.user.id;
 
-    const updatedOrder = await MerchandiseService.markOrderDelivered(
-      orderId, 
-      adminId, 
-      deliveryNotes
-    );
-
-    // Get full order details for response
-    const orderDetails = await prisma.merchandiseOrder.findUnique({
+    // Check if order exists
+    const order = await prisma.merchandiseOrder.findUnique({
       where: { id: orderId },
       include: {
-        user: {
-          select: {
-            fullName: true,
-            email: true
-          }
-        },
+        user: { select: { fullName: true, email: true } },
         items: {
           include: {
-            merchandise: {
-              select: {
-                name: true,
-                category: true
-              }
-            }
+            merchandise: { select: { name: true } }
           }
         }
       }
     });
 
-    // TODO: Send delivery confirmation email to customer
-    console.log(`📧 Order delivered notification should be sent to: ${orderDetails.user.email}`);
-
-    return successResponse(res, {
-      order: {
-        id: updatedOrder.id,
-        orderNumber: updatedOrder.orderNumber,
-        deliveryStatus: updatedOrder.deliveryStatus,
-        deliveredAt: updatedOrder.deliveredAt,
-        deliveryNotes: updatedOrder.deliveryNotes,
-        customer: orderDetails.user,
-        items: orderDetails.items
-      }
-    }, 'Order marked as delivered successfully');
-
-  } catch (error) {
-    console.error('Mark order delivered error:', error);
-    
-    if (error.message === 'Order not found') {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
+    if (!order) {
+      return errorResponse(res, 'Order not found', 404);
     }
 
-    if (error.message.includes('already marked as delivered')) {
-      return res.status(409).json({
-        success: false,
-        message: 'Order already marked as delivered'
-      });
+    if (order.deliveryStatus === 'DELIVERED') {
+      return errorResponse(res, 'Order is already marked as delivered', 400);
     }
 
-    return errorResponse(res, 'Failed to mark order as delivered', 500);
-  }
-};
-
-/**
- * Get order statistics (admin)
- * GET /api/admin/merchandise/stats
- * Access: SUPER_ADMIN
- */
-const getOrderStatistics = async (req, res) => {
-  try {
-    const { period = '30', category } = req.query;
-    
-    // Calculate date range
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - parseInt(period));
-
-    const analytics = await MerchandiseService.getMerchandiseAnalytics({
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      category
-    });
-
-    // Get additional admin-specific statistics
-    const [
-      pendingOrders,
-      pendingDeliveries,
-      lowStockItems,
-      totalCustomers
-    ] = await Promise.all([
-      // Pending orders count
-      prisma.merchandiseOrder.count({
-        where: {
-          status: 'PENDING',
-          createdAt: {
-            gte: startDate,
-            lte: endDate
-          }
-        }
-      }),
-
-      // Pending deliveries count
-      prisma.merchandiseOrder.count({
-        where: {
-          deliveryStatus: 'PENDING',
-          paymentStatus: 'COMPLETED',
-          createdAt: {
-            gte: startDate,
-            lte: endDate
-          }
-        }
-      }),
-
-      // Low stock items (stock <= 5)
-      prisma.merchandise.findMany({
-        where: {
-          stock: { lte: 5 },
-          isActive: true
-        },
-        select: {
-          id: true,
-          name: true,
-          stock: true,
-          category: true
-        }
-      }),
-
-      // Total unique customers who placed orders
-      prisma.merchandiseOrder.groupBy({
-        by: ['userId'],
-        where: {
-          createdAt: {
-            gte: startDate,
-            lte: endDate
-          }
-        },
-        _count: true
-      })
-    ]);
-
-    const adminStats = {
-      ...analytics,
-      adminMetrics: {
-        pendingOrders,
-        pendingDeliveries,
-        lowStockItemsCount: lowStockItems.length,
-        totalCustomers: totalCustomers.length,
-        lowStockItems,
-        period: parseInt(period)
-      }
-    };
-
-    return successResponse(res, {
-      statistics: adminStats
-    }, 'Order statistics retrieved successfully');
-
-  } catch (error) {
-    console.error('Get order statistics error:', error);
-    return errorResponse(res, 'Failed to retrieve statistics', 500);
-  }
-};
-
-/**
- * Get stock alerts (admin)
- * GET /api/admin/merchandise/stock-alerts
- * Access: SUPER_ADMIN
- */
-const getStockAlerts = async (req, res) => {
-  try {
-    const { threshold = 10 } = req.query;
-
-    const lowStockItems = await prisma.merchandise.findMany({
-      where: {
-        stock: { lte: parseInt(threshold) },
-        isActive: true
-      },
-      select: {
-        id: true,
-        name: true,
-        stock: true,
-        category: true,
-        price: true,
-        images: true,
-        createdAt: true
-      },
-      orderBy: [
-        { stock: 'asc' },
-        { name: 'asc' }
-      ]
-    });
-
-    // Categorize alerts
-    const alerts = {
-      critical: lowStockItems.filter(item => item.stock === 0),
-      warning: lowStockItems.filter(item => item.stock > 0 && item.stock <= 5),
-      low: lowStockItems.filter(item => item.stock > 5 && item.stock <= parseInt(threshold))
-    };
-
-    const summary = {
-      total: lowStockItems.length,
-      critical: alerts.critical.length,
-      warning: alerts.warning.length,
-      low: alerts.low.length
-    };
-
-    return successResponse(res, {
-      alerts,
-      summary,
-      threshold: parseInt(threshold)
-    }, 'Stock alerts retrieved successfully');
-
-  } catch (error) {
-    console.error('Get stock alerts error:', error);
-    return errorResponse(res, 'Failed to retrieve stock alerts', 500);
-  }
-};
-
-/**
- * Update order status (admin)
- * PUT /api/admin/merchandise/orders/:orderId/status
- * Access: SUPER_ADMIN
- */
-const updateOrderStatus = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { status, reason } = req.body;
-    const adminId = req.user.id;
-
-    // Validate status
-    const validStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'DELIVERED', 'CANCELLED'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status',
-        validStatuses
-      });
+    if (order.status !== 'CONFIRMED') {
+      return errorResponse(res, 'Order must be confirmed before delivery', 400);
     }
 
-    // Get current order
-    const currentOrder = await prisma.merchandiseOrder.findUnique({
-      where: { id: orderId },
-      select: { 
-        id: true, 
-        orderNumber: true, 
-        status: true,
-        userId: true,
-        totalAmount: true
-      }
-    });
-
-    if (!currentOrder) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // Update order status
+    // Update order delivery status
     const updatedOrder = await prisma.merchandiseOrder.update({
       where: { id: orderId },
-      data: { 
-        status,
-        ...(status === 'DELIVERED' && { 
-          deliveryStatus: 'DELIVERED',
-          deliveredAt: new Date(),
-          deliveredBy: adminId 
-        })
+      data: {
+        deliveryStatus: 'DELIVERED',
+        deliveredAt: new Date(),
+        deliveredBy: req.user.fullName || req.user.email,
+        deliveryNotes
+      }
+    });
+
+    // Create delivery record
+    await prisma.merchandiseDelivery.create({
+      data: {
+        orderId,
+        deliveredBy: req.user.fullName || req.user.email,
+        deliveredAt: new Date(),
+        deliveryNotes,
+        confirmationPhoto,
+        recipientName: recipientName || order.user.fullName,
+        deliveryLocation: 'Office/Event Location', // You can make this dynamic
+        status: 'DELIVERED'
       }
     });
 
     // Log activity
     await prisma.activityLog.create({
       data: {
-        userId: adminId,
-        action: 'merchandise_order_status_updated',
+        userId: deliveredBy,
+        action: 'merchandise_order_delivered',
         details: {
           orderId,
-          orderNumber: currentOrder.orderNumber,
-          oldStatus: currentOrder.status,
-          newStatus: status,
-          reason: reason || 'Admin status update'
+          orderNumber: order.orderNumber,
+          customerName: order.user.fullName,
+          itemCount: order.items.length,
+          deliveryNotes
         }
       }
     });
 
-    return successResponse(res, {
-      order: {
-        id: updatedOrder.id,
-        orderNumber: updatedOrder.orderNumber,
-        status: updatedOrder.status,
-        deliveryStatus: updatedOrder.deliveryStatus
-      }
-    }, 'Order status updated successfully');
+    // Send delivery confirmation email (implement this based on your email service)
+    // await EmailService.sendDeliveryConfirmation(order);
+
+    // Clear order caches
+    await MerchandiseService.clearOrderCaches(order.orderNumber);
+
+    return successResponse(
+      res,
+      {
+        order: {
+          id: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber,
+          deliveryStatus: updatedOrder.deliveryStatus,
+          deliveredAt: updatedOrder.deliveredAt
+        }
+      },
+      'Order marked as delivered successfully'
+    );
 
   } catch (error) {
-    console.error('Update order status error:', error);
-    return errorResponse(res, 'Failed to update order status', 500);
+    console.error('Mark order delivered error:', error);
+    return errorResponse(res, 'Failed to mark order as delivered', 500);
   }
 };
 
 /**
- * Get customer order history (admin)
- * GET /api/admin/merchandise/customers/:userId/orders
+ * Get merchandise analytics
+ * GET /api/admin/merchandise/analytics
  * Access: SUPER_ADMIN
  */
-const getCustomerOrderHistory = async (req, res) => {
+const getMerchandiseAnalytics = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { page, limit, skip } = getPaginationParams(req.query, 10);
+    const { startDate, endDate, category } = req.query;
 
-    // Get customer details
-    const customer = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        batch: true,
-        isActive: true
-      }
+    const analytics = await MerchandiseService.getMerchandiseAnalytics({
+      startDate,
+      endDate,
+      category
     });
 
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
-    }
-
-    // Get customer's orders
-    const [total, orders] = await Promise.all([
-      prisma.merchandiseOrder.count({ where: { userId } }),
-      prisma.merchandiseOrder.findMany({
-        where: { userId },
-        include: {
-          items: {
-            include: {
-              merchandise: {
-                select: {
-                  id: true,
-                  name: true,
-                  category: true,
-                  images: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
-      })
-    ]);
-
-    // Calculate customer statistics
-    const customerStats = await prisma.merchandiseOrder.aggregate({
-      where: { 
-        userId,
-        paymentStatus: 'COMPLETED'
-      },
-      _sum: { totalAmount: true },
-      _count: true
-    });
-
-    const pagination = calculatePagination(total, page, limit);
-
-    return paginatedResponse(res, orders, pagination, 'Customer order history retrieved successfully', {
-      customer,
-      customerStats: {
-        totalOrders: customerStats._count,
-        totalSpent: customerStats._sum.totalAmount || 0,
-        averageOrderValue: customerStats._count > 0 
-          ? (customerStats._sum.totalAmount || 0) / customerStats._count 
-          : 0
-      }
-    });
+    return successResponse(
+      res,
+      { analytics },
+      'Merchandise analytics retrieved successfully'
+    );
 
   } catch (error) {
-    console.error('Get customer order history error:', error);
-    return errorResponse(res, 'Failed to retrieve customer order history', 500);
+    console.error('Get merchandise analytics error:', error);
+    return errorResponse(res, 'Failed to retrieve analytics', 500);
+  }
+};
+
+/**
+ * Get low stock alerts
+ * GET /api/admin/merchandise/stock-alerts
+ * Access: SUPER_ADMIN
+ */
+const getLowStockAlerts = async (req, res) => {
+  try {
+    const lowStockItems = await prisma.merchandise.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { stock: { lte: prisma.merchandise.fields.lowStockThreshold } },
+          { stock: { lte: 5 } } // Default threshold
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        lowStockThreshold: true,
+        category: true,
+        price: true
+      },
+      orderBy: { stock: 'asc' }
+    });
+
+    const criticalStockItems = lowStockItems.filter(item => item.stock <= 2);
+    const outOfStockItems = lowStockItems.filter(item => item.stock === 0);
+
+    return successResponse(
+      res,
+      {
+        lowStockItems,
+        summary: {
+          total: lowStockItems.length,
+          critical: criticalStockItems.length,
+          outOfStock: outOfStockItems.length
+        }
+      },
+      'Stock alerts retrieved successfully'
+    );
+
+  } catch (error) {
+    console.error('Get low stock alerts error:', error);
+    return errorResponse(res, 'Failed to retrieve stock alerts', 500);
   }
 };
 
 module.exports = {
+  // Merchandise management
+  createMerchandise,
+  updateMerchandise,
+  deleteMerchandise,
+  updateMerchandiseStock,
+  uploadMerchandiseImages,
+  releaseMerchandise,
+  
   // Order management
   getAllOrders,
   markOrderDelivered,
-  updateOrderStatus,
   
-  // Analytics and reporting
-  getOrderStatistics,
-  getStockAlerts,
-  
-  // Customer management
-  getCustomerOrderHistory
+  // Analytics and monitoring
+  getMerchandiseAnalytics,
+  getLowStockAlerts
 };

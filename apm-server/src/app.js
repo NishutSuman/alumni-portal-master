@@ -139,7 +139,7 @@ app.use("/api/lifelink", require("./routes/lifelink.route"));
 app.use("/api/tickets", require("./routes/tickets.route"));
 app.use('/api/membership', require('./routes/membership.route'));
 app.use('/api/admin/membership', require('./routes/admin/membershipAdmin.route'));
-
+app.use('/api/merchandise', require('./routes/merchandise.route'));
 
 // 🎫 TICKET SYSTEM BACKGROUND JOBS INITIALIZATION
 console.log('🚀 Initializing ticket system background jobs...');

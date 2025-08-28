@@ -11,3 +11,6 @@ Few non negotiable rule for you:
 - Do not generate unnecessary codes or summaries
 - Follow the existing code structure, import, export and file names properly.
 - Always while generating code take reference from existing file. Check if such thing already exists in the code.
+
+POTENTIAL ISSUES:
+- For Membership and BatchAdmi payment (reference type), why there is no update in CalculatePayementTotal() in payment.controller.

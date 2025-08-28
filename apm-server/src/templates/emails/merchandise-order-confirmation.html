@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Confirmation - {{orderNumber}}</title>
+    <style>
+        .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+        .header { background: #007bff; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .order-details { background: #f8f9fa; padding: 15px; margin: 15px 0; }
+        .item { border-bottom: 1px solid #ddd; padding: 10px 0; }
+        .total { font-weight: bold; font-size: 18px; color: #007bff; }
+        .footer { background: #f8f9fa; padding: 15px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Order Confirmed!</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear {{customerName}},</p>
+            
+            <p>Thank you for your order! Your payment has been successful and your order is confirmed.</p>
+            
+            <div class="order-details">
+                <h3>Order Details</h3>
+                <p><strong>Order Number:</strong> {{orderNumber}}</p>
+                <p><strong>Order Date:</strong> {{orderDate}}</p>
+                <p><strong>Payment Method:</strong> {{paymentMethod}}</p>
+                {{#if transactionId}}<p><strong>Transaction ID:</strong> {{transactionId}}</p>{{/if}}
+            </div>
+            
+            <h3>Items Ordered:</h3>
+            {{#each items}}
+            <div class="item">
+                <p><strong>{{name}}</strong></p>
+                <p>Size: {{size}} | Quantity: {{quantity}} | Price: ₹{{unitPrice}}</p>
+                <p>Subtotal: ₹{{totalPrice}}</p>
+            </div>
+            {{/each}}
+            
+            <div class="total">
+                <p>Total Amount: ₹{{totalAmount}}</p>
+            </div>
+            
+            <p><strong>Delivery Status:</strong> {{deliveryStatus}}</p>
+            
+            <p>You can track your order status at: <a href="{{orderTrackingUrl}}">Track Order</a></p>
+            
+            <p>Your merchandise will be available for pickup/delivery as per the announced schedule. We'll notify you once it's ready.</p>
+        </div>
+        
+        <div class="footer">
+            <p>For any queries, contact us at: {{supportEmail}}</p>
+        </div>
+    </div>
+</body>
+</html>
