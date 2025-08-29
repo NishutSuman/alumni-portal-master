@@ -635,30 +635,89 @@ class PaymentService {
 					},
 				});
 
+				// 🚨 Generate QR code for event registration
+				setTimeout(async () => {
+					try {
+						const QRCodeService = require("../qr/QRCodeService");
+						await QRCodeService.generateQRCode(referenceId); // referenceId = registrationId
+						console.log("✅ Event registration QR code generated successfully");
+					} catch (qrError) {
+						console.error(
+							"❌ Event registration QR code generation failed:",
+							qrError
+						);
+					}
+				}, 200);
+
 				// Send payment confirmation email
 				try {
 					if (emailManager.isInitialized) {
 						const emailService = emailManager.getService();
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: { id: true, fullName: true, email: true },
+
+						// Get registration and event details for email
+						const registrationDetails = await tx.eventRegistration.findUnique({
+							where: { id: referenceId },
+							include: {
+								event: {
+									select: {
+										id: true,
+										title: true,
+										eventDate: true,
+										venue: true,
+										eventMode: true,
+									},
+								},
+								user: {
+									select: {
+										id: true,
+										fullName: true,
+										email: true,
+									},
+								},
+							},
 						});
 
-						if (user) {
+						if (registrationDetails) {
 							await emailService.sendPaymentConfirmation(
-								user,
+								registrationDetails.user,
 								transaction,
-								null
+								registrationDetails.event
 							);
-							console.log("✅ Payment confirmation email sent");
+							console.log(
+								"✅ Event registration payment confirmation email sent"
+							);
 						}
 					}
 				} catch (emailError) {
-					console.error("Payment confirmation email failed:", emailError);
+					console.error("❌ Payment confirmation email failed:", emailError);
 				}
 
-				// ADD: Send push notification
-				await this.sendPaymentSuccessNotification(transaction, tx);
+				// 🎯 ENHANCEMENT: Create success notification
+				setTimeout(async () => {
+					try {
+						await NotificationService.createAndSendNotification({
+							recipientIds: [transaction.userId],
+							type: "PAYMENT_SUCCESS",
+							title: "✅ Event Registration Confirmed!",
+							message: `Your payment of ₹${transaction.amount.toLocaleString("en-IN")} was successful. QR code has been generated for event check-in.`,
+							data: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								registrationId: referenceId,
+								amount: transaction.amount,
+								paymentDate: new Date().toISOString(),
+							},
+							priority: "HIGH",
+							channels: ["PUSH", "IN_APP"],
+							relatedEntityType: "EVENT_REGISTRATION",
+							relatedEntityId: referenceId,
+						});
+
+						console.log("✅ Event registration success notification sent");
+					} catch (notificationError) {
+						console.error("❌ Success notification failed:", notificationError);
+					}
+				}, 300);
 
 				break;
 

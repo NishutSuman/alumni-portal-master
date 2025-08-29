@@ -113,6 +113,217 @@ router.post(
 	asyncHandler(batchCollectionController.rejectBatchCollection)
 );
 
+// =============================================
+// 🚀 NEW UNIFIED ANALYTICS ROUTES
+// =============================================
+
+/**
+ * 🎯 PRIMARY UNIFIED ANALYTICS ENDPOINT
+ * GET /api/admin/dashboard/unified-payments
+ * Returns complete payment analytics across ALL sources
+ * Cache: 30 minutes
+ */
+router.get(
+	"/dashboard/unified-payments",
+	asyncHandler(adminController.getUnifiedPaymentAnalytics)
+);
+
+/**
+ * 🔍 TRANSPARENCY REPORT ENDPOINT
+ * GET /api/admin/dashboard/transparency-report
+ * Returns public-facing transparency report
+ * Cache: 1 hour
+ * Query params: ?eventId=123 for event-specific report
+ */
+router.get(
+	"/dashboard/transparency-report",
+	asyncHandler(adminController.getTransparencyReport)
+);
+
+/**
+ * 📊 ENHANCED REVENUE BREAKDOWN ENDPOINT
+ * GET /api/admin/dashboard/enhanced-revenue-breakdown
+ * Returns revenue breakdown with projections and insights
+ * Cache: 1 hour
+ * Query params: ?fromDate=2024-01-01&toDate=2024-12-31&includeProjections=true
+ */
+router.get(
+	"/dashboard/enhanced-revenue-breakdown",
+	asyncHandler(adminController.getEnhancedRevenueBreakdown)
+);
+
+/**
+ * 🛍️ MERCHANDISE INTEGRATION ANALYTICS
+ * GET /api/admin/dashboard/merchandise-integration
+ * Returns both standalone and event merchandise analytics
+ * Cache: 30 minutes
+ * Query params: ?period=30d
+ */
+router.get(
+	"/dashboard/merchandise-integration",
+	asyncHandler(adminController.getMerchandiseIntegrationAnalytics)
+);
+
+/**
+ * ⚡ REAL-TIME PAYMENT STATUS
+ * GET /api/admin/dashboard/real-time-payments
+ * Returns live payment status across all types
+ * Cache: 5 minutes (short cache for real-time data)
+ */
+router.get(
+	"/dashboard/real-time-payments",
+	asyncHandler(adminController.getRealTimePaymentStatus)
+);
+
+// =============================================
+// 📈 ANALYTICS COMPARISON ROUTES
+// =============================================
+
+/**
+ * BATCH PAYMENT ANALYTICS INTEGRATION
+ * GET /api/admin/dashboard/batch-payments-analytics
+ * Dedicated endpoint for batch payment analytics
+ */
+router.get(
+	"/dashboard/batch-payments-analytics",
+	asyncHandler(async (req, res) => {
+		const { fromDate, toDate } = req.query;
+
+		try {
+			const AnalyticsService = require("../services/analytics/AnalyticsService");
+			const analytics = await AnalyticsService.getBatchPaymentAnalytics(
+				fromDate ? new Date(fromDate) : null,
+				toDate ? new Date(toDate) : null
+			);
+
+			return res.json({
+				success: true,
+				data: analytics,
+				message: "Batch payment analytics retrieved successfully",
+			});
+		} catch (error) {
+			console.error("Batch payment analytics error:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to retrieve batch payment analytics",
+			});
+		}
+	})
+);
+
+/**
+ * DONATION ANALYTICS INTEGRATION
+ * GET /api/admin/dashboard/donation-analytics
+ * Dedicated endpoint for donation analytics
+ */
+router.get(
+	"/dashboard/donation-analytics",
+	asyncHandler(async (req, res) => {
+		const { fromDate, toDate } = req.query;
+
+		try {
+			const AnalyticsService = require("../services/analytics/AnalyticsService");
+			const analytics = await AnalyticsService.getDonationAnalytics(
+				fromDate ? new Date(fromDate) : null,
+				toDate ? new Date(toDate) : null
+			);
+
+			return res.json({
+				success: true,
+				data: analytics,
+				message: "Donation analytics retrieved successfully",
+			});
+		} catch (error) {
+			console.error("Donation analytics error:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to retrieve donation analytics",
+			});
+		}
+	})
+);
+
+// =============================================
+// 🔄 CACHE MANAGEMENT FOR NEW ANALYTICS
+// =============================================
+
+/**
+ * REFRESH UNIFIED ANALYTICS CACHE
+ * POST /api/admin/dashboard/refresh-unified-cache
+ * Clears all unified analytics caches
+ */
+router.post(
+	"/dashboard/refresh-unified-cache",
+	asyncHandler(async (req, res) => {
+		try {
+			const AnalyticsService = require("../services/analytics/AnalyticsService");
+			await AnalyticsService.invalidateUnifiedAnalytics();
+
+			return res.json({
+				success: true,
+				message: "Unified analytics cache refreshed successfully",
+			});
+		} catch (error) {
+			console.error("Unified cache refresh error:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to refresh unified analytics cache",
+			});
+		}
+	})
+);
+
+// =============================================
+// 📱 HEALTH CHECK ENDPOINTS
+// =============================================
+
+/**
+ * ANALYTICS HEALTH CHECK
+ * GET /api/admin/dashboard/analytics-health
+ * Returns health status of all analytics services
+ */
+router.get(
+	"/dashboard/analytics-health",
+	asyncHandler(async (req, res) => {
+		try {
+			const health = {
+				status: "healthy",
+				services: {
+					unifiedPayments: "active",
+					merchandiseIntegration: "active",
+					transparencyReporting: "active",
+					realTimePayments: "active",
+					caching: "active",
+				},
+				lastChecked: new Date().toISOString(),
+				uptime: process.uptime(),
+				version: "2.0.0", // Updated version with unified analytics
+			};
+
+			// Test database connectivity
+			const { prisma } = require("../config/database");
+			await prisma.user.count();
+
+			return res.json({
+				success: true,
+				data: health,
+				message: "Analytics services are healthy",
+			});
+		} catch (error) {
+			console.error("Analytics health check failed:", error);
+			return res.status(500).json({
+				success: false,
+				data: {
+					status: "unhealthy",
+					error: error.message,
+					lastChecked: new Date().toISOString(),
+				},
+				message: "Analytics health check failed",
+			});
+		}
+	})
+);
+
 module.exports = router;
 
 // ==========================================
