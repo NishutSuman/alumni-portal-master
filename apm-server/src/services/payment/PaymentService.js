@@ -9,6 +9,7 @@ const paymentConfig = require("../../config/payment");
 const emailManager = require("../email/EmailManager");
 const MembershipService = require("../membership.service");
 const BatchPaymentService = require("./batchPayment.service");
+const NotificationService = require("../notification.service");
 
 const prisma = new PrismaClient();
 
@@ -634,26 +635,20 @@ class PaymentService {
 					},
 				});
 
-				// ✅ ADD THIS: Send payment confirmation email
+				// Send payment confirmation email
 				try {
 					if (emailManager.isInitialized) {
 						const emailService = emailManager.getService();
-
-						// Get user and transaction details for email
 						const user = await tx.user.findUnique({
 							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-							},
+							select: { id: true, fullName: true, email: true },
 						});
 
 						if (user) {
 							await emailService.sendPaymentConfirmation(
 								user,
 								transaction,
-								null // invoice if available
+								null
 							);
 							console.log("✅ Payment confirmation email sent");
 						}
@@ -661,6 +656,10 @@ class PaymentService {
 				} catch (emailError) {
 					console.error("Payment confirmation email failed:", emailError);
 				}
+
+				// ADD: Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
+
 				break;
 
 			case "MERCHANDISE":
@@ -677,58 +676,11 @@ class PaymentService {
 						},
 					});
 				}
-				break;
 
-			case "MEMBERSHIP":
-				// Process membership payment
-				await MembershipService.processMembershipPayment(
-					transaction.userId,
-					transaction.id,
-					transaction.amount
-				);
-
-				// ADD: Send membership confirmation email
+				// Send merchandise payment confirmation email
 				try {
 					if (emailManager.isInitialized) {
 						const emailService = emailManager.getService();
-
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-								batchYear: true,
-							},
-						});
-
-						if (user) {
-							await emailService.sendMembershipConfirmation(
-								user,
-								transaction,
-								null // invoice if available
-							);
-							console.log("✅ Membership confirmation email sent");
-						}
-					}
-				} catch (emailError) {
-					console.error("Membership confirmation email failed:", emailError);
-				}
-
-				// Log membership activation
-				console.log(`✅ Membership activated for user: ${transaction.userId}`);
-				break;
-
-			case "BATCH_ADMIN_PAYMENT":
-				await BatchPaymentService.processBatchPaymentSuccess(
-					transaction.id,
-					data
-				);
-				// ADD: Send batch payment confirmation email
-				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-
 						const user = await tx.user.findUnique({
 							where: { id: transaction.userId },
 							select: {
@@ -743,7 +695,89 @@ class PaymentService {
 							await emailService.sendPaymentConfirmation(
 								user,
 								transaction,
-								null // invoice if available
+								null
+							);
+							console.log("✅ Merchandise payment confirmation email sent");
+						}
+					}
+				} catch (emailError) {
+					console.error(
+						"Merchandise payment confirmation email failed:",
+						emailError
+					);
+				}
+
+				// ADD: Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
+
+				break;
+
+			case "MEMBERSHIP":
+				// Process membership payment
+				await MembershipService.processMembershipPayment(
+					transaction.userId,
+					transaction.id,
+					transaction.amount
+				);
+
+				// Send membership confirmation email
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								batchYear: true,
+							},
+						});
+
+						if (user) {
+							await emailService.sendMembershipConfirmation(
+								user,
+								transaction,
+								null
+							);
+							console.log("✅ Membership confirmation email sent");
+						}
+					}
+				} catch (emailError) {
+					console.error("Membership confirmation email failed:", emailError);
+				}
+
+				// ADD: Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
+
+				console.log(`✅ Membership activated for user: ${transaction.userId}`);
+				break;
+
+			case "BATCH_ADMIN_PAYMENT":
+				await BatchPaymentService.processBatchPaymentSuccess(
+					transaction.id,
+					data
+				);
+
+				// Send batch payment confirmation email
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								batchYear: true,
+							},
+						});
+
+						if (user) {
+							await emailService.sendPaymentConfirmation(
+								user,
+								transaction,
+								null
 							);
 							console.log("✅ Batch payment confirmation email sent");
 						}
@@ -752,11 +786,14 @@ class PaymentService {
 					console.error("Batch payment confirmation email failed:", emailError);
 				}
 
+				// ADD: Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
+
 				console.log(`✅ Batch admin payment processed: ${transaction.userId}`);
 				break;
 
 			// STANDALONE MERCHANDISE
-			case "MERCHANDISE_ORDER": // ADD THIS NEW CASE
+			case "MERCHANDISE_ORDER":
 				// Find the order by ID
 				const order = await tx.merchandiseOrder.findUnique({
 					where: { id: referenceId },
@@ -795,6 +832,17 @@ class PaymentService {
 						where: { userId: transaction.userId },
 					});
 
+					// Generate QR code for delivery tracking
+					setTimeout(async () => {
+						try {
+							const QRCodeService = require("../qr/QRCodeService");
+							await QRCodeService.generateMerchandiseOrderQR(referenceId);
+							console.log("✅ Merchandise order QR code generated");
+						} catch (qrError) {
+							console.error("QR code generation failed:", qrError);
+						}
+					}, 200);
+
 					// Send confirmation email (async, don't wait)
 					setTimeout(async () => {
 						try {
@@ -807,15 +855,17 @@ class PaymentService {
 						}
 					}, 100);
 				}
+
+				// Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
+
 				break;
 
 			case "DONATION":
-				// No specific updates needed for donations, just send confirmation
+				// Send donation confirmation email
 				try {
 					if (emailManager.isInitialized) {
 						const emailService = emailManager.getService();
-
-						// Get user details for email
 						const user = await tx.user.findUnique({
 							where: { id: transaction.userId },
 							select: {
@@ -830,7 +880,7 @@ class PaymentService {
 							await emailService.sendDonationConfirmation(
 								user,
 								transaction,
-								null // invoice if available
+								null
 							);
 							console.log("✅ Donation confirmation email sent");
 						}
@@ -855,6 +905,9 @@ class PaymentService {
 						userAgent: null,
 					},
 				});
+
+				// ADD: Send push notification
+				await this.sendPaymentSuccessNotification(transaction, tx);
 
 				console.log(
 					`✅ Donation processed: ₹${transaction.amount} from user ${transaction.userId}`
@@ -1050,6 +1103,51 @@ class PaymentService {
 		} catch (error) {
 			console.error("Initiate donation payment error:", error);
 			throw error;
+		}
+	}
+
+	async sendPaymentSuccessNotification(transaction, tx) {
+		try {
+			// Get payment type display name
+			const paymentTypeNames = {
+				EVENT_REGISTRATION: "Event Registration",
+				MERCHANDISE: "Merchandise Purchase",
+				MEMBERSHIP: "Membership Fee",
+				BATCH_ADMIN_PAYMENT: "Batch Payment",
+				MERCHANDISE_ORDER: "Merchandise Order",
+				DONATION: "Donation",
+			};
+
+			const paymentTypeName =
+				paymentTypeNames[transaction.referenceType] || "Payment";
+
+			// Create push notification
+			await NotificationService.createAndSendNotification({
+				recipientIds: [transaction.userId],
+				type: "PAYMENT_SUCCESS",
+				title: "✅ Payment Successful",
+				message: `Your ${paymentTypeName} payment of ₹${transaction.amount.toLocaleString("en-IN")} was successful!`,
+				data: {
+					transactionId: transaction.id,
+					transactionNumber: transaction.transactionNumber,
+					amount: transaction.amount,
+					referenceType: transaction.referenceType,
+					referenceId: transaction.referenceId,
+					paymentDate: new Date().toISOString(),
+				},
+				priority: "HIGH",
+				channels: ["PUSH", "IN_APP"],
+				relatedEntityType: "PAYMENT_TRANSACTION",
+				relatedEntityId: transaction.id,
+			});
+
+			console.log(
+				`✅ Push notification sent for ${transaction.referenceType} payment`
+			);
+			return true;
+		} catch (pushError) {
+			console.error("Push notification failed:", pushError);
+			return false;
 		}
 	}
 }

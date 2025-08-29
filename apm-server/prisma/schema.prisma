@@ -2397,6 +2397,8 @@ model MerchandiseCartItem {
   @@map("merchandise_cart_items")
 }
 
+
+
 // Enums
 enum UserRole {
   USER
