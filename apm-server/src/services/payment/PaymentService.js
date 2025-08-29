@@ -687,6 +687,34 @@ class PaymentService {
 					transaction.amount
 				);
 
+				// ADD: Send membership confirmation email
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								batchYear: true,
+							},
+						});
+
+						if (user) {
+							await emailService.sendMembershipConfirmation(
+								user,
+								transaction,
+								null // invoice if available
+							);
+							console.log("✅ Membership confirmation email sent");
+						}
+					}
+				} catch (emailError) {
+					console.error("Membership confirmation email failed:", emailError);
+				}
+
 				// Log membership activation
 				console.log(`✅ Membership activated for user: ${transaction.userId}`);
 				break;
@@ -696,6 +724,34 @@ class PaymentService {
 					transaction.id,
 					data
 				);
+				// ADD: Send batch payment confirmation email
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								batchYear: true,
+							},
+						});
+
+						if (user) {
+							await emailService.sendPaymentConfirmation(
+								user,
+								transaction,
+								null // invoice if available
+							);
+							console.log("✅ Batch payment confirmation email sent");
+						}
+					}
+				} catch (emailError) {
+					console.error("Batch payment confirmation email failed:", emailError);
+				}
+
 				console.log(`✅ Batch admin payment processed: ${transaction.userId}`);
 				break;
 
@@ -752,6 +808,58 @@ class PaymentService {
 					}, 100);
 				}
 				break;
+
+			case "DONATION":
+				// No specific updates needed for donations, just send confirmation
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+
+						// Get user details for email
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+								batchYear: true,
+							},
+						});
+
+						if (user) {
+							await emailService.sendDonationConfirmation(
+								user,
+								transaction,
+								null // invoice if available
+							);
+							console.log("✅ Donation confirmation email sent");
+						}
+					}
+				} catch (emailError) {
+					console.error("Donation confirmation email failed:", emailError);
+				}
+
+				// Log donation activity for analytics
+				await tx.activityLog.create({
+					data: {
+						userId: transaction.userId,
+						action: "donation_completed",
+						details: {
+							transactionId: transaction.id,
+							amount: transaction.amount,
+							donationType:
+								transaction.metadata?.donationType || "ORGANIZATION",
+							message: transaction.metadata?.message || null,
+						},
+						ipAddress: null,
+						userAgent: null,
+					},
+				});
+
+				console.log(
+					`✅ Donation processed: ₹${transaction.amount} from user ${transaction.userId}`
+				);
+				break;
 		}
 	}
 
@@ -803,6 +911,145 @@ class PaymentService {
 			});
 		} catch (error) {
 			console.error("Failed to log activity:", error);
+		}
+	}
+	async calculateBatchAdminPaymentTotal(batchCollectionId, amount) {
+		try {
+			// Validate the batch collection exists
+			const collection = await prisma.batchEventCollection.findUnique({
+				where: { id: batchCollectionId },
+				include: {
+					event: { select: { title: true } },
+					batch: { select: { batchYear: true } },
+				},
+			});
+
+			if (!collection) {
+				throw new Error("Batch collection not found");
+			}
+
+			if (collection.status !== "ACTIVE") {
+				throw new Error("Batch collection is not accepting payments");
+			}
+
+			const remainingAmount =
+				collection.targetAmount - collection.collectedAmount;
+			if (amount > remainingAmount) {
+				throw new Error(
+					`Payment amount exceeds remaining target (₹${remainingAmount})`
+				);
+			}
+
+			return {
+				breakdown: {
+					paymentAmount: parseFloat(amount),
+					total: parseFloat(amount),
+				},
+				items: [
+					{
+						type: "batch_admin_payment",
+						description: `Batch collection - ${collection.event.title} (Batch ${collection.batch.batchYear})`,
+						amount: parseFloat(amount),
+					},
+				],
+				metadata: {
+					batchCollectionId: collection.id,
+					eventTitle: collection.event.title,
+					batchYear: collection.batch.batchYear,
+				},
+			};
+		} catch (error) {
+			console.error("Calculate batch admin payment total error:", error);
+			throw error;
+		}
+	}
+
+	async initiateDonationPayment(donationData) {
+		try {
+			const {
+				referenceType,
+				referenceId,
+				userId,
+				description,
+				calculation,
+				metadata,
+			} = donationData;
+
+			// Generate transaction number
+			const provider = PaymentProviderFactory.create();
+			const transactionNumber = provider.generateTransactionNumber();
+
+			// Create payment transaction record
+			const transaction = await prisma.paymentTransaction.create({
+				data: {
+					transactionNumber,
+					amount: calculation.breakdown.total,
+					currency: "INR",
+					description,
+					referenceType,
+					referenceId,
+					breakdown: calculation.breakdown,
+					userId,
+					status: "PENDING",
+					provider: "RAZORPAY",
+					metadata: metadata || null,
+					expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
+				},
+			});
+
+			// Create payment order with provider
+			const orderData = await provider.createOrder({
+				amount: calculation.breakdown.total * 100, // Convert to paise
+				currency: "INR",
+				receipt: transactionNumber,
+				notes: {
+					transactionId: transaction.id,
+					referenceType,
+					referenceId,
+					userId,
+					donationType: metadata?.donationType || "ORGANIZATION",
+				},
+			});
+
+			// Update transaction with provider order data
+			await prisma.paymentTransaction.update({
+				where: { id: transaction.id },
+				data: {
+					razorpayOrderId: orderData.id,
+					providerOrderData: orderData,
+				},
+			});
+
+			// Generate payment URL
+			const paymentUrl = provider.generatePaymentUrl({
+				orderId: orderData.id,
+				amount: calculation.breakdown.total * 100,
+				currency: "INR",
+				name: "JNV Alumni Organization",
+				description,
+				prefill: {
+					name: calculation.user.fullName,
+					email: calculation.user.email,
+					contact: calculation.user.whatsappNumber,
+				},
+				notes: orderData.notes,
+				callback_url: `${process.env.BASE_URL}/api/payments/${transaction.id}/verify`,
+				cancel_url: `${process.env.BASE_URL}/donation/cancelled`,
+			});
+
+			return {
+				success: true,
+				transaction: {
+					id: transaction.id,
+					transactionNumber,
+					amount: transaction.amount,
+					razorpayOrderId: orderData.id,
+				},
+				paymentUrl,
+			};
+		} catch (error) {
+			console.error("Initiate donation payment error:", error);
+			throw error;
 		}
 	}
 }

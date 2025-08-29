@@ -162,7 +162,7 @@ const initiateBatchAdminPayment = async (req, res) => {
       }
     };
 
-    const transaction = await PaymentService.initiate(paymentData);
+    const transaction = await PaymentService.initiatePayment(paymentData);
 
     return successResponse(res, {
       transaction,

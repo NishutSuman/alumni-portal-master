@@ -446,6 +446,106 @@ class EmailService {
 			};
 		}
 	}
+
+	/**
+	 * Send donation confirmation email
+	 */
+	async sendDonationConfirmation(user, transaction, invoice) {
+		try {
+			const templateData = {
+				userName: user.fullName,
+				userEmail: user.email,
+				userBatch: user.batchYear,
+				donationAmount: transaction.amount,
+				currency: transaction.currency,
+				donationDate: new Date(transaction.completedAt).toLocaleDateString(),
+				transactionNumber: transaction.transactionNumber,
+				paymentMethod: "UPI",
+				donationMessage: transaction.metadata?.message || null,
+				donationType: transaction.metadata?.donationType || "ORGANIZATION",
+				isAnonymous: transaction.metadata?.isAnonymous || false,
+				invoiceNumber: invoice?.invoiceNumber,
+				invoiceUrl: invoice?.pdfUrl,
+				receiptUrl: `${process.env.BASE_URL}/api/payments/${transaction.id}/invoice/pdf`,
+			};
+
+			const subject = `🙏 Thank you for your donation - ${transaction.transactionNumber}`;
+			const htmlContent = this.compiledTemplates.get("donation-confirmation")(
+				templateData
+			);
+
+			const result = await this.provider.sendEmail(
+				user.email,
+				subject,
+				htmlContent,
+				templateData
+			);
+
+			// Log email activity
+			await this.logEmailActivity(user.id, "donation_confirmation", {
+				transactionId: transaction.id,
+				donationAmount: transaction.amount,
+				emailResult: result,
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Donation confirmation email error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send membership payment confirmation email
+	 */
+	async sendMembershipConfirmation(user, transaction, invoice) {
+		try {
+			const templateData = {
+				userName: user.fullName,
+				userEmail: user.email,
+				userBatch: user.batchYear,
+				membershipAmount: transaction.amount,
+				membershipYear:
+					transaction.metadata?.membershipYear || new Date().getFullYear(),
+				currency: transaction.currency,
+				paymentDate: new Date(transaction.completedAt).toLocaleDateString(),
+				transactionNumber: transaction.transactionNumber,
+				paymentMethod: "UPI",
+				invoiceNumber: invoice?.invoiceNumber,
+				invoiceUrl: invoice?.pdfUrl,
+				membershipValidUntil: new Date(
+					new Date().getFullYear() + 1,
+					2,
+					31
+				).toLocaleDateString(), // Valid until March 31 next year
+			};
+
+			const subject = `✅ Membership Payment Confirmed - ${transaction.transactionNumber}`;
+			const htmlContent = this.compiledTemplates.get("membership-confirmation")(
+				templateData
+			);
+
+			const result = await this.provider.sendEmail(
+				user.email,
+				subject,
+				htmlContent,
+				templateData
+			);
+
+			// Log email activity
+			await this.logEmailActivity(user.id, "membership_confirmation", {
+				transactionId: transaction.id,
+				membershipAmount: transaction.amount,
+				membershipYear: templateData.membershipYear,
+				emailResult: result,
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Membership confirmation email error:", error);
+			throw error;
+		}
+	}
 }
 
 module.exports = EmailService;

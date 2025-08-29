@@ -295,6 +295,71 @@ const calculatePaymentTotal = asyncHandler(async (req, res) => {
 					req.user.id
 				); // Use userId, not referenceId
 				break;
+
+			case "MEMBERSHIP": // ADD THIS CASE
+				calculation = await PaymentService.calculateMembershipTotal(
+					req.user.id
+				);
+				break;
+			case "BATCH_ADMIN_PAYMENT": // ADD THIS CASE
+				// For batch admin payments, we just validate the amount from request
+				// since it's a simple payment without complex calculations
+				const { amount } = req.body;
+				if (!amount || amount <= 0) {
+					throw new Error("Valid payment amount is required");
+				}
+				calculation = {
+					breakdown: {
+						paymentAmount: parseFloat(amount),
+						total: parseFloat(amount),
+					},
+					items: [
+						{
+							type: "batch_admin_payment",
+							description: "Batch collection contribution",
+							amount: parseFloat(amount),
+						},
+					],
+				};
+				break;
+
+			case "DONATION":
+				// For donations, amount should be provided in metadata
+				const donationAmount = req.body.amount || req.body.customAmount;
+				if (!donationAmount || donationAmount <= 0) {
+					return res.status(400).json({
+						success: false,
+						message: "Donation amount is required and must be greater than 0",
+					});
+				}
+
+				calculation = {
+					success: true,
+					breakdown: {
+						donationAmount: parseFloat(donationAmount),
+						subtotal: parseFloat(donationAmount),
+						processingFee: 0, // No processing fee for donations
+						total: parseFloat(donationAmount),
+					},
+					items: [
+						{
+							type: "donation",
+							description: `Organization Donation${req.body.message ? " - " + req.body.message : ""}`,
+							amount: parseFloat(donationAmount),
+						},
+					],
+					user: await prisma.user.findUnique({
+						where: { id: userId },
+						select: {
+							fullName: true,
+							email: true,
+							whatsappNumber: true,
+							batchYear: true,
+						},
+					}),
+				};
+				break;
+
 			default:
 				return res.status(400).json({
 					success: false,

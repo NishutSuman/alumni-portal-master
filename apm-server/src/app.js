@@ -140,6 +140,7 @@ app.use("/api/tickets", require("./routes/tickets.route"));
 app.use('/api/membership', require('./routes/membership.route'));
 app.use('/api/admin/membership', require('./routes/admin/membershipAdmin.route'));
 app.use('/api/merchandise', require('./routes/merchandise.route'));
+app.use('/api/donations', require('./routes/donation.route'));
 
 // 🎫 TICKET SYSTEM BACKGROUND JOBS INITIALIZATION
 console.log('🚀 Initializing ticket system background jobs...');
