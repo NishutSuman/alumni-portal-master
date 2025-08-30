@@ -2,7 +2,9 @@
 const app = require("./app");
 const config = require("./config");
 const { connectDB, disconnectDB } = require("./config/database");
-const MembershipExpiryJob = require('./jobs/membershipExpiry.job');
+const MembershipExpiryJob = require("./jobs/membershipExpiry.job");
+const DailyCelebrationJob = require("./jobs/dailyCelebrationJob");
+const WeeklyFestivalSyncJob = require("./jobs/weeklyFestivalSyncJob");
 
 let server;
 
@@ -44,18 +46,32 @@ async function startServer() {
 					throw error;
 			}
 		});
-    
 
-			// Initialize membership expiry job
-			MembershipExpiryJob.initialize();
+		// Initialize membership expiry job
+		// MembershipExpiryJob.initialize();
 
-			// For development/testing - run manual check on startup
-			// if (process.env.NODE_ENV === "development") {
-			// 	setTimeout(() => {
-			// 		MembershipExpiryJob.runManual();
-			// 	}, 5000); // Run after 5 seconds on dev startup
-			// }
-		
+		// For development/testing - run manual check on startup
+		// if (process.env.NODE_ENV === "development") {
+		// 	setTimeout(() => {
+		// 		MembershipExpiryJob.runManual();
+		// 	}, 5000); // Run after 5 seconds on dev startup
+		// }
+		try {
+			// Initialize daily celebration job (birthdays + festivals at 8 AM)
+			//   DailyCelebrationJob.initialize();
+			//   console.log('✅ Daily celebration job initialized');
+			// Initialize weekly festival sync job (external API sync on Sundays at 3 AM)
+			//   WeeklyFestivalSyncJob.initialize();
+			//   console.log('✅ Weekly festival sync job initialized');
+			// For development/testing - optional manual trigger on startup
+			//   if (process.env.NODE_ENV === "development") {
+			//     console.log('🧪 Development mode: Setting up test triggers...');
+			// console.log('🎊 Celebration system initialization completed');
+
+		} catch (error) {
+			// console.error("❌ Failed to initialize celebration system:", error);
+			// Don't exit - let server continue running without celebration jobs
+		}
 	} catch (error) {
 		console.error("Failed to start server:", error);
 		process.exit(1);

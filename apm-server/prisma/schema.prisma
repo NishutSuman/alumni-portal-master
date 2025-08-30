@@ -2397,6 +2397,45 @@ model MerchandiseCartItem {
   @@map("merchandise_cart_items")
 }
 
+// Single Festival table - stores all festival data
+model Festival {
+  id                String            @id @default(cuid())
+  name              String            @unique
+  description       String?
+  date              DateTime
+  
+  // Festival categorization
+  festivalType      FestivalType
+  religion          Religion?
+  region            String?
+  
+  // Visual styling (Keka.com style)
+  vectorImage       String?           // SVG/vector image URL
+  backgroundColor   String            @default("#f8f9fa")
+  textColor         String            @default("#333333")
+  greetingMessage   String?
+  
+  // Configuration
+  priority          FestivalPriority  @default(MAJOR)
+  isActive          Boolean           @default(true)
+  enableNotifications Boolean         @default(true)
+  
+  // API source tracking
+  externalId        String?           // External API festival ID
+  source            String            @default("INTERNAL") // INTERNAL, CALENDARIFIC, MANUAL
+  lastSyncedAt      DateTime?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  @@index([date])
+  @@index([festivalType])
+  @@index([isActive])
+  @@index([priority])
+  @@index([enableNotifications])
+  @@map("festivals")
+}
+
 
 
 // Enums
@@ -2439,6 +2478,9 @@ enum NotificationType {
   EVENT_INVITATION
   PAYMENT_RECEIVED
   GENERAL
+  BIRTHDAY_NOTIFICATION
+  FESTIVAL_NOTIFICATION
+
 }
 
 enum EmploymentStatus {
@@ -2778,4 +2820,35 @@ enum RegistrationMode {
   BATCH_COLLECTION     // Batch collection system active
   MIXED               // Both modes allowed (future feature)
   DISABLED            // Registration disabled
+}
+
+// ENUMS FOR CELEBRATION SYSTEM
+// ============================================
+
+enum FestivalType {
+  NATIONAL_HOLIDAY
+  HINDU
+  MUSLIM
+  CHRISTIAN
+  SIKH
+  BUDDHIST
+  JAIN
+  REGIONAL
+  CULTURAL
+}
+
+enum Religion {
+  HINDUISM
+  ISLAM
+  CHRISTIANITY
+  SIKHISM
+  BUDDHISM
+  JAINISM
+  OTHER
+}
+
+enum FestivalPriority {
+  MAJOR      // Major festivals like Diwali, Holi, Eid
+  REGIONAL   // Regional festivals
+  MINOR      // Minor festivals
 }
