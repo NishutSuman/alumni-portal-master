@@ -3,12 +3,13 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth.middleware.js');
 const { asyncHandler } = require('../utils/response');
+const { checkEmailBlacklist } = require('../middleware/alumniVerification.middleware');
 
 // Import auth controller (we'll create this next)
 const authController = require('../controllers/auth.controller');
 
 // Public routes
-router.post('/register', asyncHandler(authController.register));
+router.post('/register', checkEmailBlacklist, asyncHandler(authController.register));
 router.post('/login', asyncHandler(authController.login));
 router.post('/refresh-token', asyncHandler(authController.refreshToken));
 router.post('/forgot-password', asyncHandler(authController.forgotPassword));

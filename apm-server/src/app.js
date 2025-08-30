@@ -143,6 +143,8 @@ app.use('/api/merchandise', require('./routes/merchandise.route'));
 app.use('/api/donations', require('./routes/donation.route'));
 app.use('/api/admin', require('./routes/admin.route'));
 app.use('/api/celebrations', require('./routes/celebrations.route'));
+app.use('/api/admin/verification', require('./routes/admin/alumniVerification.route'));
+app.use('/api/admin/organization', require('./routes/admin/organization.route'));
 
 
 // 🎫 TICKET SYSTEM BACKGROUND JOBS INITIALIZATION

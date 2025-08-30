@@ -5,11 +5,18 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
+const { 
+  requireAlumniVerification, 
+  optionalAlumniVerification 
+} = require('../middleware/alumniVerification.middleware');
+
+
 const {
 	authenticateToken,
 	requireRole,
 	optionalAuth,
 } = require("../middleware/auth.middleware");
+
 const { asyncHandler } = require("../utils/response");
 const {
 	uploadEventImages,

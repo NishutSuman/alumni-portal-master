@@ -9,6 +9,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id                    String    @id @default(cuid())
+  
+  // Basic Information
+  name                  String    @unique
+  shortName             String    @unique @db.VarChar(10) // For Serial ID generation
+  foundationYear        Int
+  
+  // Contact Information  
+  officialEmail         String    @unique
+  officialContactNumber String?
+  officeAddress         String?   @db.Text
+  
+  // Digital Assets
+  logoUrl               String?   // Organization logo
+  
+  // Legal Documents (PDF/Image URLs)
+  bylawDocumentUrl      String?   // Organization bylaws PDF
+  registrationCertUrl   String?   // Registration certificate
+  
+  // Social Media Links
+  websiteUrl            String?
+  instagramUrl          String?
+  facebookUrl           String?
+  youtubeUrl            String?
+  twitterUrl            String?
+  linkedinUrl           String?
+  
+  // Founding Members (JSON array)
+  foundingMembers       Json?     // [{"name": "John Doe", "role": "Founder", "year": 1985}]
+  
+  // System Configuration
+  isActive              Boolean   @default(true)
+  lastUpdatedBy         String?   // Admin who last updated
+  lastUpdatedAdmin      User?     @relation("OrgUpdates", fields: [lastUpdatedBy], references: [id])
+  
+  // Serial ID Configuration
+  serialCounter         Int       @default(0) // Auto-increment for serial ID generation
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@map("organization")
+}
+
 model User {
   id                String   @id @default(cuid())
   email             String   @unique
@@ -24,6 +69,40 @@ model User {
   fullName          String
   dateOfBirth       DateTime?
   batch             Int
+  // NEW: Detailed batch information
+  admissionYear         Int?      // Year of admission (e.g., 2009 for 2009-16 batch)
+  passoutYear           Int?      // Year of passout (e.g., 2016 for 2009-16 batch) - should match 'batch'
+
+  // ==========================================
+  // ALUMNI VERIFICATION FIELDS (NEW)
+  // ==========================================
+  
+  // Verification Status
+  isAlumniVerified      Boolean   @default(false)
+  pendingVerification   Boolean   @default(true)   // New registrations await approval
+  
+  // Verification Process  
+  alumniVerifiedBy      String?   // Admin who verified
+  verifiedAdmin         User?     @relation("AlumniVerifications", fields: [alumniVerifiedBy], references: [id])
+  alumniVerifiedAt      DateTime? // Verification timestamp
+  verificationNotes     String?   @db.Text // Admin notes during verification
+  
+  // Rejection Handling
+  isRejected            Boolean   @default(false)
+  rejectionReason       String?   @db.Text
+  rejectedBy            String?   // Admin who rejected
+  rejectedAdmin         User?     @relation("AlumniRejections", fields: [rejectedBy], references: [id])
+  rejectedAt            DateTime?
+
+  // ==========================================
+  // UNIQUE SERIAL ID SYSTEM (NEW)
+  // ==========================================
+  
+  // Auto-generated unique ID: ORG + COUNTER + NAME_CHARS + ADMISSION_YEAR + PASSOUT_YEAR
+  // Example: JNV1234JMD0916 (JNV + 1234 + J.M.D + 09 + 16)
+  serialId              String?   @unique @db.VarChar(20)
+  serialCounter         Int?      // Registration sequence number
+
   bio               String?
   profileImage      String?
   employmentStatus  EmploymentStatus @default(OPEN_TO_WORK)
@@ -166,6 +245,20 @@ createdSponsors  Sponsor[]  @relation("SponsorCreator")
   // Files uploaded by this user
   ticketAttachments    TicketAttachment[]     @relation("TicketAttachments")
 
+  // Alumni verification relations
+  verificationsGiven    User[]    @relation("AlumniVerifications")
+  rejectionsGiven       User[]    @relation("AlumniRejections")
+  
+  // Organization updates
+  organizationUpdates   Organization[] @relation("OrgUpdates")
+  
+  // Blacklist management
+  blacklistedEmails        BlacklistedEmail[]  @relation("EmailBlacklist")
+  emailBlacklistRemovals   BlacklistedEmail[]  @relation("EmailBlacklistRemovals")
+  
+  // Enhanced notification relations
+  relatedNotifications     Notification[]      @relation("NotificationRelatedUser")
+
    messageReactions    TicketMessageReaction[]  @relation("MessageReactions")
   messageEdits        TicketMessageEdit[]      @relation("MessageEdits")
   messageDrafts       TicketMessageDraft[]     @relation("MessageDrafts")
@@ -175,7 +268,40 @@ createdSponsors  Sponsor[]  @relation("SponsorCreator")
   @@index([fullName])
   @@index([employmentStatus])
   @@index([isActive, isProfilePublic])
+  @@index([admissionYear])
+  @@index([passoutYear]) 
+  @@index([isAlumniVerified])
+  @@index([pendingVerification])
+  @@index([serialId])
+  @@index([serialCounter])
   @@map("users")
+}
+
+// ==========================================
+// 3. EMAIL BLACKLIST TABLE (NEW)
+// ==========================================
+
+model BlacklistedEmail {
+  id              String    @id @default(cuid())
+  email           String    @unique @db.VarChar(255)
+  reason          String?   @db.Text
+  
+  // Blacklist Information
+  blacklistedBy   String    // Admin who blacklisted
+  blacklistedAdmin User     @relation("EmailBlacklist", fields: [blacklistedBy], references: [id])
+  blacklistedAt   DateTime  @default(now())
+  
+  // For potential removal
+  isActive        Boolean   @default(true)
+  removedBy       String?   // Admin who removed from blacklist
+  removedAdmin    User?     @relation("EmailBlacklistRemovals", fields: [removedBy], references: [id])
+  removedAt       DateTime?
+  removedReason   String?   @db.Text
+  
+  @@index([email])
+  @@index([isActive])
+  @@index([blacklistedAt])
+  @@map("blacklisted_emails")
 }
 
 model UserAddress {
@@ -265,11 +391,23 @@ model Batch {
   adminAssignments        BatchAdminAssignment[]   @relation("BatchAdminAssignments")
 
   batchCollections        BatchEventCollection[] @relation("BatchCollections")
+
+  // Year ranges for 7-year batch system
+  admissionYear    Int?      // Start year (e.g., 2009 for 2009-16)
+  passoutYear      Int?      // End year (e.g., 2016 for 2009-16) - should match 'year'
+  
+  // Enhanced batch information
+  batchDisplayName String?   // "2009-16 Batch" or "Class of 2009-16" 
+  
+  // Serial ID generation tracking
+  lastSerialCounter Int     @default(0) // Last used counter for this batch
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   @@index([year])
+  @@index([admissionYear])
+  @@index([passoutYear])
   @@map("batches")
 }
 
@@ -491,11 +629,21 @@ model Notification {
   // Relations
   userId      String
   user        User              @relation(fields: [userId], references: [id])
+
+  // Enhanced for verification notifications
+  relatedUserId    String?   // User being verified/rejected
+  relatedUser      User?     @relation("NotificationRelatedUser", fields: [relatedUserId], references: [id])
+  
+  // Additional context for verification notifications
+  batchContext     Int?      // Batch year context for batch admin notifications
+  actionContext    String?   // Additional context (verification/rejection reason)
   
   createdAt   DateTime          @default(now())
   
   @@index([userId, isRead])
   @@index([createdAt])
+  @@index([relatedUserId])
+  @@index([batchContext])
   @@map("notifications")
 }
 
@@ -2480,6 +2628,11 @@ enum NotificationType {
   GENERAL
   BIRTHDAY_NOTIFICATION
   FESTIVAL_NOTIFICATION
+  NEW_REGISTRATION           // Admin gets notification on new registration
+  VERIFICATION_APPROVED      // User gets notification when approved  
+  VERIFICATION_REJECTED      // User gets notification when rejected
+  BATCH_USER_VERIFIED        // Batch admin gets notification when user from their batch verified
+  ADMIN_VERIFICATION_REMINDER // Periodic reminder for pending verifications
 
 }
 
