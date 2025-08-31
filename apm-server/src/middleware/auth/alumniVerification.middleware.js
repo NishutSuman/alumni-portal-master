@@ -3,9 +3,9 @@
 // File: apm-server/src/middleware/alumniVerification.middleware.js
 // ==========================================
 
-const { prisma } = require('../config/database');
-const { errorResponse } = require('../utils/response');
-const { CacheService } = require('../config/redis');
+const { prisma } = require('../../config/database');
+const { errorResponse } = require('../../utils/response');
+const { CacheService } = require('../../config/redis');
 
 /**
  * Require alumni verification for protected routes

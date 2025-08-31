@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../middleware/auth/auth.middleware');
 const emailController = require('../controllers/email.controller');
 
 // Bulk email routes (Admin only)

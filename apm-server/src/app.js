@@ -122,51 +122,59 @@ app.use(express.static("public"));
 // =============================================
 
 // Core routes
-app.use("/api/auth", require("./routes/auth.route"));
-app.use("/api/users", require("./routes/users.route"));
-app.use("/api/batches", require("./routes/batches.route"));
-app.use("/api/alumni", require("./routes/alumni.route"));
-app.use("/api/posts", require("./routes/posts.route"));
-app.use("/api/events", require("./routes/events.route"));
-app.use('/api/admin', require('./routes/admin.route'));
-app.use('/api/payments', require('./routes/payments.route'));
-app.use('/api/treasury', require('./routes/treasury.route'));
-app.use('/api/albums', require('./routes/albums.route'));
-app.use('/api/photos', require('./routes/photos.route'));
-app.use("/api/groups", require("./routes/group.route"));
-app.use("/api/polls", require("./routes/polls.route"));
-app.use("/api/lifelink", require("./routes/lifelink.route"));
-app.use("/api/tickets", require("./routes/tickets.route"));
-app.use('/api/membership', require('./routes/membership.route'));
-app.use('/api/admin/membership', require('./routes/admin/membershipAdmin.route'));
-app.use('/api/merchandise', require('./routes/merchandise.route'));
-app.use('/api/donations', require('./routes/donation.route'));
-app.use('/api/admin', require('./routes/admin.route'));
-app.use('/api/celebrations', require('./routes/celebrations.route'));
-app.use('/api/admin/verification', require('./routes/admin/alumniVerification.route'));
-app.use('/api/admin/organization', require('./routes/admin/organization.route'));
-
+app.use("/api/auth", require("./routes/v1/auth.route"));
+// app.use("/api/users", require("./routes/users.route"));
+// app.use("/api/batches", require("./routes/batches.route"));
+// app.use("/api/alumni", require("./routes/alumni.route"));
+// app.use("/api/posts", require("./routes/posts.route"));
+// app.use("/api/events", require("./routes/events.route"));
+// app.use("/api/admin", require("./routes/admin.route"));
+// app.use("/api/payments", require("./routes/payments.route"));
+// app.use("/api/treasury", require("./routes/treasury.route"));
+// app.use("/api/albums", require("./routes/albums.route"));
+// app.use("/api/photos", require("./routes/photos.route"));
+// app.use("/api/groups", require("./routes/group.route"));
+// app.use("/api/polls", require("./routes/polls.route"));
+// app.use("/api/lifelink", require("./routes/lifelink.route"));
+// app.use("/api/tickets", require("./routes/tickets.route"));
+// app.use("/api/membership", require("./routes/membership.route"));
+// app.use(
+// 	"/api/admin/membership",
+// 	require("./routes/admin/membershipAdmin.route")
+// );
+// app.use("/api/merchandise", require("./routes/merchandise.route"));
+// app.use("/api/donations", require("./routes/donation.route"));
+// app.use("/api/admin", require("./routes/admin.route"));
+// app.use("/api/celebrations", require("./routes/celebrations.route"));
+// app.use(
+// 	"/api/admin/verification",
+// 	require("./routes/admin/alumniVerification.route")
+// );
+// app.use(
+// 	"/api/admin/organization",
+// 	require("./routes/admin/organization.route")
+// );
 
 // 🎫 TICKET SYSTEM BACKGROUND JOBS INITIALIZATION
-console.log('🚀 Initializing ticket system background jobs...');
+console.log("🚀 Initializing ticket system background jobs...");
 
 try {
-  // Initialize email system first
-//   const EmailManager = require('./services/email/EmailManager');
-//   await EmailManager.initialize();
-//   console.log('✅ Email system initialized');
+	// Initialize email system first
+	//   const EmailManager = require('./services/email/EmailManager');
+	//   await EmailManager.initialize();
+	//   console.log('✅ Email system initialized');
 
-  // Setup ticket notification background jobs
-  const TicketNotificationService = require('./services/ticketNotification.service');
-  TicketNotificationService.setupDelayedNotificationCheck();
+	// Setup ticket notification background jobs
+	const TicketNotificationService = require("./services/ticketNotification.service");
+	TicketNotificationService.setupDelayedNotificationCheck();
 
-  // Setup performance optimization jobs
-  const TicketPerformanceService = require('./services/ticketPerformance.service');
-  TicketPerformanceService.setupPerformanceJobs();
-  
-  console.log('✅ Ticket system background jobs ready');
+	// Setup performance optimization jobs
+	const TicketPerformanceService = require("./services/ticketPerformance.service");
+	TicketPerformanceService.setupPerformanceJobs();
+
+	console.log("✅ Ticket system background jobs ready");
 } catch (error) {
-  console.error('❌ Ticket background jobs initialization failed:', error);
+	console.error("❌ Ticket background jobs initialization failed:", error);
 }
 
 // PAYMENT ROUTES - ENABLED (was commented out)

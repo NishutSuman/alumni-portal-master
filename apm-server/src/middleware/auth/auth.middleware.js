@@ -1,7 +1,7 @@
 // src/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const config = require('../config');
-const { prisma } = require('../config/database');
+const config = require('../../config');
+const { prisma } = require('../../config/database');
 
 // Verify JWT token
 const authenticateToken = async (req, res, next) => {

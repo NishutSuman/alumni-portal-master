@@ -6,11 +6,11 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { prisma } = require('../config/database');
-const config = require('../config');
-const { successResponse, errorResponse } = require('../utils/response');
-const SerialIdService = require('../services/serialID.service');
-const NotificationService = require('../services/notification.service');
+const { prisma } = require('../../config/database');
+const config = require('../../config');
+const { successResponse, errorResponse } = require('../../utils/response');
+const SerialIdService = require('../../services/serialID.service');
+const NotificationService = require('../../services/notification.service');
 
 // Generate JWT tokens (UNCHANGED)
 const generateTokens = (userId) => {
