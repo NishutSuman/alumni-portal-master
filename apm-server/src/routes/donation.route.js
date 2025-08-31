@@ -8,6 +8,7 @@ const {
   validateInitiateDonation, 
   validateDonationQuery 
 } = require('../middleware/donation.validation.middleware');
+const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/alumniVerification.middleware');
 
 // Controller
 const donationController = require('../controllers/donation.controller');
@@ -24,6 +25,7 @@ const donationController = require('../controllers/donation.controller');
 router.post('/',
   [
     authenticateToken, // Must be logged in
+    requireAlumniVerification,
     validateInitiateDonation
   ],
   asyncHandler(donationController.initiateDonation)
@@ -37,6 +39,7 @@ router.post('/',
 router.get('/my-donations',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateDonationQuery
   ],
   asyncHandler(donationController.getMyDonations)
@@ -49,7 +52,8 @@ router.get('/my-donations',
  */
 router.get('/organization-stats',
   [
-    authenticateToken
+    authenticateToken,
+    requireAlumniVerification
   ],
   asyncHandler(donationController.getOrganizationStats)
 );

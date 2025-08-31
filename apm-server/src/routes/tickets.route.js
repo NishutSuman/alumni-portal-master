@@ -29,6 +29,7 @@ const ticketPerformanceController = require('../controllers/support/ticketPerfor
 
 // Import middleware
 const { authenticateToken, requireRole, optionalAuth } = require('../middleware/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
 const { 
   uploadGeneral, 
   uploadTicketAttachments, 
@@ -148,7 +149,7 @@ router.get(
  */
 router.get(
   '/admins',
-  [authenticateToken, cacheAvailableAdmins],
+  [authenticateToken, requireAlumniVerification, cacheAvailableAdmins],
   asyncHandler(ticketCategoryController.getAvailableAdmins)
 );
 
@@ -158,7 +159,7 @@ router.get(
  */
 router.get(
   '/dashboard',
-  [authenticateToken, cacheUserDashboard],
+  [authenticateToken, requireAlumniVerification, cacheUserDashboard],
   asyncHandler(ticketController.getUserDashboard)
 );
 
@@ -170,6 +171,7 @@ router.get(
   '/',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketQuery,
     cacheUserTickets
   ],
@@ -184,6 +186,7 @@ router.post(
   '/',
   [
     authenticateToken,
+    requireAlumniVerification,
     uploadTicketAttachments,
     handleUploadError,
     validateCreateTicket,
@@ -203,6 +206,7 @@ router.get(
   '/:ticketId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     cacheTicketDetails
@@ -218,6 +222,7 @@ router.put(
   '/:ticketId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateUserCanUpdateTicket,
@@ -237,6 +242,7 @@ router.post(
   '/:ticketId/reopen',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateCanReopenTicket,
@@ -254,6 +260,7 @@ router.post(
   '/:ticketId/satisfaction',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateSatisfaction,
@@ -270,6 +277,7 @@ router.post(
   '/:ticketId/email-copy',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess
   ],
@@ -288,6 +296,7 @@ router.post(
   '/:ticketId/messages',
   [
     authenticateToken,
+    requireAlumniVerification,
     uploadMessageAttachments,
     handleUploadError,
     validateTicketIdParam,
@@ -307,6 +316,7 @@ router.put(
   '/:ticketId/messages/:messageId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateMessageIdParam,
@@ -325,6 +335,7 @@ router.post(
   '/:ticketId/messages/:messageId/react',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateMessageIdParam,
@@ -343,6 +354,7 @@ router.get(
   '/:ticketId/messages/:messageId/reactions',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateMessageIdParam,
@@ -359,6 +371,7 @@ router.get(
   '/:ticketId/messages/:messageId/history',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateMessageIdParam,
@@ -375,6 +388,7 @@ router.post(
   '/:ticketId/messages/draft',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     validateMessageDraft
@@ -390,6 +404,7 @@ router.get(
   '/:ticketId/messages/draft',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess
   ],
@@ -404,6 +419,7 @@ router.delete(
   '/:ticketId/messages/draft',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess
   ],
@@ -420,7 +436,7 @@ router.delete(
  */
 router.get(
   '/files/:attachmentId/preview',
-  [authenticateToken, cacheFilePreview],
+  [authenticateToken, requireAlumniVerification, cacheFilePreview],
   asyncHandler(ticketFileController.getFilePreview)
 );
 
@@ -430,7 +446,7 @@ router.get(
  */
 router.get(
   '/files/:attachmentId/download',
-  [authenticateToken],
+  [authenticateToken, requireAlumniVerification],
   asyncHandler(ticketFileController.downloadFile)
 );
 
@@ -440,7 +456,7 @@ router.get(
  */
 router.get(
   '/files/:attachmentId/thumbnail',
-  [authenticateToken],
+  [authenticateToken, requireAlumniVerification],
   asyncHandler(ticketFileController.getThumbnail)
 );
 
@@ -450,7 +466,7 @@ router.get(
  */
 router.get(
   '/files/:attachmentId/metadata',
-  [authenticateToken, cacheFileMetadata],
+  [authenticateToken, requireAlumniVerification, cacheFileMetadata],
   asyncHandler(ticketFileController.getFileMetadata)
 );
 
@@ -466,6 +482,7 @@ router.get(
   '/:ticketId/audit',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess,
     cacheAuditTrail
@@ -510,6 +527,7 @@ router.post(
   '/templates/:templateId/use',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTemplateIdParam,
     validateTemplateAccess
   ],
@@ -526,7 +544,7 @@ router.post(
  */
 router.get(
   '/search/config',
-  [authenticateToken, cacheSearchConfig],
+  [authenticateToken, requireAlumniVerification, cacheSearchConfig],
   asyncHandler(ticketAdvancedController.getSearchConfig)
 );
 
@@ -538,6 +556,7 @@ router.post(
   '/search',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateAdvancedSearch
   ],
   asyncHandler(ticketSearchController.performAdvancedSearch)
@@ -551,6 +570,7 @@ router.get(
   '/search/suggestions',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheSearchSuggestions
   ],
   asyncHandler(ticketSearchController.getSearchSuggestions)
@@ -564,6 +584,7 @@ router.get(
   '/filters',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserFilters
   ],
   asyncHandler(ticketSearchController.getUserFilters)
@@ -577,6 +598,7 @@ router.post(
   '/filters',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateSaveFilter,
     invalidateSearchCaches
   ],
@@ -589,7 +611,7 @@ router.post(
  */
 router.post(
   '/filters/:filterId/apply',
-  [authenticateToken],
+  [authenticateToken, requireAlumniVerification],
   asyncHandler(ticketSearchController.applyFilter)
 );
 
@@ -601,6 +623,7 @@ router.delete(
   '/filters/:filterId',
   [
     authenticateToken,
+    requireAlumniVerification,
     invalidateSearchCaches
   ],
   asyncHandler(ticketSearchController.deleteFilter)
@@ -1046,6 +1069,7 @@ router.get(
   '/:ticketId/export/pdf',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTicketIdParam,
     validateTicketAccess
   ],

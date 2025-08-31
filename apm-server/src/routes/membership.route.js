@@ -5,6 +5,12 @@ const router = express.Router();
 // Import middleware
 const { authenticateToken } = require('../middleware/auth.middleware');
 const { asyncHandler } = require('../utils/response');
+
+const { 
+  requireAlumniVerification,
+  optionalAlumniVerification 
+} = require('../middleware/alumniVerification.middleware');
+
 const { 
   checkMembershipStatus, 
   membershipRateLimit 
@@ -23,6 +29,7 @@ const membershipController = require('../controllers/membership.controller');
  */
 router.get('/status',
   authenticateToken,
+  optionalAlumniVerification,
   asyncHandler(membershipController.getMembershipStatus)
 );
 
@@ -33,6 +40,7 @@ router.get('/status',
  */
 router.get('/fee',
   authenticateToken,
+  optionalAlumniVerification,
   asyncHandler(membershipController.getMembershipFee)
 );
 
@@ -43,6 +51,7 @@ router.get('/fee',
  */
 router.post('/pay',
   authenticateToken,
+  requireAlumniVerification,
   membershipRateLimit,
   validateMembershipPayment,
   asyncHandler(membershipController.initiateMembershipPayment)

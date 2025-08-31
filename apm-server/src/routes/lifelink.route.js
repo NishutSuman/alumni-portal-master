@@ -12,6 +12,7 @@ const {
   requireRole,
   optionalAuth
 } = require('../middleware/auth.middleware');
+const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 const lifeLinkController = require('../controllers/lifeLink.controller');
 
@@ -64,7 +65,8 @@ const {
  */
 router.get('/dashboard',
   [
-    optionalAuth,
+    authenticateToken,
+    requireAlumniVerification,
     validateDashboardQuery,
     cacheLifeLinkDashboard
   ],
@@ -95,6 +97,7 @@ router.get('/stats/bloodgroups',
 router.get('/profile/blood',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserBloodProfile
   ],
   asyncHandler(lifeLinkController.getBloodProfile)
@@ -108,6 +111,7 @@ router.get('/profile/blood',
 router.put('/profile/blood',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateUpdateBloodProfile,
     autoInvalidateLifeLinkCaches
   ],
@@ -126,6 +130,7 @@ router.put('/profile/blood',
 router.get('/my-donations',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateBloodDonor,
     cacheUserDonations
   ],
@@ -140,6 +145,7 @@ router.get('/my-donations',
 router.post('/donations',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateBloodDonor,
     validateAddDonation,
     autoInvalidateLifeLinkCaches
@@ -155,6 +161,7 @@ router.post('/donations',
 router.get('/donation-status',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateBloodDonor,
     cacheDonationStatus
   ],
@@ -173,6 +180,7 @@ router.get('/donation-status',
 router.post('/requisitions',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateCreateRequisition,
     autoInvalidateLifeLinkCaches
   ],
@@ -187,6 +195,7 @@ router.post('/requisitions',
 router.get('/my-requisitions',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserRequisitions
   ],
   asyncHandler(lifeLinkController.getMyRequisitions)
@@ -200,6 +209,7 @@ router.get('/my-requisitions',
 router.get('/requisitions/:requisitionId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateRequisitionIdParam,
     validateRequisitionAccess,
     cacheRequisitionDetails
@@ -215,6 +225,7 @@ router.get('/requisitions/:requisitionId',
 router.put('/requisitions/:requisitionId/status',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateRequisitionIdParam,
     validateRequisitionAccess,
     autoInvalidateLifeLinkCaches
@@ -230,6 +241,7 @@ router.put('/requisitions/:requisitionId/status',
 router.put('/requisitions/:requisitionId/reuse',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateRequisitionIdParam,
     validateRequisitionAccess,
     autoInvalidateLifeLinkCaches
@@ -249,6 +261,7 @@ router.put('/requisitions/:requisitionId/reuse',
 router.get('/discover-requisitions',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateBloodDonor,
     validateDashboardQuery, // Reuse for pagination params
     cacheDiscoverRequisitions
@@ -264,6 +277,7 @@ router.get('/discover-requisitions',
 router.post('/search-donors',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateSearchDonors,
     cacheAvailableDonors
   ],
@@ -278,6 +292,7 @@ router.post('/search-donors',
 router.get('/willing-donors/:requisitionId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateRequisitionIdParam,
     validateRequisitionAccess,
     cacheWillingDonors
@@ -297,6 +312,7 @@ router.get('/willing-donors/:requisitionId',
 router.post('/notify-selected',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotifyDonors,
     autoInvalidateLifeLinkCaches
   ],
@@ -311,6 +327,7 @@ router.post('/notify-selected',
 router.post('/notify-all',
   [
     authenticateToken,
+    requireAlumniVerification,
     autoInvalidateLifeLinkCaches
   ],
   asyncHandler(lifeLinkController.notifyAllDonors)
@@ -324,6 +341,7 @@ router.post('/notify-all',
 router.get('/notifications',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateBloodDonor,
     cacheUserNotifications
   ],
@@ -338,6 +356,7 @@ router.get('/notifications',
 router.put('/notifications/:notificationId/read',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationIdParam,
     validateNotificationAccess,
     autoInvalidateLifeLinkCaches
@@ -357,6 +376,7 @@ router.put('/notifications/:notificationId/read',
 router.post('/notifications/:notificationId/respond',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationIdParam,
     validateNotificationAccess,
     validateBloodDonor,
@@ -375,6 +395,7 @@ router.post('/notifications/:notificationId/respond',
 router.post('/requisitions/:requisitionId/respond',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateRequisitionIdParam,
     validateActiveRequisition,
     validateBloodDonor,

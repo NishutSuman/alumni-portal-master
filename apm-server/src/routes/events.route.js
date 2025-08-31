@@ -17,6 +17,7 @@ const {
 	optionalAuth,
 } = require("../middleware/auth.middleware");
 
+
 const { asyncHandler } = require("../utils/response");
 const {
 	uploadEventImages,
@@ -518,6 +519,7 @@ router.get(
 router.post(
 	"/:eventId/register",
 	authenticateToken,
+	requireAlumniVerification,
 	checkMembershipStatus,
 	checkRegistrationMode,  // Check batch collection mode
 	preventDuplicateRegistration,
@@ -531,6 +533,7 @@ router.post(
 router.get(
 	"/:eventId/my-registration",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	// NOT cached - user-specific data
 	asyncHandler(eventRegistrationController.getMyRegistration)
@@ -539,6 +542,7 @@ router.get(
 router.put(
 	"/:eventId/my-registration",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	validateUpdateUserRegistration,
 	autoInvalidateRegistrationCaches, // 🆕 AUTO INVALIDATE AFTER SUCCESS
@@ -548,6 +552,7 @@ router.put(
 router.delete(
 	"/:eventId/my-registration",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	autoInvalidateRegistrationCaches, // 🆕 AUTO INVALIDATE AFTER SUCCESS
 	asyncHandler(eventRegistrationController.cancelMyRegistration)
@@ -649,6 +654,7 @@ router.post(
 router.post(
 	"/:eventId/guests",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	validateAddGuest,
 	validateGuestBusinessRules,
@@ -659,6 +665,7 @@ router.post(
 router.get(
 	"/:eventId/guests",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	// NOT cached - user-specific data
 	asyncHandler(eventGuestController.getMyGuests)
@@ -667,6 +674,7 @@ router.get(
 router.put(
 	"/:eventId/guests/:guestId",
 	authenticateToken,
+	requireAlumniVerification,
 	validateGuestParams,
 	validateUpdateGuest,
 	autoInvalidateGuestCaches, // 🆕 AUTO INVALIDATE AFTER SUCCESS
@@ -676,6 +684,7 @@ router.put(
 router.delete(
 	"/:eventId/guests/:guestId",
 	authenticateToken,
+	requireAlumniVerification,
 	validateGuestParams,
 	autoInvalidateGuestCaches, // 🆕 AUTO INVALIDATE AFTER SUCCESS
 	asyncHandler(eventGuestController.cancelGuest)
@@ -689,6 +698,7 @@ router.delete(
 router.get(
 	"/:eventId/guests/:guestId/form",
 	authenticateToken,
+	requireAlumniVerification,
 	validateGuestParams,
 	// NOT cached - user-specific data
 	asyncHandler(eventGuestController.getGuestForm)
@@ -697,6 +707,7 @@ router.get(
 router.post(
 	"/:eventId/guests/:guestId/form",
 	authenticateToken,
+	requireAlumniVerification,
 	validateGuestParams,
 	validateGuestFormResponse,
 	validateGuestFormBusinessRules,
@@ -707,6 +718,7 @@ router.post(
 router.put(
 	"/:eventId/guests/:guestId/form",
 	authenticateToken,
+	requireAlumniVerification,
 	validateGuestParams,
 	validateUpdateGuestFormResponse,
 	validateGuestFormBusinessRules,
@@ -918,6 +930,7 @@ router.get(
 	"/:eventId/cart",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateEventIdParam,
 		validateMerchandiseBusinessRules,
 		validateCartBusinessRules,
@@ -931,6 +944,7 @@ router.post(
 	"/:eventId/cart",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateEventIdParam,
 		validateAddToCart,
 		validateMerchandiseBusinessRules,
@@ -945,6 +959,7 @@ router.put(
 	"/:eventId/cart/:itemId",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateCartParams,
 		validateUpdateCartItem,
 		validateMerchandiseBusinessRules,
@@ -959,6 +974,7 @@ router.delete(
 	"/:eventId/cart/:itemId",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateCartParams,
 		validateMerchandiseBusinessRules,
 		validateCartBusinessRules,
@@ -972,6 +988,7 @@ router.post(
 	"/:eventId/checkout",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateEventIdParam,
 		validateCheckoutCart,
 		validateMerchandiseBusinessRules,
@@ -990,6 +1007,7 @@ router.get(
 	"/:eventId/my-orders",
 	[
 		authenticateToken,
+		requireAlumniVerification,
 		validateEventIdParam,
 		validateMerchandiseBusinessRules,
 		validateCartBusinessRules,
@@ -1195,6 +1213,7 @@ router.post(
 router.get(
 	"/:eventId/feedback/my-response",
 	authenticateToken,
+	requireAlumniVerification,
 	validateEventIdParam,
 	cacheUserFeedbackResponse,
 	asyncHandler(feedbackController.getMyFeedbackResponse)

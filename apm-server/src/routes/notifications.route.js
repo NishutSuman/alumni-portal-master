@@ -41,6 +41,10 @@ const {
   autoInvalidateNotificationCaches,
   autoInvalidatePushTokenCaches
 } = require('../middleware/notification.cache.middleware');
+const { 
+  requireAlumniVerification, 
+  optionalAlumniVerification 
+} = require('../middleware/alumniVerification.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS
@@ -59,6 +63,7 @@ const notificationController = require('../controllers/notification.controller')
 router.get('/',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationListQuery,
     cacheUserNotifications
   ],
@@ -73,6 +78,7 @@ router.get('/',
 router.get('/unread-count',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUnreadCount
   ],
   asyncHandler(notificationController.getUnreadCount)
@@ -86,6 +92,7 @@ router.get('/unread-count',
 router.put('/:notificationId/read',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationIdParam,
     validateNotificationAccess,
     validateNotificationNotExpired,
@@ -102,6 +109,7 @@ router.put('/:notificationId/read',
 router.put('/mark-all-read',
   [
     authenticateToken,
+    requireAlumniVerification,
     autoInvalidateNotificationCaches
   ],
   asyncHandler(notificationController.markAllNotificationsAsRead)
@@ -115,6 +123,7 @@ router.put('/mark-all-read',
 router.get('/:notificationId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationIdParam,
     validateNotificationAccess,
     cacheNotificationDetails
@@ -130,6 +139,7 @@ router.get('/:notificationId',
 router.delete('/:notificationId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateNotificationIdParam,
     validateNotificationAccess,
     autoInvalidateNotificationCaches
@@ -149,6 +159,7 @@ router.delete('/:notificationId',
 router.post('/register-token',
   [
     authenticateToken,
+    requireAlumniVerification,
     validatePushPermissions,
     validateRegisterPushToken,
     autoInvalidatePushTokenCaches
@@ -164,6 +175,7 @@ router.post('/register-token',
 router.delete('/unregister-token',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateUnregisterPushToken,
     autoInvalidatePushTokenCaches
   ],
@@ -178,6 +190,7 @@ router.delete('/unregister-token',
 router.get('/my-tokens',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserPushTokens
   ],
   asyncHandler(notificationController.getUserPushTokens)
@@ -194,7 +207,8 @@ router.get('/my-tokens',
  */
 router.get('/preferences',
   [
-    authenticateToken
+    authenticateToken,
+    requireAlumniVerification
   ],
   asyncHandler(notificationController.getNotificationPreferences)
 );
@@ -207,6 +221,7 @@ router.get('/preferences',
 router.put('/preferences',
   [
     authenticateToken,
+    requireAlumniVerification,
     autoInvalidateNotificationCaches
   ],
   asyncHandler(notificationController.updateNotificationPreferences)
@@ -467,6 +482,7 @@ router.post('/integrations/:feature/send',
   [
     // Add internal API validation middleware
     authenticateToken,
+    requireAlumniVerification,
     autoInvalidateNotificationCaches
   ],
   asyncHandler(notificationController.sendIntegrationNotification)

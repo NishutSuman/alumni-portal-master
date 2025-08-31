@@ -10,6 +10,10 @@ const {
   requireRole,
   optionalAuth 
 } = require('../middleware/auth.middleware');
+const { 
+  requireAlumniVerification, 
+  optionalAlumniVerification 
+} = require('../middleware/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Celebration-specific middleware
@@ -94,6 +98,7 @@ router.get('/festivals/upcoming',
 router.get('/birthdays/today',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheTodaysBirthdays
   ],
   asyncHandler(celebrationController.getTodaysBirthdays)
@@ -107,6 +112,7 @@ router.get('/birthdays/today',
 router.get('/birthdays/upcoming',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateUpcomingBirthdays,
     cacheUpcomingBirthdays
   ],
@@ -121,6 +127,7 @@ router.get('/birthdays/upcoming',
 router.get('/today',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheTodaysCelebrations
   ],
   asyncHandler(celebrationController.getTodaysCelebrations)
@@ -134,6 +141,7 @@ router.get('/today',
 router.get('/festivals/search',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateSearchFestivals,
     cacheFestivalSearch
   ],
@@ -148,6 +156,7 @@ router.get('/festivals/search',
 router.get('/festivals/calendar',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateFestivalCalendar,
     cacheFestivalCalendar
   ],

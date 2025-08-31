@@ -10,6 +10,7 @@ const {
   requireRole,
   optionalAuth
 } = require('../middleware/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Poll-specific middleware
@@ -115,6 +116,7 @@ router.get('/:pollId/results',
 router.get('/my/votes',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserVotes
   ],
   asyncHandler(pollController.getUserVotes)
@@ -128,6 +130,7 @@ router.get('/my/votes',
 router.post('/:pollId/vote',
   [
     authenticateToken,
+    requireAlumniVerification,
     validatePollIdParam,
     validatePollAccess,
     validatePollAvailable,
@@ -181,6 +184,7 @@ router.post('/',
 router.put('/:pollId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validatePollIdParam,
     validatePollAccess,
     validatePollModifyPermission,
@@ -198,6 +202,7 @@ router.put('/:pollId',
 router.delete('/:pollId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validatePollIdParam,
     validatePollAccess,
     validatePollModifyPermission,

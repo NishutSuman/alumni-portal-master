@@ -14,6 +14,7 @@ const merchandiseAdminController = require('../controllers/merchandiseAdmin.cont
 
 // Middleware
 const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Merchandise validation middleware
@@ -161,6 +162,7 @@ router.get('/:merchandiseId',
 router.get('/cart',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserCart
   ],
   asyncHandler(merchandiseCartController.getUserCart)
@@ -173,6 +175,7 @@ router.get('/cart',
 router.post('/cart/add',
   [
     authenticateToken,
+    requireAlumniVerification,
     merchandiseRateLimit,
     validateAddToCart,
     validateMerchandiseExists,
@@ -191,6 +194,7 @@ router.post('/cart/add',
 router.put('/cart/:cartItemId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateCartItemIdParam,
     validateUpdateCartItem,
     validateStockAvailability,
@@ -206,6 +210,7 @@ router.put('/cart/:cartItemId',
 router.delete('/cart/:cartItemId',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateCartItemIdParam,
     autoInvalidateCartCaches
   ],
@@ -219,6 +224,7 @@ router.delete('/cart/:cartItemId',
 router.post('/cart/clear',
   [
     authenticateToken,
+    requireAlumniVerification,
     autoInvalidateCartCaches
   ],
   asyncHandler(merchandiseCartController.clearCart)
@@ -231,6 +237,7 @@ router.post('/cart/clear',
 router.post('/order',
   [
     authenticateToken,
+    requireAlumniVerification,
     merchandiseRateLimit,
     autoInvalidateCartCaches,
     autoInvalidateOrderCaches
@@ -245,6 +252,7 @@ router.post('/order',
 router.get('/my-orders',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserOrders
   ],
   asyncHandler(merchandiseCartController.getMyOrders)
@@ -257,6 +265,7 @@ router.get('/my-orders',
 router.get('/orders/:orderNumber',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateOrderNumberParam,
     cacheOrderDetails
   ],
@@ -270,6 +279,7 @@ router.get('/orders/:orderNumber',
 router.get('/orders/:orderNumber/qr',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateOrderNumberParam
   ],
   asyncHandler(merchandiseCartController.getOrderQRCode)

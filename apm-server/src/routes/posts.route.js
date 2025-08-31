@@ -4,6 +4,8 @@ const router = express.Router();
 const { authenticateToken, requireRole, optionalAuth } = require("../middleware/auth.middleware");
 const { asyncHandler } = require('../utils/response');
 const { handleUploadError } = require('../middleware/upload.middleware');
+const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+
 const { 
   validateCreatePost, 
   validateUpdatePost, 
@@ -91,6 +93,7 @@ router.get('/:postId', optionalAuth, validatePostIdParam, cachePost, asyncHandle
 // Protected routes (authentication required)
 router.post('/', 
   authenticateToken, 
+  requireAlumniVerification,
   validateCreatePost, 
   uploadPostFiles,
   handleUploadError,
@@ -100,6 +103,7 @@ router.post('/',
 
 router.put('/:postId', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostIdParam,  
   validateUpdatePost,
   uploadPostFiles,
@@ -110,6 +114,7 @@ router.put('/:postId',
 
 router.patch('/:postId/archive', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostIdParam,
   invalidatePostCache,
   asyncHandler(postController.archivePost)
@@ -146,6 +151,7 @@ router.delete('/:postId',
 // Toggle like on a post
 router.post('/:postId/like', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostIdParam,
   invalidatePostInteractionCache,
   asyncHandler(likeController.toggleLike)
@@ -161,6 +167,7 @@ router.get('/:postId/likes',
 // Check if current user liked a post
 router.get('/:postId/like/status', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostIdParam,
   asyncHandler(likeController.checkUserLike)
 );
@@ -179,6 +186,7 @@ router.get('/:postId/comments',
 // Create a comment on a post
 router.post('/:postId/comments', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostIdParam,
   validateCreateComment,
   invalidatePostInteractionCache,
@@ -188,6 +196,7 @@ router.post('/:postId/comments',
 // Update a comment
 router.put('/:postId/comments/:commentId', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostAndCommentParams,
   validateUpdateComment,
   invalidatePostInteractionCache,
@@ -197,6 +206,7 @@ router.put('/:postId/comments/:commentId',
 // Delete a comment (works for both comments and replies)
 router.delete('/:postId/comments/:commentId', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostAndCommentParams,
   invalidatePostInteractionCache,
   asyncHandler(commentController.deleteComment)
@@ -205,6 +215,7 @@ router.delete('/:postId/comments/:commentId',
 // Create a reply to a comment
 router.post('/:postId/comments/:commentId/replies', 
   authenticateToken, 
+  requireAlumniVerification,
   validatePostAndCommentParams,
   validateCreateComment, // Same validation as regular comments
   invalidatePostInteractionCache,

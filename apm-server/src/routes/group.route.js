@@ -10,6 +10,8 @@ const {
   requireRole,
   optionalAuth
 } = require('../middleware/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+
 const { asyncHandler } = require('../utils/response');
 
 // Group-specific middleware

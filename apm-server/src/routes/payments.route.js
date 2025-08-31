@@ -4,6 +4,9 @@ const router = express.Router();
 // Import middleware (following existing pattern)
 const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
 const { asyncHandler } = require('../utils/response');
+const { 
+  requireAlumniVerification 
+} = require('../middleware/alumniVerification.middleware');
 
 // Import payment-specific middleware
 const {
@@ -58,6 +61,7 @@ router.post(
   '/calculate',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateCalculatePayment,
     cachePaymentCalculation
   ],
@@ -69,6 +73,7 @@ router.post(
   '/initiate',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateInitiatePayment,
     validatePaymentInitiationRules,
     autoInvalidatePaymentCaches
@@ -81,6 +86,7 @@ router.post(
   '/:transactionId/verify',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam,
     validateVerifyPayment,
     validatePaymentVerificationRules,
@@ -94,6 +100,7 @@ router.get(
   '/:transactionId/status',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam,
     cachePaymentStatus
   ],
@@ -105,6 +112,7 @@ router.get(
   '/my-payments',
   [
     authenticateToken,
+    requireAlumniVerification,
     cacheUserPayments
   ],
   asyncHandler(paymentController.getUserPayments)
@@ -119,6 +127,7 @@ router.post(
   '/:transactionId/invoice',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam,
     autoInvalidatePaymentCaches
   ],
@@ -130,6 +139,7 @@ router.get(
   '/:transactionId/invoice',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam,
     cacheInvoice
   ],
@@ -141,6 +151,7 @@ router.get(
   '/:transactionId/invoice/pdf',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam
   ],
   asyncHandler(invoiceController.downloadInvoicePDF)
@@ -151,6 +162,7 @@ router.post(
   '/:transactionId/invoice/resend',
   [
     authenticateToken,
+    requireAlumniVerification,
     validateTransactionIdParam
   ],
   asyncHandler(invoiceController.resendInvoiceEmail)
