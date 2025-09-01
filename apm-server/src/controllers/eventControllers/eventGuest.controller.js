@@ -7,7 +7,7 @@ const {
 	getPaginationParams,
 	calculatePagination,
 } = require("../../utils/response");
-const eventService = require("../../services/event.service");
+const eventService = require("../../services/event/event.service");
 const emailManager = require("../../services/email/EmailManager");
 
 // ==========================================

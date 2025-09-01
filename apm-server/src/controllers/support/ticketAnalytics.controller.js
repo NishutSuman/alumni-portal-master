@@ -1,5 +1,5 @@
 // src/controllers/support/ticketAnalytics.controller.js
-const TicketAnalyticsService = require('../../services/ticketAnalytics.service');
+const TicketAnalyticsService = require('../../services/ticket/ticketAnalytics.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 
 /**

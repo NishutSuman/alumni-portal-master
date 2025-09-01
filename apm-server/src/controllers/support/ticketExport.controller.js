@@ -1,5 +1,5 @@
 // src/controllers/support/ticketExport.controller.js
-const TicketExportService = require('../../services/ticketExport.service');
+const TicketExportService = require('../../services/ticket/ticketExport.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 
 /**

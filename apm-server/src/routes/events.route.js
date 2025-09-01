@@ -8,14 +8,14 @@ const fs = require("fs");
 const { 
   requireAlumniVerification, 
   optionalAlumniVerification 
-} = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/alumniVerification.middleware');
 
 
 const {
 	authenticateToken,
 	requireRole,
 	optionalAuth,
-} = require("../middleware/auth.middleware");
+} = require("../middleware/auth/auth.middleware");
 
 
 const { asyncHandler } = require("../utils/response");
@@ -61,7 +61,7 @@ const {
 	autoInvalidateMerchandiseCaches,
 	autoInvalidateCartCaches,
 	autoInvalidateOrderCaches,
-} = require("../middleware/event.cache.middleware");
+} = require("../middleware/cache/event.cache.middleware");
 
 // ==========================================
 // VALIDATION MIDDLEWARE IMPORTS (COMPLETE)
@@ -114,7 +114,7 @@ const {
 	validateCartParams,
 	validateMerchandiseBusinessRules,
 	validateCartBusinessRules,
-} = require("../middleware/event.validation.middleware");
+} = require("../middleware/validation/event.validation.middleware");
 
 // ==========================================
 // FEEDBACK MIDDLEWARE IMPORTS
@@ -128,7 +128,7 @@ const {
 	validateFeedbackFormAccess,
 	validateFeedbackSubmission,
 	validateFieldModification,
-} = require("../middleware/feedback.validation.middleware");
+} = require("../middleware/validation/feedback.validation.middleware");
 
 const {
 	cacheFeedbackForm,
@@ -140,7 +140,7 @@ const {
 	invalidateFeedbackFormCache,
 	invalidateResponseCache,
 	invalidateAnalyticsCache,
-} = require("../middleware/feedback.cache.middleware");
+} = require("../middleware/cache/feedback.cache.middleware");
 
 const {
   validateEventIdParam: validateEventId,
@@ -152,9 +152,9 @@ const {
   validateNoDuplicateBatchCollection,
   validateBatchHasActiveAdmins,
   batchCollectionRateLimit
-} = require('../middleware/batchCollection.validation.middleware');
+} = require('../middleware/validation/batchCollection.validation.middleware');
 
-const batchCollectionController = require('../controllers/batchCollection.controller');
+const batchCollectionController = require('../controllers/batch/batchCollection.controller');
 
 // Import registration mode middleware
 const { 

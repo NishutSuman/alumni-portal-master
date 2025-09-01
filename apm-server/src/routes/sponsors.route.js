@@ -9,7 +9,7 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth
-} = require('../middleware/auth.middleware');
+} = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Upload middleware

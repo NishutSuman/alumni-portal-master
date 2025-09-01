@@ -7,7 +7,7 @@ const { PrismaClient } = require("@prisma/client");
 const PaymentProviderFactory = require("./PaymentProviderFactory");
 const paymentConfig = require("../../config/payment");
 const emailManager = require("../email/EmailManager");
-const MembershipService = require("../membership.service");
+const MembershipService = require("../membership/membership.service");
 const BatchPaymentService = require("./batchPayment.service");
 const NotificationService = require("../notification.service");
 

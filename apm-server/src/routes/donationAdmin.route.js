@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticateToken, requireRole } = require('../../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../../utils/response');
 const donationAdminController = require('../../controllers/admin/donationAdmin.controller');
 

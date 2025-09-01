@@ -9,7 +9,7 @@ const multer = require('multer');
 const path = require('path');
 
 // Import middleware
-const { authenticateToken, requireRole } = require('../../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../../utils/response');
 
 // Import controller

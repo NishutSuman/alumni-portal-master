@@ -8,6 +8,8 @@ module.exports = {
     '!src/server.js',
     '!src/**/*.test.js'
   ],
+//   testRegex: [/\.test\.js$/],
+//   testPathPattern:"auth",
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 10000,

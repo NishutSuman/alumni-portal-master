@@ -2,16 +2,16 @@ const express = require('express');
 const router = express.Router();
 
 // Middleware
-const { authenticateToken } = require('../middleware/auth.middleware');
+const { authenticateToken } = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 const { 
   validateInitiateDonation, 
   validateDonationQuery 
-} = require('../middleware/donation.validation.middleware');
-const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/validation/donation.validation.middleware');
+const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 
 // Controller
-const donationController = require('../controllers/donation.controller');
+const donationController = require('../controllers/donation/donation.controller');
 
 // ============================================
 // DONATION ROUTES (ALL REQUIRE AUTHENTICATION)

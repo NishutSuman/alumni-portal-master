@@ -3,7 +3,7 @@
 // Runs weekly to stay within API limits (104 calls/year vs 1000 limit)
 
 const cron = require('node-cron');
-const FestivalSyncService = require('../services/FestivalSyncService');
+const FestivalSyncService = require('../services/festival/FestivalSyncService');
 const { prisma } = require('../config/database');
 
 class WeeklyFestivalSyncJob {

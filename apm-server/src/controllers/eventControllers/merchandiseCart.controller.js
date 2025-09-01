@@ -1,7 +1,7 @@
 // src/controllers/eventControllers/merchandiseCart.controller.js
 const { prisma } = require("../../config/database");
 const { successResponse, errorResponse } = require("../../utils/response");
-const EventService = require("../../services/event.service");
+const EventService = require("../../services/event/event.service");
 
 // Add item to cart (Authenticated users)
 const addToCart = async (req, res) => {

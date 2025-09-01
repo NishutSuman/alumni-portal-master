@@ -11,10 +11,10 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth
-} = require('../middleware/auth.middleware');
-const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/auth.middleware');
+const { requireAlumniVerification, optionalAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
-const lifeLinkController = require('../controllers/lifeLink.controller');
+const lifeLinkController = require('../controllers/lifeLink/lifeLink.controller');
 
 
 // LifeLink-specific middleware
@@ -33,7 +33,7 @@ const {
   validateActiveRequisition,
   validateNotificationAccess,
   validateUniqueResponse
-} = require('../middleware/lifelink.validation.middleware');
+} = require('../middleware/validation/lifelink.validation.middleware');
 
 const {
   cacheLifeLinkDashboard,
@@ -48,7 +48,7 @@ const {
   cacheWillingDonors,
   cacheDiscoverRequisitions,
   autoInvalidateLifeLinkCaches
-} = require('../middleware/lifelink.cache.middleware');
+} = require('../middleware/cache/lifelink.cache.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS

@@ -1,4 +1,4 @@
-const TicketFileService = require('../../services/ticketFile.service');
+const TicketFileService = require('../../services/ticket/ticketFile.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { prisma } = require('../../config/database');
 const fs = require('fs').promises;

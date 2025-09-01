@@ -9,11 +9,11 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth 
-} = require('../middleware/auth.middleware');
+} = require('../middleware/auth/auth.middleware');
 const { 
   requireAlumniVerification, 
   optionalAlumniVerification 
-} = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Celebration-specific middleware
@@ -29,7 +29,7 @@ const {
   validateNotificationHistory,
   validateFestivalAccess,
   validateSyncRateLimit
-} = require('../middleware/celebration.validation.middleware');
+} = require('../middleware/validation/celebration.validation.middleware');
 
 // Cache middleware
 const {
@@ -48,7 +48,7 @@ const {
   autoInvalidateCelebrationCaches,
   autoInvalidateFestivalCaches,
   autoInvalidateBirthdayCaches
-} = require('../middleware/celebration.cache.middleware');
+} = require('../middleware/cache/celebration.cache.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS

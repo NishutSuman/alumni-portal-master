@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const MembershipAdminService = require('../services/membershipAdmin.service');
+const MembershipAdminService = require('../services/membership/membershipAdmin.service');
 const { prisma } = require('../config/database');
 
 class MembershipExpiryJob {

@@ -7,14 +7,14 @@ const express = require('express');
 const router = express.Router();
 
 // Import middleware
-const { authenticateToken, requireRole } = require('../../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../../utils/response');
 const {
   validateBatchAdminVerificationPermission,
   verificationRateLimit,
   validateVerificationRequest,
   addVerificationContext
-} = require('../../middleware/alumniVerification.middleware');
+} = require('../../middleware/auth/alumniVerification.middleware');
 
 // Import controllers
 const alumniVerificationController = require('../../controllers/admin/alumniVerification.controller');

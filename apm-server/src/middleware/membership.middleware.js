@@ -1,5 +1,5 @@
 // src/middleware/membership.middleware.js
-const MembershipService = require('../services/membership.service');
+const MembershipService = require('../services/membership/membership.service');
 const { CacheService } = require('../config/redis');
 const { errorResponse } = require('../utils/response');
 

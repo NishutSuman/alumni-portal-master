@@ -3,13 +3,13 @@ const express = require('express');
 const router = express.Router();
 
 // Import middleware
-const { authenticateToken } = require('../middleware/auth.middleware');
+const { authenticateToken } = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 
 const { 
   requireAlumniVerification,
   optionalAlumniVerification 
-} = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/alumniVerification.middleware');
 
 const { 
   checkMembershipStatus, 
@@ -17,10 +17,10 @@ const {
 } = require('../middleware/membership.middleware');
 const {
   validateMembershipPayment
-} = require('../middleware/membership.validation.middleware');
+} = require('../middleware/validation/membership.validation.middleware');
 
 // Import controllers
-const membershipController = require('../controllers/membership.controller');
+const membershipController = require('../controllers/membership/membership.controller');
 
 /**
  * Get user's membership status and fee information

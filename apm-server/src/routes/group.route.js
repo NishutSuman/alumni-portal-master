@@ -9,8 +9,8 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth
-} = require('../middleware/auth.middleware');
-const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 
 const { asyncHandler } = require('../utils/response');
 
@@ -29,7 +29,7 @@ const {
   validateMemberRole,
   validateUserForMembership,
   validateMemberExists
-} = require('../middleware/group.validation.middleware');
+} = require('../middleware/validation/group.validation.middleware');
 
 const {
   cacheGroupsList,
@@ -39,12 +39,12 @@ const {
   cachePublicGroups,
   autoInvalidateGroupCaches,
   autoInvalidateGroupMemberCaches
-} = require('../middleware/group.cache.middleware');
+} = require('../middleware/cache/group.cache.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS
 // ============================================
-const groupController = require('../controllers/group.controller');
+const groupController = require('../controllers/group/group.controller');
 
 // ============================================
 // PUBLIC ROUTES

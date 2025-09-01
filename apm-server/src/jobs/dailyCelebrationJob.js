@@ -3,8 +3,8 @@
 // Uses existing ActivityLog table for tracking
 
 const cron = require('node-cron');
-const BirthdayService = require('../services/BirthdayService');
-const FestivalService = require('../services/FestivalService');
+const BirthdayService = require('../services/birthday/BirthdayService');
+const FestivalService = require('../services/festival/FestivalService');
 const { prisma } = require('../config/database');
 
 class DailyCelebrationJob {

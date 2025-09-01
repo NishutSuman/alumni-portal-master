@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // Import middleware (following existing pattern)
-const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 const { 
   requireAlumniVerification 
-} = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/alumniVerification.middleware');
 
 // Import payment-specific middleware
 const {
@@ -20,7 +20,7 @@ const {
   validatePaymentInitiationRules,
   validatePaymentVerificationRules,
   validateWebhookRequest
-} = require('../middleware/payment.validation.middleware');
+} = require('../middleware/validation/payment.validation.middleware');
 
 // Import caching middleware
 const {
@@ -31,11 +31,11 @@ const {
   cachePaymentAnalytics,
   cacheInvoice,
   autoInvalidatePaymentCaches
-} = require('../middleware/payment.cache.middleware');
+} = require('../middleware/cache/payment.cache.middleware');
 
 // Import controllers
-const paymentController = require('../controllers/payment.controller');
-const invoiceController = require('../controllers/invoice.controller');
+const paymentController = require('../controllers/payment/payment.controller');
+const invoiceController = require('../controllers/payment/invoice.controller');
 
 // =============================================
 // PUBLIC ROUTES

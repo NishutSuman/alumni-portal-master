@@ -2,7 +2,7 @@
 // FILE: src/controllers/support/ticketCategory.controller.js
 // ============================================
 
-const TicketService = require('../../services/ticket.service');
+const TicketService = require('../../services/ticket/ticket.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { prisma } = require('../../config/database');
 

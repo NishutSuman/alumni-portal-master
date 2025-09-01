@@ -28,8 +28,8 @@ const ticketExportController = require('../controllers/support/ticketExport.cont
 const ticketPerformanceController = require('../controllers/support/ticketPerformance.controller');
 
 // Import middleware
-const { authenticateToken, requireRole, optionalAuth } = require('../middleware/auth.middleware');
-const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+const { authenticateToken, requireRole, optionalAuth } = require('../middleware/auth/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 const { 
   uploadGeneral, 
   uploadTicketAttachments, 
@@ -53,7 +53,7 @@ const {
   validateCanReopenTicket,
   validateCategoryExists,
   validateAssignedAdminExists
-} = require('../middleware/ticket.validation.middleware');
+} = require('../middleware/validation/ticket.validation.middleware');
 
 // Import Phase 2 validation middleware
 const {
@@ -65,7 +65,7 @@ const {
   validateMessageEditPermission,
   validateMessageReactionPermission,
   validateFormattedContent
-} = require('../middleware/ticketMessage.validation.middleware');
+} = require('../middleware/validation/ticketMessage.validation.middleware');
 
 // Import Phase 3 validation middleware
 const {
@@ -80,7 +80,7 @@ const {
   validateBulkClose,
   validateBulkCategory,
   validateBulkTicketSelection
-} = require('../middleware/ticketAdvanced.validation.middleware');
+} = require('../middleware/validation/ticketAdvanced.validation.middleware');
 
 // Import Phase 1-2 cache middleware
 const {
@@ -92,7 +92,7 @@ const {
   cacheCategories,
   cacheAvailableAdmins,
   invalidateTicketCaches
-} = require('../middleware/ticket.cache.middleware');
+} = require('../middleware/cache/ticket.cache.middleware');
 
 const { 
   cacheAnalyticsOverview,
@@ -101,7 +101,7 @@ const {
   cacheAdminPerformance,
   cacheCompleteAnalytics,
   autoInvalidateAnalyticsCaches
-} = require('../middleware/ticket.cache.middleware');
+} = require('../middleware/cache/ticket.cache.middleware');
 
 // Import Phase 2 cache middleware
 const {
@@ -111,7 +111,7 @@ const {
   cacheFileMetadata,
   cacheAuditTrail,
   invalidateMessageCaches
-} = require('../middleware/ticketMessage.cache.middleware');
+} = require('../middleware/cache/ticketMessage.cache.middleware');
 
 // Import Phase 3 cache middleware
 const {
@@ -127,7 +127,7 @@ const {
   invalidateTemplateCaches,
   invalidateSearchCaches,
   invalidateBulkCaches
-} = require('../middleware/ticketAdvanced.cache.middleware');
+} = require('../middleware/cache/ticketAdvanced.cache.middleware');
 
 // ============================================
 // PHASE 1 ROUTES: BASIC FUNCTIONALITY

@@ -1,5 +1,5 @@
 // src/controllers/support/ticketPerformance.controller.js
-const TicketPerformanceService = require('../../services/ticketPerformance.service');
+const TicketPerformanceService = require('../../services/ticket/ticketPerformance.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 
 /**

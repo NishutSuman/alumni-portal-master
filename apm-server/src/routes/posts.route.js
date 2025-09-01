@@ -1,85 +1,104 @@
 // src/routes/posts.route.js - COMPLETE VERSION
 const express = require("express");
 const router = express.Router();
-const { authenticateToken, requireRole, optionalAuth } = require("../middleware/auth.middleware");
-const { asyncHandler } = require('../utils/response');
-const { handleUploadError } = require('../middleware/upload.middleware');
-const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+const {
+	authenticateToken,
+	requireRole,
+	optionalAuth,
+} = require("../middleware/auth/auth.middleware");
+const { asyncHandler } = require("../utils/response");
+const { handleUploadError } = require("../middleware/upload.middleware");
+const {
+	requireAlumniVerification,
+} = require("../middleware/auth/alumniVerification.middleware");
 
-const { 
-  validateCreatePost, 
-  validateUpdatePost, 
-  validateApprovePost,
-  validatePostIdParam,
-  validateCreateComment,
-  validateUpdateComment,
-  validateCommentIdParam,
-  validatePostAndCommentParams
-} = require('../middleware/validation.middleware');
-const { 
-  cachePosts,
-  cachePost,
-  invalidatePostCache,
-  invalidatePostInteractionCache
-} = require('../middleware/cache.middleware');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const {
+	validateCreatePost,
+	validateUpdatePost,
+	validateApprovePost,
+	validatePostIdParam,
+	validateCreateComment,
+	validateUpdateComment,
+	validateCommentIdParam,
+	validatePostAndCommentParams,
+} = require("../middleware/validation/validation.middleware");
+const {
+	cachePosts,
+	cachePost,
+	invalidatePostCache,
+	invalidatePostInteractionCache,
+} = require("../middleware/cache/cache.middleware");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 // Import controllers
-const postController = require('../controllers/post.controller');
-const likeController = require('../controllers/like.controller');
-const commentController = require('../controllers/comment.controller');
+const postController = require("../controllers/post/post.controller");
+const likeController = require("../controllers/post/like.controller");
+const commentController = require("../controllers/post/comment.controller");
 
 // Configure multer for post uploads (images and documents)
 const postUploadStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = './public/uploads/posts/';
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, extension);
-    const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-    const filename = `${cleanBaseName}_${uniqueSuffix}${extension}`;
-    cb(null, filename);
-  }
+	destination: (req, file, cb) => {
+		const uploadPath = "./public/uploads/posts/";
+		if (!fs.existsSync(uploadPath)) {
+			fs.mkdirSync(uploadPath, { recursive: true });
+		}
+		cb(null, uploadPath);
+	},
+	filename: (req, file, cb) => {
+		const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+		const extension = path.extname(file.originalname);
+		const baseName = path.basename(file.originalname, extension);
+		const cleanBaseName = baseName
+			.replace(/[^a-zA-Z0-9]/g, "_")
+			.substring(0, 50);
+		const filename = `${cleanBaseName}_${uniqueSuffix}${extension}`;
+		cb(null, filename);
+	},
 });
 
 const postFileFilter = (req, file, cb) => {
-  // Allowed file types for posts
-  const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  const documentTypes = [
-    'application/pdf', 
-    'application/msword', 
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  ];
-  
-  const allowedTypes = [...imageTypes, ...documentTypes];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Allowed: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, XLS, XLSX'), false);
-  }
+	// Allowed file types for posts
+	const imageTypes = [
+		"image/jpeg",
+		"image/jpg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	];
+	const documentTypes = [
+		"application/pdf",
+		"application/msword",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"application/vnd.ms-excel",
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	];
+
+	const allowedTypes = [...imageTypes, ...documentTypes];
+
+	if (allowedTypes.includes(file.mimetype)) {
+		cb(null, true);
+	} else {
+		cb(
+			new Error(
+				"Invalid file type. Allowed: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, XLS, XLSX"
+			),
+			false
+		);
+	}
 };
 
 const uploadPostFiles = multer({
-  storage: postUploadStorage,
-  fileFilter: postFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB per file
-    files: 10 // Maximum 10 files total
-  }
+	storage: postUploadStorage,
+	fileFilter: postFileFilter,
+	limits: {
+		fileSize: 10 * 1024 * 1024, // 10MB per file
+		files: 10, // Maximum 10 files total
+	},
 }).fields([
-  { name: 'heroImage', maxCount: 1 },
-  { name: 'images', maxCount: 9 } // 9 additional images + 1 hero = 10 total
+	{ name: "heroImage", maxCount: 1 },
+	{ name: "images", maxCount: 9 }, // 9 additional images + 1 hero = 10 total
 ]);
 
 // ==========================================
@@ -87,61 +106,78 @@ const uploadPostFiles = multer({
 // ==========================================
 
 // Public routes (no auth required, but can be enhanced with optional auth)
-router.get('/', optionalAuth, cachePosts, asyncHandler(postController.getPosts));
-router.get('/:postId', optionalAuth, validatePostIdParam, cachePost, asyncHandler(postController.getPostById));
+router.get(
+	"/",
+	optionalAuth,
+	cachePosts,
+	asyncHandler(postController.getPosts)
+);
+router.get(
+	"/:postId",
+	optionalAuth,
+	validatePostIdParam,
+	cachePost,
+	asyncHandler(postController.getPostById)
+);
 
 // Protected routes (authentication required)
-router.post('/', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validateCreatePost, 
-  uploadPostFiles,
-  handleUploadError,
-  invalidatePostCache,
-  asyncHandler(postController.createPost)
+router.post(
+	"/",
+	authenticateToken,
+	requireAlumniVerification,
+	validateCreatePost,
+	uploadPostFiles,
+	handleUploadError,
+	invalidatePostCache,
+	asyncHandler(postController.createPost)
 );
 
-router.put('/:postId', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostIdParam,  
-  validateUpdatePost,
-  uploadPostFiles,
-  handleUploadError,
-  invalidatePostCache,
-  asyncHandler(postController.updatePost)
+router.put(
+	"/:postId",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	validateUpdatePost,
+	uploadPostFiles,
+	handleUploadError,
+	invalidatePostCache,
+	asyncHandler(postController.updatePost)
 );
 
-router.patch('/:postId/archive', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostIdParam,
-  invalidatePostCache,
-  asyncHandler(postController.archivePost)
+router.patch(
+	"/:postId/archive",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	invalidatePostCache,
+	asyncHandler(postController.archivePost)
 );
 
 // Super Admin only routes
-router.get('/admin/pending', 
-  authenticateToken,
-  requireRole('SUPER_ADMIN'),
-  asyncHandler(postController.getPendingPosts)
+router.get(
+	"/admin/pending",
+	authenticateToken,
+	requireRole("SUPER_ADMIN"),
+	asyncHandler(postController.getPendingPosts)
 );
 
-router.patch('/:postId/approve', 
-  authenticateToken,
-  requireRole('SUPER_ADMIN'),
-  validatePostIdParam,   
-  validateApprovePost,
-  invalidatePostCache,
-  asyncHandler(postController.approvePost)
+router.patch(
+	"/:postId/approve",
+	authenticateToken,
+	requireRole("SUPER_ADMIN"),
+	validatePostIdParam,
+	validateApprovePost,
+	invalidatePostCache,
+	asyncHandler(postController.approvePost)
 );
 
-router.delete('/:postId', 
-  authenticateToken,
-  requireRole('SUPER_ADMIN'),
-  validatePostIdParam,
-  invalidatePostCache,
-  asyncHandler(postController.deletePost)
+router.delete(
+	"/:postId",
+	authenticateToken,
+	requireRole("SUPER_ADMIN"),
+	validatePostIdParam,
+	invalidatePostCache,
+	asyncHandler(postController.deletePost)
 );
 
 // ==========================================
@@ -149,27 +185,30 @@ router.delete('/:postId',
 // ==========================================
 
 // Toggle like on a post
-router.post('/:postId/like', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostIdParam,
-  invalidatePostInteractionCache,
-  asyncHandler(likeController.toggleLike)
+router.post(
+	"/:postId/like",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	invalidatePostInteractionCache,
+	asyncHandler(likeController.toggleLike)
 );
 
 // Get users who liked a post (with pagination)
-router.get('/:postId/likes', 
-  optionalAuth, 
-  validatePostIdParam,
-  asyncHandler(likeController.getPostLikes)
+router.get(
+	"/:postId/likes",
+	optionalAuth,
+	validatePostIdParam,
+	asyncHandler(likeController.getPostLikes)
 );
 
 // Check if current user liked a post
-router.get('/:postId/like/status', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostIdParam,
-  asyncHandler(likeController.checkUserLike)
+router.get(
+	"/:postId/like/status",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	asyncHandler(likeController.checkUserLike)
 );
 
 // ==========================================
@@ -177,49 +216,54 @@ router.get('/:postId/like/status',
 // ==========================================
 
 // Get comments for a post (with nested replies and pagination)
-router.get('/:postId/comments', 
-  optionalAuth, 
-  validatePostIdParam,
-  asyncHandler(commentController.getPostComments)
+router.get(
+	"/:postId/comments",
+	optionalAuth,
+	validatePostIdParam,
+	asyncHandler(commentController.getPostComments)
 );
 
 // Create a comment on a post
-router.post('/:postId/comments', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostIdParam,
-  validateCreateComment,
-  invalidatePostInteractionCache,
-  asyncHandler(commentController.createComment)
+router.post(
+	"/:postId/comments",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	validateCreateComment,
+	invalidatePostInteractionCache,
+	asyncHandler(commentController.createComment)
 );
 
 // Update a comment
-router.put('/:postId/comments/:commentId', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostAndCommentParams,
-  validateUpdateComment,
-  invalidatePostInteractionCache,
-  asyncHandler(commentController.updateComment)
+router.put(
+	"/:postId/comments/:commentId",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostAndCommentParams,
+	validateUpdateComment,
+	invalidatePostInteractionCache,
+	asyncHandler(commentController.updateComment)
 );
 
 // Delete a comment (works for both comments and replies)
-router.delete('/:postId/comments/:commentId', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostAndCommentParams,
-  invalidatePostInteractionCache,
-  asyncHandler(commentController.deleteComment)
+router.delete(
+	"/:postId/comments/:commentId",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostAndCommentParams,
+	invalidatePostInteractionCache,
+	asyncHandler(commentController.deleteComment)
 );
 
 // Create a reply to a comment
-router.post('/:postId/comments/:commentId/replies', 
-  authenticateToken, 
-  requireAlumniVerification,
-  validatePostAndCommentParams,
-  validateCreateComment, // Same validation as regular comments
-  invalidatePostInteractionCache,
-  asyncHandler(commentController.createReply)
+router.post(
+	"/:postId/comments/:commentId/replies",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostAndCommentParams,
+	validateCreateComment, // Same validation as regular comments
+	invalidatePostInteractionCache,
+	asyncHandler(commentController.createReply)
 );
 
 module.exports = router;

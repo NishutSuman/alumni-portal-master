@@ -9,8 +9,8 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth
-} = require('../middleware/auth.middleware');
-const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Poll-specific middleware
@@ -26,7 +26,7 @@ const {
   validatePollOptions,
   validatePollModifyPermission,
   validatePollHasNoVotes
-} = require('../middleware/poll.validation.middleware');
+} = require('../middleware/validation/poll.validation.middleware');
 
 const {
   cachePollsList,
@@ -37,12 +37,12 @@ const {
   cacheActivePolls,
   autoInvalidatePollCaches,
   autoInvalidatePollVoteCaches
-} = require('../middleware/poll.cache.middleware');
+} = require('../middleware/cache/poll.cache.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS
 // ============================================
-const pollController = require('../controllers/poll.controller');
+const pollController = require('../controllers/poll/poll.controller');
 
 // ============================================
 // PUBLIC ROUTES

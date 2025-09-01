@@ -7,7 +7,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
 const SerialIdService = require('../../services/serialID.service');
-const { sendVerificationNotifications } = require('../auth.controller');
+const { sendVerificationNotifications } = require('../auth/auth.controller');
 
 /**
  * Get pending verification users

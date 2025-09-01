@@ -4,11 +4,11 @@ const router = express.Router();
 const {
 	authenticateToken,
 	requireRole,
-} = require("../middleware/auth.middleware");
+} = require("../middleware/auth/auth.middleware");
 const { asyncHandler } = require("../utils/response");
-const adminController = require("../controllers/admin.controller");
+const adminController = require("../controllers/admin/admin.controller");
 const ExportController = require("../controllers/export/export.controller");
-const batchCollectionController = require("../controllers/batchCollection.controller");
+const batchCollectionController = require("../controllers/batch/batchCollection.controller");
 const {
 	validateEventIdParam,
 	validateBatchYearParam,
@@ -17,7 +17,7 @@ const {
 	validateBatchHasActiveAdmins,
 	batchCollectionRateLimit,
 	validateApproveRejectCollection,
-} = require("../middleware/batchCollection.validation.middleware");
+} = require("../middleware/validation/batchCollection.validation.middleware");
 
 // All admin routes require SUPER_ADMIN role
 router.use(authenticateToken);

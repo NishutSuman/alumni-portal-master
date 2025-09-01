@@ -9,7 +9,7 @@ const {
   authenticateToken, 
   requireRole, 
   optionalAuth 
-} = require('../middleware/auth.middleware');
+} = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 const { uploadReceipt, handleUploadError } = require('../middleware/upload.middleware');
 
@@ -36,7 +36,7 @@ const {
   validateCreateYearlyBalance,
   validateUpdateYearlyBalance,
   validateUpdateAccountBalance
-} = require('../middleware/treasury.validation.middleware');
+} = require('../middleware/validation/treasury.validation.middleware');
 
 // Treasury cache middleware
 const {
@@ -64,7 +64,7 @@ const {
   cacheAnalyticsExpenses,
   cacheYearlySummary,
   cacheAnalyticsTrends,
-} = require('../middleware/treasury.cache.middleware');
+} = require('../middleware/cache/treasury.cache.middleware');
 
 // Treasury audit middleware
 const {

@@ -8,7 +8,7 @@ const router = express.Router();
 const { 
   authenticateToken, 
   requireRole 
-} = require('../middleware/auth.middleware');
+} = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Photo-specific middleware
@@ -24,7 +24,7 @@ const {
   validatePhotoIdParam,
   validatePhotoAccess,
   validatePhotoUpload
-} = require('../middleware/photo.validation.middleware');
+} = require('../middleware/validation/photo.validation.middleware');
 
 const {
   cachePhotoDetails,
@@ -34,12 +34,12 @@ const {
   cacheUserPhotoStats,
   cacheAdminPhotosList,
   autoInvalidatePhotoCaches
-} = require('../middleware/photo.cache.middleware');
+} = require('../middleware/cache/photo.cache.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS
 // ============================================
-const photoController = require('../controllers/photo.controller');
+const photoController = require('../controllers/album/photo.controller');
 
 // ============================================
 // ADMIN-ONLY MIDDLEWARE

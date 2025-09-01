@@ -1,5 +1,5 @@
 // src/controllers/celebrations/birthday.controller.js
-const BirthdayService = require('../../services/BirthdayService');
+const BirthdayService = require('../../services/birthday/BirthdayService');
 const { successResponse, errorResponse } = require('../../utils/response');
 
 /**

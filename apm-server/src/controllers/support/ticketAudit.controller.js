@@ -1,4 +1,4 @@
-const TicketAuditService = require('../../services/ticketAudit.service');
+const TicketAuditService = require('../../services/ticket/ticketAudit.service');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { prisma } = require('../../config/database');
 

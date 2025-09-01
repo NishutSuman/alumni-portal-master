@@ -1,7 +1,7 @@
 // src/services/batchCollection.service.js
 const { prisma } = require('../config/database');
 const { CacheService } = require('../config/redis');
-const MembershipService = require('./membership.service');
+const MembershipService = require('./membership/membership.service');
 const EmailService = require('./email/EmailManager');
 
 class BatchCollectionService {

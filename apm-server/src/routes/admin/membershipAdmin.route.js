@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 // Import middleware
-const { authenticateToken, requireRole } = require('../../middleware/auth.middleware');
+const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../../utils/response');
 const {
   validateBatchMembershipSettings,
@@ -12,17 +12,17 @@ const {
   validateBatchExists,
   validateMembershipSettingsConflict,
   validateMembershipYearNotPast
-} = require('../../middleware/membership.validation.middleware');
+} = require('../../middleware/validation/membership.validation.middleware');
 
 const {
   validateBulkUpdateStatus,
   validateUpdateUserStatus,
   validateSendReminders,
   validateUserIdParam
-} = require('../../middleware/membershipAdmin.validation.middleware');
+} = require('../../middleware/validation/membershipAdmin.validation.middleware');
 
 // Import controllers
-const membershipAdminController = require('../../controllers/membershipAdmin.controller');
+const membershipAdminController = require('../../controllers/membership/membershipAdmin.controller');
 
 // All routes require SUPER_ADMIN role
 router.use(authenticateToken);

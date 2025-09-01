@@ -11,7 +11,7 @@ const {
   authenticateToken, 
   requireRole,
   optionalAuth
-} = require('../middleware/auth.middleware');
+} = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Notification-specific middleware
@@ -29,7 +29,7 @@ const {
   validateRecipients,
   validateNotificationRateLimit,
   validateNotificationNotExpired
-} = require('../middleware/notification.validation.middleware');
+} = require('../middleware/validation/notification.validation.middleware');
 
 const {
   cacheUserNotifications,
@@ -40,16 +40,16 @@ const {
   cacheSystemStats,
   autoInvalidateNotificationCaches,
   autoInvalidatePushTokenCaches
-} = require('../middleware/notification.cache.middleware');
+} = require('../middleware/cache/notification.cache.middleware');
 const { 
   requireAlumniVerification, 
   optionalAlumniVerification 
-} = require('../middleware/alumniVerification.middleware');
+} = require('../middleware/auth/alumniVerification.middleware');
 
 // ============================================
 // CONTROLLER IMPORTS
 // ============================================
-const notificationController = require('../controllers/notification.controller');
+const notificationController = require('../controllers/notification/notification.controller');
 
 // ============================================
 // USER NOTIFICATION ROUTES

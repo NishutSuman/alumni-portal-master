@@ -8,13 +8,13 @@ const path = require('path');
 const fs = require('fs');
 
 // Controllers
-const merchandiseController = require('../controllers/merchandise.controller');
-const merchandiseCartController = require('../controllers/merchandiseCart.controller');
-const merchandiseAdminController = require('../controllers/merchandiseAdmin.controller');
+const merchandiseController = require('../controllers/merchandise/merchandise.controller');
+const merchandiseCartController = require('../controllers/merchandise/merchandiseCart.controller');
+const merchandiseAdminController = require('../controllers/merchandise/merchandiseAdmin.controller');
 
 // Middleware
-const { authenticateToken, requireRole } = require('../middleware/auth.middleware');
-const { requireAlumniVerification } = require('../middleware/alumniVerification.middleware');
+const { authenticateToken, requireRole } = require('../middleware/auth/auth.middleware');
+const { requireAlumniVerification } = require('../middleware/auth/alumniVerification.middleware');
 const { asyncHandler } = require('../utils/response');
 
 // Merchandise validation middleware
@@ -33,7 +33,7 @@ const {
   validateSizeAvailable,
   validateStockAvailability,
   merchandiseRateLimit
-} = require('../middleware/merchandise.validation.middleware');
+} = require('../middleware/validation/merchandise.validation.middleware');
 
 // Merchandise caching middleware
 const {
@@ -48,7 +48,7 @@ const {
   autoInvalidateCartCaches,
   autoInvalidateOrderCaches,
   autoInvalidateStockCaches
-} = require('../middleware/merchandise.cache.middleware');
+} = require('../middleware/cache/merchandise.cache.middleware');
 
 // ============================================
 // MULTER CONFIGURATION FOR MERCHANDISE IMAGES
