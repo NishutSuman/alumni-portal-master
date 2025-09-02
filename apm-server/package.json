@@ -10,15 +10,6 @@
 		"db:migrate": "npx prisma migrate dev",
 		"db:studio": "npx prisma studio",
 		"db:seed": "node prisma/seed.js",
-		"test": "cross-env NODE_ENV=test jest",
-		"test:watch": "cross-env NODE_ENV=test jest --watch",
-		"test:coverage": "cross-env NODE_ENV=test jest --coverage",
-		"test:unit": "cross-env NODE_ENV=test jest --testPathPatterns=unit",
-		"test:integration": "cross-env NODE_ENV=test jest --testPathPatterns=integration",
-		"test:e2e": "cross-env NODE_ENV=test jest --testPathPatterns=e2e",
-		"test:auth": "cross-env NODE_ENV=test jest --testPathPatterns=auth",
-		"test:events": "cross-env NODE_ENV=test jest --testPathPatterns=events",
-		"test:payments": "cross-env NODE_ENV=test jest --testPathPatterns=payments",
 		"docs": "node scripts/generate-docs.js",
 		"docs:generate": "node scripts/generateDocs.js",
 		"docs:serve": "node scripts/serveDocs.js",
@@ -68,14 +59,10 @@
 	},
 	"devDependencies": {
 		"@faker-js/faker": "^7.6.0",
-		"@types/jest": "^30.0.0",
 		"cross-env": "^10.0.0",
 		"eslint": "^9.33.0",
-		"jest": "^30.1.1",
-		"jest-environment-node": "^30.1.1",
 		"nodemon": "^3.1.10",
 		"prettier": "^3.6.2",
-		"prisma": "^6.15.0",
-		"supertest": "^7.1.4"
+		"prisma": "^6.15.0"
 	}
 }
