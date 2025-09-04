@@ -51,8 +51,7 @@ const formatGroupData = (group, includeMembers = false) => {
 			addedAt: member.createdAt,
 			user: {
 				id: member.user.id,
-				firstName: member.user.firstName,
-				lastName: member.user.lastName,
+				fullName: member.user.fullName, 
 				profilePhoto: member.user.profilePhoto,
 				batchYear: member.user.batchYear,
 				email: member.user.email,
@@ -122,8 +121,7 @@ const getGroups = async (req, res) => {
 					user: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 							profilePhoto: true,
 							batchYear: true,
 							email: true,
@@ -195,8 +193,7 @@ const getGroup = async (req, res) => {
 			creator: {
 				select: {
 					id: true,
-					firstName: true,
-					lastName: true,
+					fullName: true,
 				},
 			},
 			_count: { select: { members: true } },
@@ -208,8 +205,7 @@ const getGroup = async (req, res) => {
 					user: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 							profilePhoto: true,
 							batchYear: true,
 							email: true,
@@ -219,8 +215,7 @@ const getGroup = async (req, res) => {
 					adder: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 						},
 					},
 				},
@@ -288,8 +283,7 @@ const createGroup = async (req, res) => {
 				creator: {
 					select: {
 						id: true,
-						firstName: true,
-						lastName: true,
+						fullName: true,
 					},
 				},
 				_count: { select: { members: true } },
@@ -355,8 +349,7 @@ const updateGroup = async (req, res) => {
 				creator: {
 					select: {
 						id: true,
-						firstName: true,
-						lastName: true,
+						fullName: true,
 					},
 				},
 				_count: { select: { members: true } },
@@ -540,8 +533,7 @@ const getGroupMembers = async (req, res) => {
 		if (search) {
 			where.user = {
 				OR: [
-					{ firstName: { contains: search, mode: "insensitive" } },
-					{ lastName: { contains: search, mode: "insensitive" } },
+					{ fullName: { contains: search, mode: "insensitive" } },
 					{ email: { contains: search, mode: "insensitive" } },
 				],
 			};
@@ -550,7 +542,7 @@ const getGroupMembers = async (req, res) => {
 		// Build order clause
 		const orderBy = {};
 		if (sortBy === "name") {
-			orderBy.user = { firstName: sortOrder };
+			orderBy.user = { fullName: sortOrder };
 		} else {
 			orderBy[sortBy] = sortOrder;
 		}
@@ -566,8 +558,7 @@ const getGroupMembers = async (req, res) => {
 					user: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 							email: true,
 							profilePhoto: true,
 							batchYear: true,
@@ -577,8 +568,7 @@ const getGroupMembers = async (req, res) => {
 					adder: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 						},
 					},
 				},
@@ -663,8 +653,7 @@ const addGroupMember = async (req, res) => {
 					user: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 							email: true,
 							profilePhoto: true,
 							batchYear: true,
@@ -673,8 +662,7 @@ const addGroupMember = async (req, res) => {
 					adder: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 						},
 					},
 				},
@@ -692,8 +680,7 @@ const addGroupMember = async (req, res) => {
 					user: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 							email: true,
 							profilePhoto: true,
 							batchYear: true,
@@ -702,8 +689,7 @@ const addGroupMember = async (req, res) => {
 					adder: {
 						select: {
 							id: true,
-							firstName: true,
-							lastName: true,
+							fullName: true,
 						},
 					},
 				},
@@ -776,8 +762,7 @@ const updateGroupMember = async (req, res) => {
 				user: {
 					select: {
 						id: true,
-						firstName: true,
-						lastName: true,
+						fullName: true,
 						email: true,
 						profilePhoto: true,
 						batchYear: true,
@@ -786,8 +771,7 @@ const updateGroupMember = async (req, res) => {
 				adder: {
 					select: {
 						id: true,
-						firstName: true,
-						lastName: true,
+						fullName: true,
 					},
 				},
 			},
@@ -844,8 +828,7 @@ const removeGroupMember = async (req, res) => {
 				user: {
 					select: {
 						id: true,
-						firstName: true,
-						lastName: true,
+						fullName: true,
 					},
 				},
 			},
@@ -870,7 +853,7 @@ const removeGroupMember = async (req, res) => {
 					groupId,
 					memberId: member.id,
 					memberUserId: userId,
-					memberName: `${member.user.firstName} ${member.user.lastName}`,
+					memberName: `${member.user.fullName}`,
 					role: member.role,
 				},
 				ipAddress: req.ip,
@@ -883,7 +866,7 @@ const removeGroupMember = async (req, res) => {
 			{
 				removedMember: {
 					id: member.user.id,
-					name: `${member.user.firstName} ${member.user.lastName}`,
+					name: `${member.user.fullName}`,
 					role: member.role,
 				},
 			},
@@ -1072,8 +1055,7 @@ const getPublicGroups = async (req, res) => {
 						user: {
 							select: {
 								id: true,
-								firstName: true,
-								lastName: true,
+								fullName: true,
 								profilePhoto: true,
 								batchYear: true,
 								// Note: Not including email for privacy
@@ -1097,7 +1079,7 @@ const getPublicGroups = async (req, res) => {
 				description: group.description,
 				members: group.members.map((member) => ({
 					id: member.user.id,
-					name: `${member.user.firstName} ${member.user.lastName}`,
+					name: `${member.user.fullName}`,
 					role: member.role,
 					profilePhoto: member.user.profilePhoto,
 					batchYear: member.user.batchYear,
