@@ -1,0 +1,11 @@
+// src/types/index.ts - FIXED with correct filename (lifelink not lifeLink)
+export * from './common'
+export * from './auth'
+export * from './event'
+export * from './social'
+export * from './lifelink'  // FIXED: lowercase 'l'
+export * from './payment'
+export * from './notification'
+export * from './organization'
+export * from './ui'
+export * from './api'
