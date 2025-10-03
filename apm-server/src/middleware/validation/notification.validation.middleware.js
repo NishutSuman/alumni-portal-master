@@ -262,11 +262,10 @@ const validateNotificationAccess = async (req, res, next) => {
       where: { id: notificationId },
       select: {
         id: true,
-        recipientId: true,
+        userId: true, // Fixed: schema uses userId not recipientId
         type: true,
-        status: true,
-        expiresAt: true,
-        readAt: true
+        isRead: true,
+        createdAt: true
       }
     });
 
@@ -275,14 +274,12 @@ const validateNotificationAccess = async (req, res, next) => {
     }
 
     // Check if user is the recipient or super admin
-    if (notification.recipientId !== userId && req.user.role !== 'SUPER_ADMIN') {
+    if (notification.userId !== userId && req.user.role !== 'SUPER_ADMIN') {
       return errorResponse(res, 'You do not have access to this notification', 403);
     }
 
-    // Check if notification has expired (for certain actions)
-    if (notification.expiresAt && new Date() > new Date(notification.expiresAt)) {
-      req.notificationExpired = true;
-    }
+    // Add notification to request for further processing
+    // No expiration check needed for basic notifications
 
     req.notification = notification;
     next();

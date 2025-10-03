@@ -132,6 +132,21 @@ router.get('/:notificationId',
 );
 
 /**
+ * Clear all notifications for user
+ * DELETE /api/notifications/clear-all
+ * Access: Authenticated users
+ * IMPORTANT: Must be placed BEFORE /:notificationId route to avoid route conflicts
+ */
+router.delete('/clear-all',
+  [
+    authenticateToken,
+    requireAlumniVerification,
+    autoInvalidateNotificationCaches
+  ],
+  asyncHandler(notificationController.clearAllNotifications)
+);
+
+/**
  * Delete notification
  * DELETE /api/notifications/:notificationId
  * Access: Notification recipient

@@ -24,10 +24,11 @@ const {
   validateReorderGroups,
   validateGroupIdParam,
   validateUserIdParam,
+  validateGroupUserIdParams,
   validateGroupNameUnique,
   validateGroupAccess,
   validateMemberRole,
-  validateUserForMembership,
+  validateRoleLimits,
   validateMemberExists
 } = require('../middleware/validation/group.validation.middleware');
 
@@ -64,11 +65,9 @@ router.get('/public',
 );
 
 // ============================================
-// PROTECTED ROUTES (SUPER_ADMIN ONLY)
-// All management routes require SUPER_ADMIN access
+// PROTECTED ROUTES - ALL AUTHENTICATED USERS
 // ============================================
 router.use(authenticateToken);
-router.use(requireRole('SUPER_ADMIN'));
 
 // ============================================
 // GROUP MANAGEMENT ROUTES
@@ -77,10 +76,11 @@ router.use(requireRole('SUPER_ADMIN'));
 /**
  * Get all groups with filtering and pagination
  * GET /api/groups
- * Access: SUPER_ADMIN
+ * Access: USER, BATCH_ADMIN, SUPER_ADMIN
  */
 router.get('/',
   [
+    requireRole(['USER', 'BATCH_ADMIN', 'SUPER_ADMIN']),
     cacheGroupsList
   ],
   asyncHandler(groupController.getGroups)
@@ -89,10 +89,11 @@ router.get('/',
 /**
  * Get group statistics
  * GET /api/groups/statistics
- * Access: SUPER_ADMIN
+ * Access: BATCH_ADMIN, SUPER_ADMIN
  */
 router.get('/statistics',
   [
+    requireRole(['BATCH_ADMIN', 'SUPER_ADMIN']),
     cacheGroupStats
   ],
   asyncHandler(groupController.getGroupStatistics)
@@ -105,6 +106,7 @@ router.get('/statistics',
  */
 router.post('/',
   [
+    requireRole('SUPER_ADMIN'),
     validateCreateGroup,
     validateGroupNameUnique,
     autoInvalidateGroupCaches
@@ -119,6 +121,7 @@ router.post('/',
  */
 router.post('/reorder',
   [
+    requireRole('SUPER_ADMIN'),
     validateReorderGroups,
     autoInvalidateGroupCaches
   ],
@@ -128,10 +131,11 @@ router.post('/reorder',
 /**
  * Get single group with details and members
  * GET /api/groups/:groupId
- * Access: SUPER_ADMIN
+ * Access: USER, BATCH_ADMIN, SUPER_ADMIN
  */
 router.get('/:groupId',
   [
+    requireRole(['USER', 'BATCH_ADMIN', 'SUPER_ADMIN']),
     validateGroupIdParam,
     validateGroupAccess,
     cacheGroupDetails
@@ -146,6 +150,7 @@ router.get('/:groupId',
  */
 router.put('/:groupId',
   [
+    requireRole('SUPER_ADMIN'),
     validateGroupIdParam,
     validateGroupAccess,
     validateUpdateGroup,
@@ -162,6 +167,7 @@ router.put('/:groupId',
  */
 router.delete('/:groupId',
   [
+    requireRole('SUPER_ADMIN'),
     validateGroupIdParam,
     validateGroupAccess,
     autoInvalidateGroupCaches
@@ -176,10 +182,11 @@ router.delete('/:groupId',
 /**
  * Get group members with filtering
  * GET /api/groups/:groupId/members
- * Access: SUPER_ADMIN
+ * Access: USER, BATCH_ADMIN, SUPER_ADMIN
  */
 router.get('/:groupId/members',
   [
+    requireRole(['USER', 'BATCH_ADMIN', 'SUPER_ADMIN']),
     validateGroupIdParam,
     validateGroupAccess,
     cacheGroupMembers
@@ -194,11 +201,12 @@ router.get('/:groupId/members',
  */
 router.post('/:groupId/members',
   [
+    requireRole('SUPER_ADMIN'),
     validateGroupIdParam,
     validateGroupAccess,
     validateAddMember,
     validateMemberRole,
-    validateUserForMembership,
+    validateRoleLimits,
     autoInvalidateGroupMemberCaches
   ],
   asyncHandler(groupController.addGroupMember)
@@ -211,6 +219,7 @@ router.post('/:groupId/members',
  */
 router.post('/:groupId/members/bulk',
   [
+    requireRole('SUPER_ADMIN'),
     validateGroupIdParam,
     validateGroupAccess,
     validateBulkMembers,
@@ -226,8 +235,8 @@ router.post('/:groupId/members/bulk',
  */
 router.put('/:groupId/members/:userId',
   [
-    validateGroupIdParam,
-    validateUserIdParam,
+    requireRole('SUPER_ADMIN'),
+    validateGroupUserIdParams,
     validateGroupAccess,
     validateMemberExists,
     validateUpdateMember,
@@ -238,14 +247,14 @@ router.put('/:groupId/members/:userId',
 );
 
 /**
- * Remove member from group
- * DELETE /api/groups/:groupId/members/:userId
+ * Remove member from group (update member status to inactive)
+ * PUT /api/groups/:groupId/members/:userId/remove
  * Access: SUPER_ADMIN
  */
-router.delete('/:groupId/members/:userId',
+router.put('/:groupId/members/:userId/remove',
   [
-    validateGroupIdParam,
-    validateUserIdParam,
+    requireRole('SUPER_ADMIN'),
+    validateGroupUserIdParams,
     validateGroupAccess,
     validateMemberExists,
     autoInvalidateGroupMemberCaches

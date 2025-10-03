@@ -3,6 +3,7 @@
 
 const { prisma } = require('../../config/database');
 const { NotificationService } = require('../notification.service');
+const emailManager = require('../email/EmailManager');
 
 class FestivalService {
   /**
@@ -139,17 +140,32 @@ class FestivalService {
 
       const userIds = allUsers.map(user => user.id);
       let totalNotificationsSent = 0;
+      let totalEmailsSent = 0;
 
-      // Send notification for each festival
+      // Get organization data for emails
+      const organization = await prisma.organization.findFirst({
+        select: {
+          name: true,
+          shortName: true
+        }
+      });
+
+      // Send notifications and emails for each festival
       for (const festival of todaysFestivals) {
         try {
+          // Send push notifications
           const notificationResult = await this.sendFestivalNotification(festival, userIds);
           
           if (notificationResult.success) {
             totalNotificationsSent++;
           }
+
+          // Send festival emails to all users
+          const emailResult = await this.sendFestivalEmails(festival, allUsers, organization);
+          totalEmailsSent += emailResult.emailsSent;
+
         } catch (error) {
-          console.error(`❌ Failed to send festival notification for ${festival.name}:`, error);
+          console.error(`❌ Failed to send festival notifications/emails for ${festival.name}:`, error);
         }
       }
 
@@ -161,6 +177,7 @@ class FestivalService {
           details: {
             festivalsCount: todaysFestivals.length,
             notificationsSent: totalNotificationsSent,
+            emailsSent: totalEmailsSent,
             festivals: todaysFestivals.map(f => ({
               name: f.name,
               type: f.festivalType,
@@ -172,12 +189,13 @@ class FestivalService {
         }
       });
 
-      console.log(`✅ Festival notifications processed: ${totalNotificationsSent}/${todaysFestivals.length} sent successfully`);
+      console.log(`✅ Festival notifications processed: ${totalNotificationsSent}/${todaysFestivals.length} push notifications and ${totalEmailsSent} emails sent successfully`);
       
       return {
         success: true,
         festivalsCount: todaysFestivals.length,
         notificationsSent: totalNotificationsSent,
+        emailsSent: totalEmailsSent,
         festivals: todaysFestivals.map(f => ({
           name: f.name,
           type: f.festivalType,
@@ -222,6 +240,39 @@ class FestivalService {
     } catch (error) {
       console.error(`❌ Failed to send festival notification for ${festival.name}:`, error);
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Send festival emails to all users
+   */
+  static async sendFestivalEmails(festival, users, organizationData) {
+    try {
+      const emailService = emailManager.getService();
+      let emailsSent = 0;
+
+      console.log(`📧 Sending festival emails for ${festival.name} to ${users.length} users...`);
+
+      // Send festival emails to all active users
+      for (const user of users) {
+        try {
+          await emailService.sendFestivalWish(user, festival, organizationData);
+          emailsSent++;
+        } catch (error) {
+          console.error(`❌ Failed to send festival email to ${user.fullName}:`, error);
+        }
+      }
+
+      console.log(`✅ Festival emails sent for ${festival.name}: ${emailsSent}/${users.length} successful`);
+      
+      return {
+        success: true,
+        emailsSent: emailsSent,
+        totalUsers: users.length
+      };
+    } catch (error) {
+      console.error(`❌ Failed to send festival emails for ${festival.name}:`, error);
+      return { success: false, emailsSent: 0, error: error.message };
     }
   }
 
@@ -555,7 +606,11 @@ class FestivalService {
 
       return {
         year,
-        months: Object.values(calendar),
+        calendar: Object.values(calendar).map(month => ({
+          month: month.monthNumber,
+          monthName: month.monthName,
+          festivals: month.festivals
+        })),
         totalFestivals: festivals.length
       };
     } catch (error) {

@@ -285,11 +285,89 @@ const togglePaymentVisibility = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get public analytics with privacy settings applied
+ * @route   GET /api/events/:eventId/public-analytics
+ * @access  Public (No authentication required)
+ */
+const getPublicAnalytics = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Verify event exists and is publicly viewable
+    const event = await prisma.event.findFirst({
+      where: { 
+        id: eventId,
+        status: { in: ['PUBLISHED', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED'] }
+      },
+      select: { id: true, title: true }
+    });
+
+    if (!event) {
+      return errorResponse(res, 'Event not found or not publicly available', 404);
+    }
+
+    // Get public analytics
+    const analytics = await RegistrationDashboardService.getPublicAnalytics(eventId);
+
+    return successResponse(res, analytics, 'Public analytics retrieved successfully');
+
+  } catch (error) {
+    console.error('Public analytics error:', error);
+    
+    if (error.message === 'Public analytics are disabled for this event') {
+      return errorResponse(res, 'Public analytics are not available for this event', 403);
+    }
+    
+    return errorResponse(res, 'Failed to retrieve public analytics', 500);
+  }
+};
+
+/**
+ * @desc    Get public registrations with privacy settings applied
+ * @route   GET /api/events/:eventId/public-registrations
+ * @access  Public (No authentication required)
+ */
+const getPublicRegistrations = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Verify event exists and is publicly viewable
+    const event = await prisma.event.findFirst({
+      where: { 
+        id: eventId,
+        status: { in: ['PUBLISHED', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED'] }
+      },
+      select: { id: true, title: true }
+    });
+
+    if (!event) {
+      return errorResponse(res, 'Event not found or not publicly available', 404);
+    }
+
+    // Get public registrations
+    const registrations = await RegistrationDashboardService.getPublicRegistrations(eventId);
+
+    return successResponse(res, registrations, 'Public registrations retrieved successfully');
+
+  } catch (error) {
+    console.error('Public registrations error:', error);
+    
+    if (error.message === 'Public registrations are disabled for this event') {
+      return errorResponse(res, 'Public registrations are not available for this event', 403);
+    }
+    
+    return errorResponse(res, 'Failed to retrieve public registrations', 500);
+  }
+};
+
 module.exports = {
   getPublicRegistrationDashboard,
   getAdminRegistrationDashboard,
   getBatchWiseRegistrations,
   getPrivacySettings,
   updatePrivacySettings,
-  togglePaymentVisibility
+  togglePaymentVisibility,
+  getPublicAnalytics,
+  getPublicRegistrations
 };

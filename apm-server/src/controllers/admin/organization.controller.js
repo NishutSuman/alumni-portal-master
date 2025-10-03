@@ -7,6 +7,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
 const SerialIdService = require('../../services/serialID.service');
+const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
 
 /**
  * Get organization details
@@ -29,6 +30,8 @@ const getOrganizationDetails = async (req, res) => {
           officialContactNumber: true,
           officeAddress: true,
           logoUrl: true,
+          bylawDocumentUrl: true,
+          registrationCertUrl: true,
           websiteUrl: true,
           instagramUrl: true,
           facebookUrl: true,
@@ -48,7 +51,10 @@ const getOrganizationDetails = async (req, res) => {
     }
     
     if (!organization) {
-      return errorResponse(res, 'Organization details not configured', 404);
+      return successResponse(res, {
+        organization: null,
+        isConfigured: false
+      });
     }
     
     return successResponse(res, {
@@ -57,7 +63,8 @@ const getOrganizationDetails = async (req, res) => {
         // Hide sensitive details in public endpoint
         serialCounter: undefined, // Don't expose counter
         lastUpdatedBy: undefined
-      }
+      },
+      isConfigured: true
     });
     
   } catch (error) {
@@ -85,7 +92,24 @@ const getOrganizationDetailsAdmin = async (req, res) => {
     });
     
     if (!organization) {
-      return errorResponse(res, 'Organization details not configured', 404);
+      // Get basic statistics even if no organization exists
+      const [totalUsers, totalVerified, totalBatches] = await Promise.all([
+        prisma.user.count({ where: { isActive: true, role: 'USER' } }),
+        prisma.user.count({ where: { isActive: true, isAlumniVerified: true } }),
+        prisma.batch.count()
+      ]);
+      
+      return successResponse(res, {
+        organization: null,
+        isConfigured: false,
+        statistics: {
+          totalUsers,
+          totalVerified,
+          totalBatches,
+          currentSerialCounter: 0,
+          verificationRate: totalUsers > 0 ? ((totalVerified / totalUsers) * 100).toFixed(1) : '0'
+        }
+      });
     }
     
     // Get additional statistics
@@ -97,12 +121,13 @@ const getOrganizationDetailsAdmin = async (req, res) => {
     
     return successResponse(res, {
       organization,
+      isConfigured: true,
       statistics: {
         totalUsers,
         totalVerified,
         totalBatches,
         currentSerialCounter: organization.serialCounter,
-        verificationRate: totalUsers > 0 ? ((totalVerified / totalUsers) * 100).toFixed(1) : 0
+        verificationRate: totalUsers > 0 ? ((totalVerified / totalUsers) * 100).toFixed(1) : '0'
       }
     });
     
@@ -315,76 +340,6 @@ const upsertOrganizationDetails = async (req, res) => {
   }
 };
 
-/**
- * Upload organization logo
- * SUPER_ADMIN only
- */
-const uploadOrganizationLogo = async (req, res) => {
-  try {
-    const { id: adminId } = req.user;
-    
-    if (!req.file) {
-      return errorResponse(res, 'Logo file is required', 400);
-    }
-    
-    // File validation would be handled by multer middleware
-    const logoUrl = `/uploads/organization/${req.file.filename}`;
-    
-    const organization = await prisma.organization.findFirst({
-      where: { isActive: true }
-    });
-    
-    if (!organization) {
-      return errorResponse(res, 'Organization not configured. Please set up organization details first.', 404);
-    }
-    
-    const updated = await prisma.$transaction(async (tx) => {
-      const updated = await tx.organization.update({
-        where: { id: organization.id },
-        data: {
-          logoUrl: logoUrl,
-          lastUpdatedBy: adminId
-        }
-      });
-      
-      await tx.activityLog.create({
-        data: {
-          userId: adminId,
-          action: 'organization_logo_updated',
-          details: {
-            organizationId: organization.id,
-            logoUrl: logoUrl,
-            originalLogoUrl: organization.logoUrl
-          },
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      return updated;
-    });
-    
-    // Clear caches
-    await Promise.all([
-      CacheService.del('public:organization:details'),
-      CacheService.del('system:organization:details')
-    ]);
-    
-    return successResponse(res, {
-      message: 'Organization logo updated successfully',
-      logoUrl: updated.logoUrl,
-      organization: {
-        id: updated.id,
-        name: updated.name,
-        logoUrl: updated.logoUrl
-      }
-    });
-    
-  } catch (error) {
-    console.error('Upload organization logo error:', error);
-    return errorResponse(res, 'Failed to upload organization logo', 500);
-  }
-};
 
 /**
  * Get organization statistics for admin dashboard
@@ -786,12 +741,454 @@ const resetSerialCounter = async (req, res) => {
   }
 };
 
+/**
+ * Upload organization files (logo, bylaws, certificate)
+ * SUPER_ADMIN only
+ */
+const uploadOrganizationFiles = async (req, res) => {
+  try {
+    console.log('Upload request received:');
+    console.log('- Content-Type:', req.get('Content-Type'));
+    console.log('- Files object:', req.files);
+    console.log('- Body:', req.body);
+    console.log('- File keys:', req.files ? Object.keys(req.files) : 'no files object');
+    
+    const { id: adminId, fullName: adminName } = req.user;
+    const files = req.files;
+    
+    if (!files || Object.keys(files).length === 0) {
+      console.log('❌ No files found in request');
+      return errorResponse(res, 'No files provided for upload', 400);
+    }
+    
+    // Check if Cloudflare R2 is configured
+    if (!cloudflareR2Service.isConfigured()) {
+      return errorResponse(res, 'File storage (Cloudflare R2) is not configured. Please set up R2 environment variables: CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET_NAME, CLOUDFLARE_R2_PUBLIC_URL', 500);
+    }
+    
+    // Get existing organization
+    const existingOrg = await prisma.organization.findFirst({
+      where: { isActive: true }
+    });
+    
+    if (!existingOrg) {
+      return errorResponse(res, 'Organization not found. Please initialize first.', 404);
+    }
+    
+    const uploadResults = {};
+    const updateData = {};
+    const oldFiles = {}; // For cleanup if upload fails
+    
+    try {
+      // Upload logo file
+      if (files.logoFile && files.logoFile[0]) {
+        const logoFile = files.logoFile[0];
+        const validation = cloudflareR2Service.validateOrganizationFile(logoFile, 'logo');
+        
+        if (!validation.isValid) {
+          return errorResponse(res, `Logo validation failed: ${validation.errors.join(', ')}`, 400);
+        }
+        
+        oldFiles.logoUrl = existingOrg.logoUrl;
+        const logoResult = await cloudflareR2Service.uploadOrganizationLogo(logoFile);
+        uploadResults.logo = logoResult;
+        updateData.logoUrl = logoResult.url;
+      }
+      
+      // Upload bylaw document
+      if (files.bylawFile && files.bylawFile[0]) {
+        const bylawFile = files.bylawFile[0];
+        const validation = cloudflareR2Service.validateOrganizationFile(bylawFile, 'bylaw');
+        
+        if (!validation.isValid) {
+          return errorResponse(res, `Bylaw document validation failed: ${validation.errors.join(', ')}`, 400);
+        }
+        
+        oldFiles.bylawDocumentUrl = existingOrg.bylawDocumentUrl;
+        const bylawResult = await cloudflareR2Service.uploadOrganizationBylaw(bylawFile);
+        uploadResults.bylaw = bylawResult;
+        updateData.bylawDocumentUrl = bylawResult.url;
+      }
+      
+      // Upload certificate document
+      if (files.certFile && files.certFile[0]) {
+        const certFile = files.certFile[0];
+        const validation = cloudflareR2Service.validateOrganizationFile(certFile, 'certificate');
+        
+        if (!validation.isValid) {
+          return errorResponse(res, `Certificate validation failed: ${validation.errors.join(', ')}`, 400);
+        }
+        
+        oldFiles.registrationCertUrl = existingOrg.registrationCertUrl;
+        const certResult = await cloudflareR2Service.uploadOrganizationCertificate(certFile);
+        uploadResults.certificate = certResult;
+        updateData.registrationCertUrl = certResult.url;
+      }
+      
+      // Update organization with new file URLs
+      const updatedOrg = await prisma.organization.update({
+        where: { id: existingOrg.id },
+        data: {
+          ...updateData,
+          updatedAt: new Date()
+        }
+      });
+      
+      // Delete old files from R2 (cleanup)
+      for (const [field, oldUrl] of Object.entries(oldFiles)) {
+        if (oldUrl) {
+          try {
+            const oldKey = cloudflareR2Service.extractKeyFromUrl(oldUrl);
+            if (oldKey) {
+              await cloudflareR2Service.deleteFile(oldKey);
+            }
+          } catch (cleanupError) {
+            console.warn(`Failed to cleanup old file ${field}:`, cleanupError);
+          }
+        }
+      }
+      
+      // Clear cache
+      await CacheService.delPattern('organization:*');
+      await CacheService.delPattern('public:organization:*');
+      
+      // Log file uploads
+      await prisma.activityLog.create({
+        data: {
+          userId: adminId,
+          action: 'organization_files_uploaded',
+          details: {
+            organizationId: existingOrg.id,
+            uploadedFiles: Object.keys(uploadResults),
+            uploadResults: Object.keys(uploadResults).reduce((acc, key) => ({
+              ...acc,
+              [key]: {
+                filename: uploadResults[key].filename,
+                size: uploadResults[key].size,
+                url: uploadResults[key].url
+              }
+            }), {}),
+            uploadedBy: adminName
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        }
+      });
+      
+      return successResponse(res, {
+        message: 'Organization files uploaded successfully',
+        uploadedFiles: uploadResults,
+        organization: {
+          id: updatedOrg.id,
+          logoUrl: updatedOrg.logoUrl,
+          bylawDocumentUrl: updatedOrg.bylawDocumentUrl,
+          registrationCertUrl: updatedOrg.registrationCertUrl,
+          updatedAt: updatedOrg.updatedAt
+        }
+      });
+      
+    } catch (uploadError) {
+      // Cleanup any successfully uploaded files if there's an error
+      for (const result of Object.values(uploadResults)) {
+        if (result.key) {
+          try {
+            await cloudflareR2Service.deleteFile(result.key);
+          } catch (cleanupError) {
+            console.warn('Failed to cleanup uploaded file:', cleanupError);
+          }
+        }
+      }
+      throw uploadError;
+    }
+    
+  } catch (error) {
+    console.error('Organization file upload error:', error);
+    return errorResponse(res, error.message || 'Failed to upload organization files', 500);
+  }
+};
+
+/**
+ * Upload organization logo only
+ * SUPER_ADMIN only
+ */
+const uploadOrganizationLogo = async (req, res) => {
+  try {
+    const { id: adminId, fullName: adminName } = req.user;
+    const file = req.file;
+    
+    if (!file) {
+      return errorResponse(res, 'No logo file provided', 400);
+    }
+    
+    // Check if Cloudflare R2 is configured
+    if (!cloudflareR2Service.isConfigured()) {
+      return errorResponse(res, 'File storage (Cloudflare R2) is not configured. Please set up R2 environment variables: CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET_NAME, CLOUDFLARE_R2_PUBLIC_URL', 500);
+    }
+    
+    // Validate logo file
+    const validation = cloudflareR2Service.validateOrganizationFile(file, 'logo');
+    if (!validation.isValid) {
+      return errorResponse(res, `Logo validation failed: ${validation.errors.join(', ')}`, 400);
+    }
+    
+    // Get existing organization
+    const existingOrg = await prisma.organization.findFirst({
+      where: { isActive: true }
+    });
+    
+    if (!existingOrg) {
+      return errorResponse(res, 'Organization not found. Please initialize first.', 404);
+    }
+    
+    // Upload new logo
+    const uploadResult = await cloudflareR2Service.uploadOrganizationLogo(file);
+    
+    // Update organization with new logo URL
+    const updatedOrg = await prisma.organization.update({
+      where: { id: existingOrg.id },
+      data: {
+        logoUrl: uploadResult.url,
+        updatedAt: new Date()
+      }
+    });
+    
+    // Delete old logo if exists
+    if (existingOrg.logoUrl) {
+      try {
+        const oldKey = cloudflareR2Service.extractKeyFromUrl(existingOrg.logoUrl);
+        if (oldKey) {
+          await cloudflareR2Service.deleteFile(oldKey);
+        }
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup old logo:', cleanupError);
+      }
+    }
+    
+    // Clear cache
+    await CacheService.delPattern('organization:*');
+    await CacheService.delPattern('public:organization:*');
+    
+    // Log logo upload
+    await prisma.activityLog.create({
+      data: {
+        userId: adminId,
+        action: 'organization_logo_uploaded',
+        details: {
+          organizationId: existingOrg.id,
+          filename: uploadResult.filename,
+          size: uploadResult.size,
+          url: uploadResult.url,
+          uploadedBy: adminName
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+    
+    return successResponse(res, {
+      message: 'Organization logo uploaded successfully',
+      logo: uploadResult,
+      organization: {
+        id: updatedOrg.id,
+        logoUrl: updatedOrg.logoUrl,
+        updatedAt: updatedOrg.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('Organization logo upload error:', error);
+    return errorResponse(res, error.message || 'Failed to upload organization logo', 500);
+  }
+};
+
+/**
+ * View organization file through authenticated proxy
+ * POST /api/admin/organization/files/view
+ * Body: { fileUrl: string, fileType: string }
+ * Access: SUPER_ADMIN only
+ */
+const viewOrganizationFile = async (req, res) => {
+  try {
+    const { fileUrl, fileType } = req.body;
+    
+    if (!fileUrl || !fileType) {
+      return errorResponse(res, 'File URL and file type are required', 400);
+    }
+    
+    // Verify the file belongs to this organization
+    const organization = await prisma.organization.findFirst({
+      where: { isActive: true }
+    });
+    
+    if (!organization) {
+      return errorResponse(res, 'Organization not found', 404);
+    }
+    
+    // Verify the file URL belongs to this organization
+    const validUrls = [
+      organization.logoUrl,
+      organization.bylawDocumentUrl,
+      organization.registrationCertUrl
+    ].filter(Boolean);
+    
+    if (!validUrls.includes(fileUrl)) {
+      return errorResponse(res, 'Unauthorized file access', 403);
+    }
+    
+    // Fetch the file from R2
+    const fileResponse = await fetch(fileUrl);
+    
+    if (!fileResponse.ok) {
+      return errorResponse(res, 'File not found or inaccessible', 404);
+    }
+    
+    // Get the file blob and determine content type
+    const fileBuffer = await fileResponse.arrayBuffer();
+    let contentType = fileResponse.headers.get('content-type');
+    
+    // Fallback content type detection
+    if (!contentType) {
+      if (fileUrl.includes('.pdf')) contentType = 'application/pdf';
+      else if (fileUrl.includes('.png')) contentType = 'image/png';
+      else if (fileUrl.includes('.jpg') || fileUrl.includes('.jpeg')) contentType = 'image/jpeg';
+      else if (fileUrl.includes('.webp')) contentType = 'image/webp';
+      else contentType = 'application/octet-stream';
+    }
+    
+    // Set appropriate headers and send the file
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `inline; filename="${fileType}_${Date.now()}"`,
+      'Cache-Control': 'private, max-age=300'
+    });
+    
+    return res.send(Buffer.from(fileBuffer));
+    
+  } catch (error) {
+    console.error('View organization file error:', error);
+    return errorResponse(res, 'Failed to load file', 500);
+  }
+};
+
+/**
+ * Delete organization file
+ * DELETE /api/admin/organization/files/delete
+ * Body: { fileType: 'logo' | 'bylaw' | 'certificate' }
+ * Access: SUPER_ADMIN only
+ */
+const deleteOrganizationFile = async (req, res) => {
+  try {
+    const { fileType } = req.body;
+    const { id: adminId } = req.user;
+    
+    if (!fileType || !['logo', 'bylaw', 'certificate'].includes(fileType)) {
+      return errorResponse(res, 'Invalid file type. Must be logo, bylaw, or certificate', 400);
+    }
+    
+    // Get current organization
+    const organization = await prisma.organization.findFirst({
+      where: { isActive: true }
+    });
+    
+    if (!organization) {
+      return errorResponse(res, 'Organization not found', 404);
+    }
+    
+    // Determine which field to update and get the file URL for deletion
+    let updateData = { lastUpdatedBy: adminId };
+    let fileUrlToDelete = null;
+    
+    switch (fileType) {
+      case 'logo':
+        fileUrlToDelete = organization.logoUrl;
+        updateData.logoUrl = null;
+        break;
+      case 'bylaw':
+        fileUrlToDelete = organization.bylawDocumentUrl;
+        updateData.bylawDocumentUrl = null;
+        break;
+      case 'certificate':
+        fileUrlToDelete = organization.registrationCertUrl;
+        updateData.registrationCertUrl = null;
+        break;
+    }
+    
+    if (!fileUrlToDelete) {
+      return errorResponse(res, 'No file found to delete', 404);
+    }
+    
+    // Update database and delete from R2 in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Update organization record
+      const updatedOrg = await tx.organization.update({
+        where: { id: organization.id },
+        data: updateData
+      });
+      
+      // Log the deletion
+      await tx.activityLog.create({
+        data: {
+          userId: adminId,
+          action: `organization_${fileType}_deleted`,
+          details: {
+            organizationId: organization.id,
+            deletedFileUrl: fileUrlToDelete,
+            fileType
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        }
+      });
+      
+      return updatedOrg;
+    });
+    
+    // Delete file from R2 (don't fail the request if this fails)
+    try {
+      if (fileType === 'logo') {
+        await cloudflareR2Service.deleteOrganizationLogo(fileUrlToDelete);
+      } else if (fileType === 'bylaw') {
+        await cloudflareR2Service.deleteOrganizationBylaw(fileUrlToDelete);
+      } else if (fileType === 'certificate') {
+        await cloudflareR2Service.deleteOrganizationCertificate(fileUrlToDelete);
+      }
+    } catch (deleteError) {
+      console.warn('Failed to delete file from R2 storage:', deleteError);
+      // Continue - database is updated, file deletion from R2 can be handled separately
+    }
+    
+    // Clear caches
+    await Promise.all([
+      CacheService.delPattern('organization:*'),
+      CacheService.delPattern('public:organization:*')
+    ]);
+    
+    return successResponse(res, {
+      message: `${fileType} deleted successfully`,
+      organization: {
+        id: result.id,
+        logoUrl: result.logoUrl,
+        bylawDocumentUrl: result.bylawDocumentUrl,
+        registrationCertUrl: result.registrationCertUrl
+      }
+    });
+    
+  } catch (error) {
+    console.error('Delete organization file error:', error);
+    return errorResponse(res, 'Failed to delete file', 500);
+  }
+};
+
 module.exports = {
   getOrganizationDetails,      // Public endpoint
   getOrganizationDetailsAdmin, // Admin endpoint with full details
   upsertOrganizationDetails,   // Create/Update organization  
   updateSocialLinks,           // Update social media links
-  uploadOrganizationLogo,      // Upload logo
+  uploadOrganizationLogo,      // Upload logo only
+  uploadOrganizationFiles,     // Upload multiple files (logo, bylaw, certificate)
   resetSerialCounter,          // Emergency serial counter reset
-  getOrganizationStats         // Organization statistics
+  getOrganizationStats,        // Organization statistics
+  initializeOrganization,      // Initialize organization
+  viewOrganizationFile,        // View file through authenticated proxy
+  deleteOrganizationFile       // Delete organization file
 };

@@ -18,7 +18,7 @@ const emailManager = require("../../services/email/EmailManager");
 // Get all registrations for an event (Super Admin only) - EXISTING METHOD
 const getEventRegistrations = async (req, res) => {
 	const { eventId } = req.params;
-	const { status, search } = req.query;
+	const { status, search, batch } = req.query;
 	const { page, limit, skip } = getPaginationParams(req.query, 20);
 
 	try {
@@ -44,6 +44,26 @@ const getEventRegistrations = async (req, res) => {
 				fullName: { contains: search, mode: "insensitive" },
 			};
 		}
+
+		if (batch) {
+			// If user filter already exists, merge with it
+			if (whereClause.user) {
+				whereClause.user.batch = parseInt(batch);
+			} else {
+				whereClause.user = {
+					batch: parseInt(batch),
+				};
+			}
+		}
+
+		// Debug: Log the where clause for troubleshooting
+		console.log('🔍 Event Registrations Filter:', {
+			eventId,
+			status,
+			search,
+			batch,
+			whereClause: JSON.stringify(whereClause, null, 2)
+		});
 
 		// Get total count
 		const total = await prisma.eventRegistration.count({ where: whereClause });

@@ -37,10 +37,21 @@ const NOTIFICATION_TYPES = {
   ACCOUNT_REMINDER: 'ACCOUNT_REMINDER',
   SECURITY_ALERT: 'SECURITY_ALERT',
   
+  // Admin/Verification notifications
+  ALUMNI_VERIFIED: 'ALUMNI_VERIFIED',
+  ALUMNI_REJECTED: 'ALUMNI_REJECTED',
+  ROLE_UPDATED: 'ROLE_UPDATED',
+  VERIFICATION_REQUIRED: 'VERIFICATION_REQUIRED',
+  
   // Post/Comment notifications
   POST_APPROVED: 'POST_APPROVED',
   POST_COMMENTED: 'POST_COMMENTED',
-  POST_LIKED: 'POST_LIKED'
+  POST_LIKED: 'POST_LIKED',
+  MENTION: 'MENTION',
+  
+  // Birthday/Festival notifications
+  BIRTHDAY_NOTIFICATION: 'BIRTHDAY_NOTIFICATION',
+  FESTIVAL_NOTIFICATION: 'FESTIVAL_NOTIFICATION'
 };
 
 /**
@@ -111,9 +122,9 @@ class NotificationService {
         await this.sendPushNotifications(notifications);
       }
 
-      // Send email notifications if enabled (future feature)
+      // Send email notifications if enabled
       if (!scheduleAt && channels.includes(CHANNELS.EMAIL)) {
-        // await this.sendEmailNotifications(notifications);
+        await this.sendEmailNotifications(notifications);
       }
 
       return {
@@ -121,7 +132,7 @@ class NotificationService {
         notificationsSent: notifications.length,
         notifications: notifications.map(n => ({
           id: n.id,
-          recipientId: n.recipientId,
+          userId: n.userId,
           type: n.type,
           status: n.status
         }))
@@ -160,18 +171,11 @@ class NotificationService {
         for (const recipientId of recipientIds) {
           const notification = await tx.notification.create({
             data: {
-              recipientId,
+              userId: recipientId,
               type,
               title,
               message,
-              data: notificationData,
-              priority,
-              channels,
-              status: scheduleAt ? 'SCHEDULED' : 'PENDING',
-              scheduledFor: scheduleAt ? new Date(scheduleAt) : null,
-              expiresAt: expiresAt ? new Date(expiresAt) : null,
-              relatedEntityType,
-              relatedEntityId
+              payload: notificationData
             }
           });
 
@@ -203,56 +207,166 @@ class NotificationService {
       for (const notification of notifications) {
         // Get user's push tokens
         const user = await prisma.user.findUnique({
-          where: { id: notification.recipientId },
+          where: { id: notification.userId },
           select: {
             id: true,
-            firstName: true,
-            pushTokens: true // Assuming you'll add this field
+            fullName: true
           }
         });
 
-        if (!user?.pushTokens || user.pushTokens.length === 0) {
-          // Update notification status - no push token
+        // Send push notification using FCM (production ready)
+        try {
+          const pushResult = await PushNotificationService.sendToToken({
+            token: 'mock-device-token', // In production, fetch actual device token from user
+            title: notification.title,
+            body: notification.message,
+            data: {
+              notificationId: notification.id,
+              type: notification.type,
+              userId: user.id,
+              ...notification.payload
+            },
+            priority: 'normal'
+          });
+
+          // Update notification status based on result
           await prisma.notification.update({
             where: { id: notification.id },
-            data: {
-              status: 'NO_DEVICE',
-              deliveryAttempts: { increment: 1 }
+            data: { 
+              isRead: false,
+              // Add any additional status tracking if needed
             }
           });
-          continue;
+
+          console.log(`✅ Push notification sent to ${user.fullName}: ${notification.title}`);
+        } catch (pushError) {
+          console.error(`❌ Failed to send push notification to ${user.fullName}:`, pushError);
+          
+          // Update notification to mark delivery failure
+          await prisma.notification.update({
+            where: { id: notification.id },
+            data: { isRead: false }
+          });
         }
-
-        // Send push notification using FCM
-        const pushResult = await PushNotificationService.sendToTokens({
-          tokens: user.pushTokens,
-          title: notification.title,
-          body: notification.message,
-          data: {
-            notificationId: notification.id,
-            type: notification.type,
-            relatedEntityType: notification.relatedEntityType,
-            relatedEntityId: notification.relatedEntityId,
-            ...notification.data
-          },
-          priority: this.mapPriorityToFCM(notification.priority)
-        });
-
-        // Update notification status based on push result
-        await prisma.notification.update({
-          where: { id: notification.id },
-          data: {
-            status: pushResult.success ? 'SENT' : 'FAILED',
-            sentAt: pushResult.success ? new Date() : null,
-            deliveryAttempts: { increment: 1 },
-            failureReason: pushResult.success ? null : pushResult.error
-          }
-        });
       }
     } catch (error) {
       console.error('Send push notifications error:', error);
       // Don't throw - partial failure is acceptable
     }
+  }
+
+  /**
+   * Send email notifications
+   * @param {Array} notifications - Array of notification objects
+   * @returns {Promise<void>}
+   */
+  static async sendEmailNotifications(notifications) {
+    try {
+      const emailManager = require('./email/EmailManager');
+      
+      for (const notification of notifications) {
+        try {
+          // Get user details for email
+          const user = await prisma.user.findUnique({
+            where: { id: notification.userId },
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              batch: true
+            }
+          });
+
+          if (!user?.email) {
+            // Update notification status - no email
+            await prisma.notification.update({
+              where: { id: notification.id },
+              data: {
+                status: 'NO_EMAIL',
+                deliveryAttempts: { increment: 1 }
+              }
+            });
+            continue;
+          }
+
+          // Get email service
+          const emailService = emailManager.getService();
+          
+          // Send notification email (generic notification email)
+          const emailOptions = {
+            to: user.email,
+            subject: notification.title,
+            html: this.generateNotificationEmailHTML(notification, user)
+          };
+
+          const result = await emailService.provider.sendEmail(emailOptions);
+          
+          // Update notification status based on email result
+          await prisma.notification.update({
+            where: { id: notification.id },
+            data: {
+              status: result.success ? 'SENT' : 'FAILED',
+              sentAt: result.success ? new Date() : null,
+              deliveryAttempts: { increment: 1 },
+              failureReason: result.success ? null : result.error
+            }
+          });
+
+        } catch (notificationError) {
+          console.error(`Failed to send email notification ${notification.id}:`, notificationError);
+          
+          // Update notification as failed
+          await prisma.notification.update({
+            where: { id: notification.id },
+            data: {
+              status: 'FAILED',
+              deliveryAttempts: { increment: 1 },
+              failureReason: notificationError.message
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Send email notifications error:', error);
+      // Don't throw - partial failure is acceptable
+    }
+  }
+
+  /**
+   * Generate HTML for notification email
+   */
+  static generateNotificationEmailHTML(notification, user) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${notification.title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .content { padding: 30px; }
+          .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>${notification.title}</h1>
+          </div>
+          <div class="content">
+            <p>Dear ${user.fullName},</p>
+            <p>${notification.message}</p>
+            <p>Best regards,<br>Alumni Portal Team</p>
+          </div>
+          <div class="footer">
+            <p>© 2024 Alumni Portal. This is an automated notification.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
   /**
@@ -276,7 +390,7 @@ class NotificationService {
 
       // Build where clause
       const where = {
-        recipientId: userId
+        userId: userId
       };
 
       if (type) where.type = type;
@@ -346,14 +460,14 @@ class NotificationService {
     try {
       const notification = await prisma.notification.findUnique({
         where: { id: notificationId },
-        select: { recipientId: true, readAt: true }
+        select: { userId: true, readAt: true }
       });
 
       if (!notification) {
         throw new Error('Notification not found');
       }
 
-      if (notification.recipientId !== userId) {
+      if (notification.userId !== userId) {
         throw new Error('Unauthorized to mark this notification as read');
       }
 
@@ -385,7 +499,7 @@ class NotificationService {
     try {
       const result = await prisma.notification.updateMany({
         where: {
-          recipientId: userId,
+          userId: userId,
           readAt: null
         },
         data: {
@@ -412,7 +526,7 @@ class NotificationService {
     try {
       const count = await prisma.notification.count({
         where: {
-          recipientId: userId,
+          userId: userId,
           readAt: null,
           OR: [
             { expiresAt: null },

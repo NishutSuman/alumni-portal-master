@@ -19,8 +19,11 @@ router.post(
 router.post("/login", asyncHandler(authController.login));
 router.post("/refresh-token", asyncHandler(authController.refreshToken));
 router.post("/forgot-password", asyncHandler(authController.forgotPassword));
+router.get("/validate-reset-token", asyncHandler(authController.validateResetToken));
 router.post("/reset-password", asyncHandler(authController.resetPassword));
 router.get("/verify-email/:token", asyncHandler(authController.verifyEmail));
+router.post("/resend-verification", asyncHandler(authController.resendVerificationEmail));
+router.post("/test-email", asyncHandler(authController.testEmail));
 
 // Protected routes
 router.post("/logout", authenticateToken, asyncHandler(authController.logout));

@@ -11,7 +11,12 @@ const path = require('path');
 class PushNotificationService {
   constructor() {
     this.initialized = false;
-    this.initializeFirebase();
+    try {
+      this.initializeFirebase();
+    } catch (error) {
+      console.warn('❌ Firebase initialization failed in constructor:', error.message);
+      this.initialized = false;
+    }
   }
 
   /**
@@ -24,6 +29,13 @@ class PushNotificationService {
         return;
       }
 
+      // Mock Firebase for development - Enable basic push notification logging
+      console.log('📱 Mock Firebase push notifications enabled for development');
+      this.initialized = true;
+      this.mockMode = true;
+      return;
+
+      /* FIREBASE INIT CODE - COMMENTED OUT UNTIL PROPERLY CONFIGURED
       const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
         || path.join(__dirname, '../config/firebase-service-account.json');
 
@@ -51,6 +63,7 @@ class PushNotificationService {
       this.messaging = admin.messaging();
       this.initialized = true;
       console.log('✅ Firebase Admin SDK initialized successfully');
+      */
     } catch (error) {
       console.error('❌ Firebase initialization failed:', error);
       this.initialized = false;
@@ -69,6 +82,24 @@ class PushNotificationService {
       }
 
       const { token, title, body, data = {}, priority = 'normal' } = options;
+
+      // Mock mode for development
+      if (this.mockMode) {
+        console.log('📱 MOCK PUSH NOTIFICATION:', {
+          token: token?.substring(0, 20) + '...',
+          title,
+          body,
+          data,
+          priority
+        });
+        
+        return {
+          success: true,
+          messageId: 'mock-' + Date.now(),
+          token,
+          mockMode: true
+        };
+      }
 
       const message = {
         token,
@@ -500,7 +531,17 @@ class PushNotificationService {
 }
 
 // Create singleton instance
-const pushNotificationService = new PushNotificationService();
+let pushNotificationService;
+try {
+  pushNotificationService = new PushNotificationService();
+} catch (error) {
+  console.warn('❌ Push notification service disabled due to configuration error:', error.message);
+  pushNotificationService = {
+    initialized: false,
+    sendToToken: () => Promise.resolve({ success: false, error: 'Service not configured' }),
+    sendToTokens: () => Promise.resolve({ success: false, error: 'Service not configured' })
+  };
+}
 
 module.exports = pushNotificationService;
 

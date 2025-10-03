@@ -227,13 +227,16 @@ const createReply = async (req, res) => {
       validMentions = mentionedUsers.map(user => user.id);
     }
     
-    // Create reply
+    // Find the root parent comment (if parentComment itself has a parent, use that root parent)
+    const rootParentId = parentComment.parentId || commentId;
+    
+    // Create reply (always reference the root parent comment)
     const reply = await prisma.comment.create({
       data: {
         content: content.trim(),
         postId,
         createdBy: req.user.id,
-        parentId: commentId,
+        parentId: rootParentId,
       },
       include: {
         author: {
@@ -333,6 +336,7 @@ const createReply = async (req, res) => {
 const getPostComments = async (req, res) => {
   const { postId } = req.params;
   const { page, limit, skip } = getPaginationParams(req.query, 10);
+  const sortOrder = req.query.sortOrder || 'desc';
   
   try {
     // Check if post exists
@@ -345,15 +349,22 @@ const getPostComments = async (req, res) => {
       return errorResponse(res, 'Post not found', 404);
     }
     
-    // Get total count of top-level comments
-    const total = await prisma.comment.count({
+    // Get total count of top-level comments (for pagination)
+    const totalParents = await prisma.comment.count({
       where: {
         postId,
         parentId: null,
       },
     });
+
+    // Get total count of all comments (parent + replies) for display
+    const totalAllComments = await prisma.comment.count({
+      where: {
+        postId,
+      },
+    });
     
-    // Get top-level comments with replies
+    // Get top-level comments
     const comments = await prisma.comment.findMany({
       where: {
         postId,
@@ -368,33 +379,82 @@ const getPostComments = async (req, res) => {
             batch: true,
           },
         },
-        replies: {
-          include: {
-            author: {
-              select: {
-                id: true,
-                fullName: true,
-                profileImage: true,
-                batch: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
         _count: {
           select: {
             replies: true,
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: sortOrder },
       skip,
       take: limit,
     });
+
+    // Get all replies for these parent comments (flattened)
+    // This will include both direct replies and replies to replies
+    const parentCommentIds = comments.map(c => c.id);
+    const allReplies = await prisma.comment.findMany({
+      where: {
+        postId,
+        parentId: { not: null }, // All non-parent comments
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            fullName: true,
+            profileImage: true,
+            batch: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Group replies by their root parent comment
+    const repliesMap = new Map();
     
-    const pagination = calculatePagination(total, page, limit);
+    // Helper function to find the root parent of a comment
+    const findRootParent = (comment) => {
+      // Start with all replies to build a parent-child relationship map
+      const parentMap = new Map();
+      allReplies.forEach(reply => {
+        parentMap.set(reply.id, reply.parentId);
+      });
+      
+      let currentId = comment.parentId;
+      while (currentId && parentMap.has(currentId)) {
+        currentId = parentMap.get(currentId);
+      }
+      return currentId || comment.parentId; // Return the root parent ID
+    };
+
+    // Group all replies by their root parent
+    allReplies.forEach(reply => {
+      const rootParentId = findRootParent(reply);
+      if (!repliesMap.has(rootParentId)) {
+        repliesMap.set(rootParentId, []);
+      }
+      repliesMap.get(rootParentId).push(reply);
+    });
+
+    // Attach flattened replies to parent comments
+    comments.forEach(comment => {
+      comment.replies = repliesMap.get(comment.id) || [];
+      // Update the count to reflect all nested replies
+      comment._count.replies = comment.replies.length;
+    });
     
-    return paginatedResponse(res, comments, pagination, 'Comments retrieved successfully');
+    // Enrich comments with reaction data and user reactions
+    const enrichedComments = await enrichCommentsWithReactions(comments, req.user?.id);
+    
+    const pagination = calculatePagination(totalParents, page, limit);
+    
+    // Add total comment count (including replies) to pagination for frontend display
+    pagination.totalAllComments = totalAllComments;
+    
+    
+    return paginatedResponse(res, enrichedComments, pagination, 'Comments retrieved successfully');
     
   } catch (error) {
     console.error('Get post comments error:', error);
@@ -553,6 +613,64 @@ const deleteComment = async (req, res) => {
     console.error('Delete comment error:', error);
     return errorResponse(res, 'Failed to delete comment', 500);
   }
+};
+
+// Helper function to enrich comments with reaction data
+const enrichCommentsWithReactions = async (comments, userId) => {
+  if (!comments || comments.length === 0) return comments;
+
+  // Get all comment IDs (including replies)
+  const commentIds = [];
+  comments.forEach(comment => {
+    commentIds.push(comment.id);
+    if (comment.replies) {
+      comment.replies.forEach(reply => commentIds.push(reply.id));
+    }
+  });
+
+  // Get user reactions for all comments if user is authenticated
+  let userReactionsMap = {};
+  if (userId) {
+    const userReactions = await prisma.commentLike.findMany({
+      where: {
+        commentId: { in: commentIds },
+        userId,
+      },
+      select: {
+        commentId: true,
+        reactionType: true,
+      },
+    });
+    
+    userReactionsMap = userReactions.reduce((acc, reaction) => {
+      acc[reaction.commentId] = reaction.reactionType;
+      return acc;
+    }, {});
+  }
+
+  // Enrich comments with reaction data
+  const enrichComment = (comment) => {
+    const reactions = {
+      LIKE: comment.likeCount || 0,
+      LOVE: comment.loveCount || 0,
+      CELEBRATE: comment.celebrateCount || 0,
+      SUPPORT: comment.supportCount || 0,
+      FUNNY: comment.funnyCount || 0,
+      WOW: comment.wowCount || 0,
+      ANGRY: comment.angryCount || 0,
+      SAD: comment.sadCount || 0,
+    };
+
+    return {
+      ...comment,
+      reactions,
+      totalReactions: comment.totalReactions || 0,
+      userReaction: userReactionsMap[comment.id] || null,
+      replies: comment.replies ? comment.replies.map(enrichComment) : [],
+    };
+  };
+
+  return comments.map(enrichComment);
 };
 
 module.exports = {

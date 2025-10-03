@@ -128,6 +128,143 @@ class PaymentService {
 		}
 	}
 
+	// Calculate total payment for event payment (before registration exists)
+	async calculateEventPaymentTotal(eventId, userId, registrationData = {}) {
+		try {
+			const event = await prisma.event.findUnique({
+				where: { id: eventId },
+				select: {
+					id: true,
+					title: true,
+					registrationFee: true,
+					guestFee: true,
+					status: true,
+					registrationStartDate: true,
+					registrationEndDate: true,
+					eventDate: true,
+					maxCapacity: true,
+				},
+			});
+
+			if (!event) {
+				throw new Error("Event not found");
+			}
+
+			// Check if event is active and accepting registrations
+			const validStatusesForRegistration = ["PUBLISHED", "REGISTRATION_OPEN"];
+			if (!validStatusesForRegistration.includes(event.status)) {
+				throw new Error(`Event status '${event.status}' does not allow registration. Event must be PUBLISHED or REGISTRATION_OPEN.`);
+			}
+
+			const now = new Date();
+			if (event.registrationStartDate && now < new Date(event.registrationStartDate)) {
+				throw new Error("Registration has not started yet");
+			}
+
+			if (event.registrationEndDate && now > new Date(event.registrationEndDate)) {
+				throw new Error("Registration deadline has passed");
+			}
+
+			// Check capacity
+			if (event.maxCapacity) {
+				const currentRegistrationCount = await prisma.eventRegistration.count({
+					where: {
+						eventId: eventId,
+						status: "CONFIRMED"
+					}
+				});
+				
+				if (currentRegistrationCount >= event.maxCapacity) {
+					throw new Error("Event is full");
+				}
+			}
+
+			// Check if user is already registered
+			const existingRegistration = await prisma.eventRegistration.findFirst({
+				where: {
+					eventId,
+					userId,
+					status: "CONFIRMED",
+				},
+			});
+
+			if (existingRegistration) {
+				throw new Error("You are already registered for this event");
+			}
+
+			// Get user data
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: {
+					fullName: true,
+					email: true,
+					whatsappNumber: true,
+				},
+			});
+
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			// Calculate fees
+			const registrationFee = parseFloat(event.registrationFee || 0);
+			const guestCount = registrationData?.guests ? registrationData.guests.length : 0;
+			const guestFees = guestCount * parseFloat(event.guestFee || 0);
+			const donationAmount = parseFloat(registrationData?.donationAmount || 0);
+
+			const subtotal = registrationFee + guestFees + donationAmount;
+			const processingFee = this.calculateProcessingFee(subtotal);
+			const total = subtotal + processingFee;
+
+			return {
+				success: true,
+				breakdown: {
+					registrationFee,
+					guestCount,
+					guestFees,
+					donationAmount,
+					subtotal,
+					processingFee,
+					total,
+				},
+				items: [
+					{
+						type: "registration",
+						description: `Event Registration - ${event.title}`,
+						amount: registrationFee,
+					},
+					...(guestCount > 0
+						? [
+								{
+									type: "guests",
+									description: `Guest Fees (${guestCount} guests)`,
+									amount: guestFees,
+								},
+							]
+						: []),
+					...(donationAmount > 0
+						? [
+								{
+									type: "donation",
+									description: "Event Support Donation",
+									amount: donationAmount,
+								},
+							]
+						: []),
+				],
+				user,
+				metadata: {
+					eventId,
+					hasGuests: guestCount > 0,
+					registrationData,
+				},
+			};
+		} catch (error) {
+			console.error("Event payment calculation failed:", error);
+			throw error;
+		}
+	}
+
 	// Calculate merchandise-only payment
 	async calculateMerchandiseTotal(registrationId) {
 		try {
@@ -278,6 +415,13 @@ class PaymentService {
 			switch (referenceType) {
 				case "EVENT_REGISTRATION":
 					calculation = await this.calculateEventRegistrationTotal(referenceId);
+					break;
+				case "EVENT_PAYMENT":
+					console.log('=== INITIATE PAYMENT - EVENT_PAYMENT CASE ===');
+					console.log('Calling calculateEventPaymentTotal with:', { referenceId, userId, registrationData: paymentData.registrationData });
+					calculation = await this.calculateEventPaymentTotal(referenceId, userId, paymentData.registrationData);
+					console.log('Calculation result:', calculation);
+					console.log('============================================');
 					break;
 				case "MERCHANDISE":
 					calculation = await this.calculateMerchandiseTotal(referenceId);
@@ -500,6 +644,33 @@ class PaymentService {
 				amount: transaction.amount,
 				paymentId: verificationResult.providerPaymentId,
 			});
+
+			// Handle post-transaction operations (QR code, invoice generation)
+			if (transaction._postTransactionOps) {
+				const ops = transaction._postTransactionOps;
+				
+				// Generate QR code for EVENT_PAYMENT registrations
+				if (ops.type === 'EVENT_PAYMENT') {
+					try {
+						console.log(`🔄 Generating QR code for registration: ${ops.registrationId}`);
+						const QRCodeService = require("../qr/QRCodeService");
+						await QRCodeService.generateQRCode(ops.registrationId);
+						console.log("✅ QR code generated successfully after payment");
+					} catch (qrError) {
+						console.error("❌ Post-transaction QR code generation failed:", qrError);
+					}
+
+					// Generate invoice for EVENT_PAYMENT
+					try {
+						console.log(`🔄 Generating invoice for transaction: ${ops.transactionId}`);
+						const InvoiceService = require("./InvoiceService");
+						await InvoiceService.generateInvoice(ops.transactionId);
+						console.log("✅ Invoice generated successfully after payment");
+					} catch (invoiceError) {
+						console.error("❌ Post-transaction invoice generation failed:", invoiceError);
+					}
+				}
+			}
 
 			return {
 				success: true,
@@ -972,6 +1143,190 @@ class PaymentService {
 					`✅ Donation processed: ₹${transaction.amount} from user ${transaction.userId}`
 				);
 				break;
+
+			case "EVENT_PAYMENT":
+				// Create event registration after successful payment
+				const { eventId, registrationData } = transaction.metadata;
+				
+				// Create the registration
+				const guestCount = registrationData?.guests?.length || 0;
+				const newRegistration = await tx.eventRegistration.create({
+					data: {
+						userId: transaction.userId,
+						eventId: referenceId, // referenceId is the event ID for EVENT_PAYMENT
+						status: "CONFIRMED",
+						paymentStatus: "COMPLETED",
+						paymentTransactionId: transaction.id,
+						totalAmountPaid: transaction.amount,
+						lastPaymentAt: new Date(),
+						mealPreference: registrationData?.mealPreference || null,
+						donationAmount: parseFloat(registrationData?.donationAmount || 0),
+						totalAmount: transaction.amount,
+						registrationFeePaid: parseFloat(transaction.breakdown?.registrationFee || 0),
+						guestFeesPaid: parseFloat(transaction.breakdown?.guestFees || 0),
+						totalGuests: guestCount,
+						activeGuests: guestCount,
+					},
+				});
+
+				// Create guest registrations if any
+				if (registrationData?.guests && registrationData.guests.length > 0) {
+					const guestData = registrationData.guests.map(guest => ({
+						registrationId: newRegistration.id,
+						name: guest.name,
+						email: guest.email || null,
+						phone: guest.phone || null,
+						mealPreference: guest.mealPreference || null,
+						status: "ACTIVE",
+						createdAt: new Date(),
+					}));
+
+					await tx.eventGuest.createMany({
+						data: guestData,
+					});
+				}
+
+				// Note: Event registration count is now calculated dynamically via COUNT queries when needed
+
+				// Store registration ID for post-transaction operations
+				const registrationId = newRegistration.id;
+
+				// Send payment confirmation email
+				try {
+					if (emailManager.isInitialized) {
+						const emailService = emailManager.getService();
+
+						// Get event details for email
+						const eventDetails = await tx.event.findUnique({
+							where: { id: referenceId },
+							select: {
+								id: true,
+								title: true,
+								eventDate: true,
+								startTime: true,
+								endTime: true,
+								venue: true,
+								eventMode: true,
+								meetingLink: true,
+							},
+						});
+
+						const user = await tx.user.findUnique({
+							where: { id: transaction.userId },
+							select: {
+								id: true,
+								fullName: true,
+								email: true,
+							},
+						});
+
+						if (eventDetails && user) {
+							// Fetch the complete registration with guest details for email
+							const registrationForEmail = await tx.eventRegistration.findUnique({
+								where: { id: newRegistration.id },
+								include: {
+									guests: true,
+									event: true,
+									user: {
+										select: {
+											id: true,
+											fullName: true,
+											email: true
+										}
+									}
+								}
+							});
+
+							if (registrationForEmail) {
+								console.log("📧 About to call sendRegistrationConfirmation with:", {
+									userId: user.id,
+									userEmail: user.email,
+									eventTitle: eventDetails.title,
+									registrationId: registrationForEmail.id
+								});
+								
+								await emailService.sendRegistrationConfirmation(
+									user,
+									eventDetails,
+									registrationForEmail
+								);
+							} else {
+								console.error("❌ Failed to fetch registration for email");
+							}
+							console.log("✅ Event registration confirmation email sent successfully");
+
+							// Send push notification for successful registration
+							try {
+								const PushNotificationService = require("../../utils/push-notification.util");
+								
+								// Send push notification using sendToToken method (mock mode for development)
+								const pushResult = await PushNotificationService.sendToToken({
+									token: 'mock-device-token', // In production, fetch actual device token from user
+									title: '🎉 Registration Confirmed!',
+									body: `You're successfully registered for ${eventDetails.title}. Check your email for details.`,
+									data: {
+										type: 'EVENT_REGISTRATION_SUCCESS',
+										eventId: eventDetails.id,
+										registrationId: newRegistration.id,
+									},
+									priority: 'normal'
+								});
+								
+								if (pushResult.success) {
+									console.log("✅ Event registration push notification sent successfully");
+								} else {
+									console.error("⚠️ Push notification failed:");
+									console.error("Error details:", pushResult.error);
+									console.error("Error message:", pushResult.message);
+								}
+							} catch (pushError) {
+								console.error("❌ Event registration push notification failed:", pushError);
+							}
+						}
+					}
+				} catch (emailError) {
+					console.error("❌ Event payment confirmation email failed:");
+					console.error("Error details:", emailError.message);
+					console.error("Stack trace:", emailError.stack);
+					console.error("Email manager initialized:", emailManager.isInitialized);
+				}
+
+				// Send success notification
+				setTimeout(async () => {
+					try {
+						await NotificationService.createAndSendNotification({
+							recipientIds: [transaction.userId],
+							type: "PAYMENT_SUCCESS",
+							title: "✅ Event Registration Confirmed!",
+							message: `Your payment of ₹${transaction.amount.toLocaleString("en-IN")} was successful. You are now registered for the event!`,
+							data: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								registrationId: newRegistration.id,
+								amount: transaction.amount,
+								paymentDate: new Date().toISOString(),
+							},
+							priority: "HIGH",
+							channels: ["PUSH", "IN_APP"],
+							relatedEntityType: "EVENT_REGISTRATION",
+							relatedEntityId: newRegistration.id,
+						});
+
+						console.log("✅ Event payment success notification sent");
+					} catch (notificationError) {
+						console.error("❌ Event payment success notification failed:", notificationError);
+					}
+				}, 300);
+
+				console.log(`✅ Event payment processed and registration created: ${newRegistration.id}`);
+				
+				// Store for post-transaction operations
+				transaction._postTransactionOps = {
+					type: 'EVENT_PAYMENT',
+					registrationId: newRegistration.id,
+					transactionId: transaction.id
+				};
+				break;
 		}
 	}
 
@@ -1012,9 +1367,15 @@ class PaymentService {
 
 	async logActivity(userId, action, details) {
 		try {
+			// Skip logging if userId is null for now to avoid constraint issues
+			if (!userId) {
+				console.log(`Activity skipped (no userId): ${action}`, details);
+				return;
+			}
+			
 			await prisma.activityLog.create({
 				data: {
-					userId: userId || "system",
+					userId,
 					action,
 					details,
 					ipAddress: null,

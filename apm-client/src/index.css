@@ -6,6 +6,9 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
+/* Tippy.js CSS for mentions */
+@import 'tippy.js/dist/tippy.css';
+
 /* Import Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
 
@@ -397,4 +400,72 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================ */
+/* PDF VIEWER STYLES */
+/* ============================================ */
+
+.pdf-viewer {
+  /* Ensure proper display for PDF viewer */
+}
+
+.pdf-document {
+  /* PDF Document container */
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.pdf-page {
+  /* Individual PDF page styling */
+  display: block;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.pdf-page canvas {
+  /* Canvas element that renders the PDF */
+  height: auto !important;
+  border-radius: 8px;
+  display: block;
+}
+
+/* React PDF text layer styles */
+.react-pdf__Page__textContent {
+  color: transparent;
+}
+
+.react-pdf__Page__textContent span {
+  color: transparent;
+}
+
+/* React PDF annotation layer styles */
+.react-pdf__Page__annotations {
+  /* Annotation layer */
+}
+
+.react-pdf__Page__annotations .linkAnnotation > a {
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+
+.react-pdf__Page__annotations .linkAnnotation > a:hover {
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Dark mode adjustments for PDF viewer */
+.dark .pdf-page {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+.dark .react-pdf__Page__annotations .linkAnnotation > a:hover {
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.1);
 }

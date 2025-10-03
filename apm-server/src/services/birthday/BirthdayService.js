@@ -2,7 +2,8 @@
 // Uses existing Notification table for tracking instead of custom logs
 
 const { prisma } = require('../../config/database');
-const NotificationService = require('../notification.service');
+const { NotificationService } = require('../notification.service');
+const emailManager = require('../email/EmailManager');
 
 class BirthdayService {
   /**
@@ -136,23 +137,8 @@ class BirthdayService {
         }
       }
 
-      // Log overall birthday job completion in ActivityLog
-      await prisma.activityLog.create({
-        data: {
-          userId: 'system',
-          action: 'birthday_notifications_sent',
-          details: {
-            birthdaysCount: todaysBirthdays.length,
-            notificationsSent: totalNotificationsSent,
-            birthdayUsers: todaysBirthdays.map(u => ({
-              name: u.fullName,
-              batch: u.batch,
-              age: u.age
-            })),
-            date: new Date().toISOString().split('T')[0]
-          }
-        }
-      });
+      // TODO: Log overall birthday job completion (requires valid userId)
+      // Skip activity logging for system jobs
 
       console.log(`✅ Birthday notifications processed: ${totalNotificationsSent}/${todaysBirthdays.length} sent successfully`);
       
@@ -169,6 +155,79 @@ class BirthdayService {
     } catch (error) {
       console.error('❌ Birthday notification service error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Send birthday wish emails to birthday people at midnight
+   */
+  static async sendBirthdayEmails() {
+    try {
+      const todaysBirthdays = await this.getTodaysBirthdays();
+      
+      if (todaysBirthdays.length === 0) {
+        console.log('ℹ️ No birthday emails to send today');
+        return { success: true, birthdaysCount: 0, emailsSent: 0 };
+      }
+
+      console.log(`🎂 Found ${todaysBirthdays.length} birthday(s) today - sending email wishes`);
+      
+      // Get organization data
+      const organization = await prisma.organization.findFirst({
+        select: {
+          name: true,
+          shortName: true
+        }
+      });
+
+      let totalEmailsSent = 0;
+      
+      // Send birthday emails to each birthday person
+      for (const birthdayUser of todaysBirthdays) {
+        try {
+          await this.sendBirthdayEmail(birthdayUser, organization);
+          totalEmailsSent++;
+        } catch (error) {
+          console.error(`❌ Failed to send birthday email to ${birthdayUser.fullName}:`, error);
+        }
+      }
+
+      // TODO: Log birthday email completion (requires valid userId)
+      // Skip activity logging for system jobs
+
+      console.log(`✅ Birthday emails processed: ${totalEmailsSent}/${todaysBirthdays.length} sent successfully`);
+      
+      return {
+        success: true,
+        birthdaysCount: todaysBirthdays.length,
+        emailsSent: totalEmailsSent,
+        birthdays: todaysBirthdays.map(user => ({
+          name: user.fullName,
+          age: user.age,
+          batch: user.batch,
+          email: user.email
+        }))
+      };
+    } catch (error) {
+      console.error('❌ Birthday email service error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send birthday wish email to specific birthday person
+   */
+  static async sendBirthdayEmail(birthdayUser, organizationData) {
+    try {
+      const emailService = emailManager.getService();
+      
+      await emailService.sendBirthdayWish(birthdayUser, organizationData);
+      console.log(`✅ Birthday email sent to ${birthdayUser.fullName} (${birthdayUser.email})`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`❌ Failed to send birthday email to ${birthdayUser.fullName}:`, error);
+      return { success: false, error: error.message };
     }
   }
 

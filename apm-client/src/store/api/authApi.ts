@@ -14,10 +14,21 @@ export interface LoginRequest {
 export interface LoginResponse {
   success: boolean
   message: string
-  user: User
-  accessToken: string
-  refreshToken: string
-  expiresIn: number
+  data: {
+    user: User
+    tokens: {
+      accessToken: string
+      refreshToken: string
+    }
+    verificationStatus: {
+      isAlumniVerified: boolean
+      pendingVerification: boolean
+      isRejected: boolean
+      rejectionReason?: string
+      hasSerialId: boolean
+      message: string
+    }
+  }
 }
 
 export interface RegisterRequest {
@@ -146,12 +157,11 @@ export const authApi = apiSlice.injectEndpoints({
       }),
     }),
 
-    // Verify email
+    // Verify email - uses GET with token in URL path
     verifyEmail: builder.mutation<VerifyEmailResponse, VerifyEmailRequest>({
       query: ({ token }) => ({
-        url: '/auth/verify-email',
-        method: 'POST',
-        body: { token },
+        url: `/auth/verify-email/${token}`,
+        method: 'GET',
       }),
       invalidatesTags: ['Auth', 'User'],
     }),
@@ -221,11 +231,11 @@ export const authApi = apiSlice.injectEndpoints({
       role: User['role']
     }>({
       query: ({ userId, role }) => ({
-        url: `/auth/users/${userId}/role`,
-        method: 'PATCH',
+        url: `/admin/users/${userId}/role`,
+        method: 'PUT',
         body: { role },
       }),
-      invalidatesTags: ['Auth', 'User'],
+      invalidatesTags: ['Users', 'Admin'],
     }),
 
     // Deactivate/activate user account (admin only)

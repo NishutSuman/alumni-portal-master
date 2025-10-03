@@ -17,6 +17,7 @@ const paymentSchemas = {
 		referenceType: Joi.string()
 			.valid(
 				"EVENT_REGISTRATION",
+				"EVENT_PAYMENT",
 				"MERCHANDISE",
 				"GUEST_FEES",
 				"ADDITIONAL_FEES",
@@ -26,19 +27,48 @@ const paymentSchemas = {
 			.required()
 			.messages({
 				"any.only":
-					"Reference type must be one of: EVENT_REGISTRATION, MERCHANDISE, GUEST_FEES, ADDITIONAL_FEES, DONATION, MEMBERSHIP",
+					"Reference type must be one of: EVENT_REGISTRATION, EVENT_PAYMENT, MERCHANDISE, GUEST_FEES, ADDITIONAL_FEES, DONATION, MEMBERSHIP",
 				"any.required": "Reference type is required",
 			}),
 
-		referenceId: Joi.string().uuid().required().messages({
-			"string.uuid": "Reference ID must be a valid UUID",
-			"any.required": "Reference ID is required",
-		}),
+		referenceId: Joi.alternatives()
+			.conditional('referenceType', {
+				is: 'EVENT_PAYMENT',
+				then: Joi.string().required().messages({
+					"any.required": "Event ID is required",
+				}),
+				otherwise: Joi.string().uuid().required().messages({
+					"string.uuid": "Reference ID must be a valid UUID",
+					"any.required": "Reference ID is required",
+				})
+			}),
 
 		description: Joi.string().trim().min(5).max(200).optional().messages({
 			"string.min": "Description must be at least 5 characters",
 			"string.max": "Description cannot exceed 200 characters",
 		}),
+
+		registrationData: Joi.object({
+			mealPreference: Joi.string().valid("VEG", "NON_VEG").optional(),
+			guestCount: Joi.number().integer().min(0).optional(),
+			guests: Joi.array().items(
+				Joi.object({
+					name: Joi.string().trim().min(1).required().messages({
+						"any.required": "Guest name is required",
+						"string.min": "Guest name cannot be empty",
+					}),
+					email: Joi.string().email().required().messages({
+						"any.required": "Guest email is required",
+						"string.email": "Guest email must be valid",
+					}),
+					phone: Joi.string().allow('').optional(),
+					mealPreference: Joi.string().valid("VEG", "NON_VEG").optional(),
+				})
+			).optional(),
+			donationAmount: Joi.number().min(0).optional().messages({
+				"number.min": "Donation amount must be 0 or greater",
+			}),
+		}).optional(),
 	}),
 
 	// Payment verification validation
@@ -98,6 +128,7 @@ const paymentSchemas = {
 		referenceType: Joi.string()
 			.valid(
 				"EVENT_REGISTRATION",
+				"EVENT_PAYMENT",
 				"MERCHANDISE",
 				"GUEST_FEES",
 				"ADDITIONAL_FEES",
@@ -131,8 +162,10 @@ const paymentSchemas = {
 
 	// Parameter validation schemas
 	transactionIdParam: Joi.object({
-		transactionId: Joi.string().uuid().required().messages({
-			"string.uuid": "Transaction ID must be a valid UUID",
+		transactionId: Joi.string().min(20).max(30).alphanum().required().messages({
+			"string.min": "Transaction ID must be at least 20 characters",
+			"string.max": "Transaction ID must be less than 30 characters",
+			"string.alphanum": "Transaction ID must contain only letters and numbers",
 			"any.required": "Transaction ID is required",
 		}),
 	}),
@@ -249,6 +282,10 @@ const validatePaymentInitiationRules = async (req, res, next) => {
 		switch (referenceType) {
 			case "EVENT_REGISTRATION":
 				await validateEventRegistrationPayment(referenceId, userId, errors);
+				break;
+
+			case "EVENT_PAYMENT":
+				await validateEventPaymentRules(referenceId, userId, errors);
 				break;
 
 			case "MERCHANDISE":
@@ -412,6 +449,97 @@ async function validateMerchandisePayment(registrationId, userId, errors) {
 		errors.push({
 			field: "referenceId",
 			message: "Cannot pay for merchandise from cancelled event",
+		});
+		return;
+	}
+}
+
+/**
+ * Validate event payment eligibility (for EVENT_PAYMENT type)
+ */
+async function validateEventPaymentRules(eventId, userId, errors) {
+	const event = await prisma.event.findUnique({
+		where: { id: eventId },
+		select: {
+			id: true,
+			title: true,
+			status: true,
+			registrationStartDate: true,
+			registrationEndDate: true,
+			eventDate: true,
+			maxCapacity: true,
+		},
+	});
+
+	if (!event) {
+		errors.push({
+			field: "referenceId",
+			message: "Event not found",
+		});
+		return;
+	}
+
+	// Check if event allows registration
+	const validStatusesForRegistration = ["PUBLISHED", "REGISTRATION_OPEN"];
+	if (!validStatusesForRegistration.includes(event.status)) {
+		errors.push({
+			field: "referenceId",
+			message: `Event status '${event.status}' does not allow registration. Event must be PUBLISHED or REGISTRATION_OPEN.`,
+		});
+		return;
+	}
+
+	const now = new Date();
+
+	// Check registration start date
+	if (event.registrationStartDate && now < new Date(event.registrationStartDate)) {
+		errors.push({
+			field: "referenceId",
+			message: "Registration has not started yet",
+		});
+		return;
+	}
+
+	// Check registration end date
+	if (event.registrationEndDate && now > new Date(event.registrationEndDate)) {
+		errors.push({
+			field: "referenceId",
+			message: "Registration deadline has passed",
+		});
+		return;
+	}
+
+	// Check capacity
+	if (event.maxCapacity) {
+		const registrationCount = await prisma.eventRegistration.count({
+			where: {
+				eventId,
+				status: "CONFIRMED",
+			},
+		});
+		
+		if (registrationCount >= event.maxCapacity) {
+			errors.push({
+				field: "referenceId",
+				message: "Event is full",
+			});
+			return;
+		}
+	}
+
+	// Check if user is already registered
+	const existingRegistration = await prisma.eventRegistration.findFirst({
+		where: {
+			eventId,
+			userId,
+			status: "CONFIRMED",
+		},
+	});
+
+	if (existingRegistration) {
+		errors.push({
+			field: "referenceId",
+			message: "You are already registered for this event",
 		});
 		return;
 	}

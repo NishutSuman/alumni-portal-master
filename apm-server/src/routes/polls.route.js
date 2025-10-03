@@ -104,6 +104,20 @@ router.get('/:pollId/results',
   asyncHandler(pollController.getPollResults)
 );
 
+/**
+ * Get detailed poll statistics
+ * GET /api/polls/:pollId/stats
+ * Access: Public
+ */
+router.get('/:pollId/stats',
+  [
+    optionalAuth,
+    validatePollIdParam,
+    validatePollAccess
+  ],
+  asyncHandler(pollController.getPollStats)
+);
+
 // ============================================
 // AUTHENTICATED USER ROUTES
 // ============================================
@@ -164,12 +178,12 @@ router.get('/admin/statistics',
 /**
  * Create new poll
  * POST /api/polls
- * Access: SUPER_ADMIN
+ * Access: SUPER_ADMIN or BATCH_ADMIN
  */
 router.post('/',
   [
     authenticateToken,
-    requireRole('SUPER_ADMIN'),
+    requireRole(['SUPER_ADMIN', 'BATCH_ADMIN']),
     validateCreatePoll,
     autoInvalidatePollCaches
   ],

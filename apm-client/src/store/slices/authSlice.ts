@@ -2,6 +2,7 @@
 // GUILD Authentication State Management
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { apiSlice } from '../api/apiSlice'
 
 // Types for authentication
 export interface User {
@@ -14,6 +15,8 @@ export interface User {
   passoutYear?: number
   isAlumniVerified: boolean
   pendingVerification: boolean
+  isRejected?: boolean
+  rejectionReason?: string
   profilePictureUrl?: string
   whatsappNumber?: string
   personalEmail?: string
@@ -25,6 +28,13 @@ export interface User {
   lastLoginAt?: string
   createdAt: string
   updatedAt: string
+  verificationContext?: {
+    isBlacklisted?: boolean
+    blacklistInfo?: {
+      reason?: string
+      blacklistedAt?: string
+    }
+  }
 }
 
 export interface AuthState {
@@ -211,7 +221,9 @@ const authSlice = createSlice({
     emailVerificationSuccess: (state) => {
       state.emailVerificationSent = false
       if (state.user) {
-        state.user.isEmailVerified = true
+        // Note: isEmailVerified field should be added to User interface if needed
+        // For now, we'll assume email verification updates the main verification status
+        state.user.isAlumniVerified = true
       }
     },
     

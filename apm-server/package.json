@@ -22,6 +22,8 @@
 	"license": "ISC",
 	"description": "",
 	"dependencies": {
+		"@aws-sdk/client-s3": "^3.884.0",
+		"@aws-sdk/s3-request-presigner": "^3.884.0",
 		"@prisma/client": "^6.15.0",
 		"@sendgrid/mail": "^8.1.5",
 		"axios": "^1.11.0",

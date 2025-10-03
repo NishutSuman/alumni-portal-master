@@ -78,18 +78,19 @@ export const useAuth = () => {
       
       if (response.success) {
         dispatch(loginSuccess({
-          user: response.user,
-          token: response.accessToken,
-          refreshToken: response.refreshToken,
+          user: response.data.user,
+          token: response.data.tokens.accessToken,
+          refreshToken: response.data.tokens.refreshToken,
           rememberMe: credentials.rememberMe || false,
         }))
         
-        toast.success(`Welcome back, ${response.user.fullName}!`)
+        toast.success(`Welcome back, ${response.data.user.fullName}!`)
         
         // Navigate based on user role and verification status
-        if (!response.user.isAlumniVerified && response.user.pendingVerification) {
+        const { user } = response.data
+        if (!user.isAlumniVerified && user.pendingVerification) {
           navigate('/auth/verification-pending')
-        } else if (response.user.role === 'SUPER_ADMIN') {
+        } else if (user.role === 'SUPER_ADMIN') {
           navigate('/admin/dashboard')
         } else {
           navigate('/user/dashboard')
@@ -102,9 +103,30 @@ export const useAuth = () => {
       return { success: false, error: 'Login failed' }
     } catch (error: any) {
       const errorMessage = error?.data?.message || error?.message || 'Login failed'
+      const errorData = error?.data?.data || {}
+      
       dispatch(loginFailure(errorMessage))
-      toast.error(errorMessage)
-      return { success: false, error: errorMessage }
+      
+      // Handle email verification required error
+      if (errorData.emailVerificationRequired) {
+        if (errorData.verificationEmailSent) {
+          toast.success('New verification link sent! Check your inbox.')
+        } else {
+          toast.error('Please verify your email address first')
+        }
+        navigate('/auth/verify-email', { 
+          state: { 
+            email: errorData.email,
+            fullName: errorData.fullName,
+            fromLogin: true,
+            emailSent: errorData.verificationEmailSent
+          } 
+        })
+      } else {
+        toast.error(errorMessage)
+      }
+      
+      return { success: false, error: errorMessage, data: errorData }
     }
   }
 
@@ -201,7 +223,7 @@ export const useAuth = () => {
     }
   }
 
-  // Verify email function - FIXED with proper return type
+  // Verify email function - FIXED with proper return type (no toast - handled by component)
   const verifyEmail = async (token: string): Promise<AuthActionResult> => {
     try {
       const response = await verifyEmailMutation({ token }).unwrap()
@@ -210,20 +232,18 @@ export const useAuth = () => {
         // If user is logged in, update their verification status
         if (isAuthenticated) {
           dispatch(loginSuccess({
-            user: response.user,
+            user: response.data?.user || response.user,
             token: auth.token!,
             refreshToken: auth.refreshToken!,
           }))
         }
         
-        toast.success('Email verified successfully!')
-        return { success: true }
+        return { success: true, data: response.data }
       }
       
-      return { success: false, error: 'Email verification failed' }
+      return { success: false, error: response.message || 'Email verification failed' }
     } catch (error: any) {
       const errorMessage = error?.data?.message || 'Email verification failed'
-      toast.error(errorMessage)
       return { success: false, error: errorMessage }
     }
   }

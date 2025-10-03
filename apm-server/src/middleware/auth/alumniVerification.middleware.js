@@ -280,8 +280,8 @@ const validateVerificationRequest = (req, res, next) => {
     
     const errors = [];
     
-    // Validate user ID format
-    if (!userId || !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(userId)) {
+    // Validate user ID format (CUID format: starts with 'c' followed by alphanumeric)
+    if (!userId || !/^c[a-z0-9]{24}$/.test(userId)) {
       errors.push({
         field: 'userId',
         message: 'Valid user ID required'

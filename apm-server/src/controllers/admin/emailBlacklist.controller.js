@@ -197,6 +197,22 @@ const removeFromBlacklist = async (req, res) => {
         }
       });
       
+      // Also update user record if exists - reset rejection status
+      await tx.user.updateMany({
+        where: { 
+          email: blacklistedEmail.email,
+          isRejected: true
+        },
+        data: {
+          isRejected: false,
+          isEmailVerified: false,
+          pendingVerification: true,
+          rejectedBy: null,
+          rejectedAt: null,
+          rejectionReason: null
+        }
+      });
+      
       // Log admin activity
       await tx.activityLog.create({
         data: {
@@ -208,7 +224,8 @@ const removeFromBlacklist = async (req, res) => {
             originalReason: blacklistedEmail.reason,
             removalReason: reason.trim(),
             originallyBlacklistedBy: blacklistedEmail.blacklistedAdmin.fullName,
-            originallyBlacklistedAt: blacklistedEmail.blacklistedAt
+            originallyBlacklistedAt: blacklistedEmail.blacklistedAt,
+            userReactivated: true
           },
           ipAddress: req.ip,
           userAgent: req.get('User-Agent')

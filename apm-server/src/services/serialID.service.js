@@ -290,7 +290,7 @@ class SerialIdService {
   static parseBatchYears(batchYear) {
     // JNV system: 7-year education (Class VI to XII)
     const passoutYear = batchYear;
-    const admissionYear = batchYear - 6; // 7 years: 2016 - 6 = 2010 (2010-2016)
+    const admissionYear = batchYear - 7; // 7 years: 2016 - 7 = 2009 (2009-2016)
     
     return {
       admissionYear,

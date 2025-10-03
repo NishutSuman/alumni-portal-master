@@ -19,8 +19,23 @@ const {
 	validateApproveRejectCollection,
 } = require("../middleware/validation/batchCollection.validation.middleware");
 
-// All admin routes require SUPER_ADMIN role
+// All admin routes require authentication
 router.use(authenticateToken);
+
+// User management routes - accessible by SUPER_ADMIN and BATCH_ADMIN
+router.get(
+	"/users",
+	requireRole(["SUPER_ADMIN", "BATCH_ADMIN"]),
+	asyncHandler(adminController.getAllUsers)
+);
+
+router.put(
+	"/users/:userId/role",
+	requireRole(["SUPER_ADMIN"]), // Only super admin can change roles
+	asyncHandler(adminController.updateUserRole)
+);
+
+// All other admin routes require SUPER_ADMIN role
 router.use(requireRole("SUPER_ADMIN"));
 
 // Cache management routes
@@ -44,6 +59,20 @@ router.get(
 router.get(
 	"/dashboard/events-analytics",
 	asyncHandler(adminController.getEventsAnalytics)
+);
+
+// Event registrations for analytics - TEMP: Auth disabled for testing
+router.get(
+	"/event-registrations",
+	// requireRole(["SUPER_ADMIN"]), // Temporarily disabled
+	asyncHandler(adminController.getEventRegistrations)
+);
+
+// User batches for dropdown - TEMP: Auth disabled for testing
+router.get(
+	"/users/batches",
+	// requireRole(["SUPER_ADMIN"]), // Temporarily disabled
+	asyncHandler(adminController.getUserBatches)
 );
 
 // Revenue breakdown - CACHED

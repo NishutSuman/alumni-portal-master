@@ -24,21 +24,20 @@ const validateProfileEdit = async (req, res, next) => {
     if (batch !== undefined) {
       console.log(`📝 Batch change request: User ${user.fullName} (${user.batch}) → ${batch}`);
       
-      // Validate batch year format
+      // Validate batch year format - simple validation only
       const batchYear = parseInt(batch);
-      const batchValidation = SerialIdService.validateAndParseBatchYear(batchYear);
+      const currentYear = new Date().getFullYear();
       
-      if (!batchValidation.isValid) {
+      // Simple validation without auto-calculation
+      if (isNaN(batchYear) || batchYear < 1950 || batchYear > currentYear + 10) {
         return res.status(400).json({
           success: false,
-          message: batchValidation.error,
+          message: 'Invalid batch year. Please enter a valid passout year.',
           field: 'batch',
           currentBatch: user.batch,
           providedBatch: batch
         });
       }
-      
-      const { admissionYear, passoutYear } = batchValidation;
       
       // ==========================================
       // VERIFIED USER: BATCH LOCKED
@@ -95,15 +94,10 @@ const validateProfileEdit = async (req, res, next) => {
           req.batchCorrectionRequested = {
             oldBatch: user.batch,
             newBatch: batchYear,
-            admissionYear,
-            passoutYear,
-            requiresReVerification: true,
-            batchDisplayName: `${admissionYear}-${passoutYear.toString().slice(-2)}`
+            requiresReVerification: true
           };
           
-          // Add batch years to updates
-          req.body.admissionYear = admissionYear;
-          req.body.passoutYear = passoutYear;
+          // Only update the batch field - don't auto-calculate admission/passout years
           
           // Reset verification status for re-evaluation with correct batch
           req.body.pendingVerification = true;
@@ -385,7 +379,7 @@ const profileUpdateRateLimit = async (req, res, next) => {
     const userId = req.user.id;
     const rateLimitKey = `profile:update:${userId}`;
     
-    const { CacheService } = require('../config/redis');
+    const { CacheService } = require('../../config/redis');
     const currentCount = await CacheService.get(rateLimitKey) || 0;
     
     // Limit: 10 profile updates per hour

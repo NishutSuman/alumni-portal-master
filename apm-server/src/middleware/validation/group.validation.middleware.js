@@ -1,4 +1,4 @@
-// src/middleware/group.validation.middleware.js
+// src/middleware/group.validation.middleware.js - Updated
 const Joi = require('joi');
 const { PrismaClient } = require('@prisma/client');
 const { errorResponse } = require('../../utils/response');
@@ -76,10 +76,10 @@ const groupValidationSchemas = {
 
   addMember: Joi.object({
     userId: Joi.string()
-      .uuid()
+      .pattern(/^c[^\s-]{8,}$/) // CUID pattern: starts with 'c' followed by at least 8 characters
       .required()
       .messages({
-        'string.uuid': 'Invalid user ID format',
+        'string.pattern.base': 'Invalid user ID format',
         'any.required': 'User ID is required'
       }),
     role: Joi.string()
@@ -122,7 +122,7 @@ const groupValidationSchemas = {
     members: Joi.array()
       .items(
         Joi.object({
-          userId: Joi.string().uuid().required(),
+          userId: Joi.string().pattern(/^c[^\s-]{8,}$/).required(),
           role: Joi.string().valid(
             'CONVENER', 'CO_CONVENER', 'STAKE_HOLDER',
             'PRESIDENT', 'VICE_PRESIDENT', 'SECRETARY', 'JOINT_SECRETARY', 'TREASURER', 'JOINT_TREASURER',
@@ -143,7 +143,7 @@ const groupValidationSchemas = {
     groups: Joi.array()
       .items(
         Joi.object({
-          id: Joi.string().uuid().required(),
+          id: Joi.string().pattern(/^c[^\s-]{8,}$/).required(),
           displayOrder: Joi.number().integer().min(0).required()
         })
       )
@@ -159,20 +159,41 @@ const groupValidationSchemas = {
 const groupParamSchemas = {
   groupIdParam: Joi.object({
     groupId: Joi.string()
-      .uuid()
+      .min(20).max(30) // CUID pattern: between 20-30 characters
       .required()
       .messages({
-        'string.uuid': 'Invalid group ID format',
+        'string.min': 'Group ID must be at least 20 characters',
+        'string.max': 'Group ID cannot exceed 30 characters', 
         'any.required': 'Group ID is required'
       })
   }),
 
   userIdParam: Joi.object({
     userId: Joi.string()
-      .uuid()
+      .min(20).max(30) // CUID pattern: between 20-30 characters
       .required()
       .messages({
-        'string.uuid': 'Invalid user ID format',
+        'string.min': 'User ID must be at least 20 characters',
+        'string.max': 'User ID cannot exceed 30 characters',
+        'any.required': 'User ID is required'
+      })
+  }),
+
+  groupUserIdParams: Joi.object({
+    groupId: Joi.string()
+      .min(20).max(30) // CUID pattern: between 20-30 characters
+      .required()
+      .messages({
+        'string.min': 'Group ID must be at least 20 characters',
+        'string.max': 'Group ID cannot exceed 30 characters', 
+        'any.required': 'Group ID is required'
+      }),
+    userId: Joi.string()
+      .min(20).max(30) // CUID pattern: between 20-30 characters
+      .required()
+      .messages({
+        'string.min': 'User ID must be at least 20 characters',
+        'string.max': 'User ID cannot exceed 30 characters',
         'any.required': 'User ID is required'
       })
   })
@@ -228,6 +249,7 @@ const validateGroupParams = (schemaName) => {
         field: detail.path.join('.'),
         message: detail.message
       }));
+
 
       return errorResponse(res, 'Parameter validation failed', 400, { errors });
     }
@@ -333,6 +355,56 @@ const validateMemberRole = (req, res, next) => {
   }
 };
 
+// Validate role limits for OFFICE_BEARERS group
+const validateRoleLimits = async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    const { group } = req;
+    
+    if (!role || !group || group.type !== 'OFFICE_BEARERS') {
+      return next();
+    }
+
+    // Define role limits for OFFICE_BEARERS
+    const roleLimits = {
+      'PRESIDENT': 1,
+      'VICE_PRESIDENT': 2, 
+      'SECRETARY': 1,
+      'JOINT_SECRETARY': 2,
+      'TREASURER': 1,
+      'JOINT_TREASURER': 2
+    };
+
+    const limit = roleLimits[role];
+    if (!limit) {
+      return next();
+    }
+
+    // Check current count of this role in the group
+    const currentCount = await prisma.groupMember.count({
+      where: {
+        groupId: group.id,
+        role: role,
+        isActive: true
+      }
+    });
+
+    if (currentCount >= limit) {
+      const roleName = role.replace(/_/g, ' ').toLowerCase();
+      return errorResponse(res, `Cannot add more ${roleName}s. Maximum limit of ${limit} reached.`, 400, {
+        currentCount,
+        maxLimit: limit,
+        role: role
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Role limit validation error:', error);
+    return errorResponse(res, 'Failed to validate role limits', 500);
+  }
+};
+
 // Validate user exists and is not already a member
 const validateUserForMembership = async (req, res, next) => {
   try {
@@ -390,20 +462,17 @@ const validateMemberExists = async (req, res, next) => {
   try {
     const { groupId, userId } = req.params;
 
-    const member = await prisma.groupMember.findUnique({
+    const member = await prisma.groupMember.findFirst({
       where: {
-        groupId_userId: {
-          groupId,
-          userId
-        }
+        groupId: groupId,
+        userId: userId
       },
       include: {
         user: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            profilePhoto: true
+            fullName: true,
+            profileImage: true
           }
         }
       }
@@ -437,11 +506,13 @@ module.exports = {
   // Parameter validation
   validateGroupIdParam: validateGroupParams('groupIdParam'),
   validateUserIdParam: validateGroupParams('userIdParam'),
+  validateGroupUserIdParams: validateGroupParams('groupUserIdParams'),
 
   // Business rule validation
   validateGroupNameUnique,
   validateGroupAccess,
   validateMemberRole,
+  validateRoleLimits,
   validateUserForMembership,
   validateMemberExists
 };

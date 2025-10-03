@@ -27,12 +27,19 @@ const formatPollData = (poll, includeResults = true) => {
   };
 
   if (poll.options) {
-    formatted.options = poll.options.map(option => ({
-      id: option.id,
-      text: option.text,
-      displayOrder: option.displayOrder,
-      voteCount: option._count?.votes || 0
-    }));
+    const totalVotes = poll._count?.votes || 0;
+    formatted.options = poll.options.map(option => {
+      const voteCount = option._count?.votes || 0;
+      const percentage = totalVotes > 0 ? parseFloat(((voteCount / totalVotes) * 100).toFixed(1)) : 0;
+      
+      return {
+        id: option.id,
+        text: option.text,
+        displayOrder: option.displayOrder,
+        voteCount,
+        percentage
+      };
+    });
   }
 
   if (includeResults && poll.votes && !poll.isAnonymous) {
@@ -41,9 +48,8 @@ const formatPollData = (poll, includeResults = true) => {
       .map(vote => ({
         user: {
           id: vote.user.id,
-          firstName: vote.user.firstName,
-          lastName: vote.user.lastName,
-          profilePhoto: vote.user.profilePhoto
+          fullName: vote.user.fullName,
+          profileImage: vote.user.profileImage
         },
         votedAt: vote.createdAt,
         optionId: vote.optionId
@@ -53,8 +59,7 @@ const formatPollData = (poll, includeResults = true) => {
   if (poll.creator) {
     formatted.creator = {
       id: poll.creator.id,
-      firstName: poll.creator.firstName,
-      lastName: poll.creator.lastName
+      fullName: poll.creator.fullName
     };
   }
 
@@ -152,8 +157,7 @@ const getPolls = async (req, res) => {
       creator: {
         select: {
           id: true,
-          firstName: true,
-          lastName: true
+          fullName: true
         }
       },
       options: {
@@ -184,8 +188,34 @@ const getPolls = async (req, res) => {
       prisma.poll.count({ where })
     ]);
 
-    // Format response data
-    const formattedPolls = polls.map(poll => formatPollData(poll, true));
+    // Get user votes for all polls if user is authenticated
+    const userId = req.user?.id;
+    let userVotes = [];
+    if (userId) {
+      userVotes = await prisma.pollVote.findMany({
+        where: {
+          userId,
+          pollId: { in: polls.map(poll => poll.id) }
+        },
+        select: {
+          pollId: true,
+          optionId: true
+        }
+      });
+    }
+
+    // Format polls with user voting data
+    const formattedPolls = polls.map(poll => {
+      const pollUserVotes = userVotes.filter(vote => vote.pollId === poll.id);
+      const hasVoted = pollUserVotes.length > 0;
+      const userVoteOptionIds = pollUserVotes.map(vote => vote.optionId);
+
+      return {
+        ...formatPollData(poll, true),
+        hasVoted,
+        userVote: hasVoted ? userVoteOptionIds : null
+      };
+    });
 
     const responseData = {
       polls: formattedPolls,
@@ -233,8 +263,7 @@ const getPoll = async (req, res) => {
       creator: {
         select: {
           id: true,
-          firstName: true,
-          lastName: true
+          fullName: true
         }
       },
       options: {
@@ -260,9 +289,8 @@ const getPoll = async (req, res) => {
           user: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
-              profilePhoto: true
+              fullName: true,
+              profileImage: true
             }
           }
         },
@@ -324,6 +352,8 @@ const getPoll = async (req, res) => {
  */
 const createPoll = async (req, res) => {
   try {
+    console.log('Create poll request body:', req.body);
+    console.log('User:', req.user);
     const { title, description, options, allowMultiple, expiresAt, isAnonymous } = req.body;
     const userId = req.user.id;
 
@@ -357,8 +387,8 @@ const createPoll = async (req, res) => {
       return { poll, options: pollOptions };
     });
 
-    // Log activity
-    await prisma.activityLog.create({
+    // Log activity (will be updated with notification stats later)
+    const activityLog = await prisma.activityLog.create({
       data: {
         userId,
         action: 'poll_create',
@@ -375,6 +405,130 @@ const createPoll = async (req, res) => {
       }
     });
 
+    // Send notifications to all users about new poll
+    try {
+      console.log('📢 Sending poll creation notifications to all users');
+      
+      // Get all active users (excluding the poll creator)
+      const allUsers = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          id: { not: userId } // Exclude the poll creator
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true
+        }
+      });
+
+      console.log(`📨 Found ${allUsers.length} users to notify`);
+
+      // Get push notification service
+      const pushNotificationService = require('../../utils/push-notification.util');
+
+      // Create in-app notifications for all users (batch operation for efficiency)
+      const notificationData = allUsers.map(user => ({
+        userId: user.id,
+        type: 'GENERAL',
+        title: 'New Poll Available',
+        message: `A new poll "${result.poll.title}" has been created. Cast your vote now!`,
+        payload: {
+          pollId: result.poll.id,
+          pollTitle: result.poll.title,
+          createdBy: req.user.fullName || 'Admin',
+          type: 'poll_created',
+          expiresAt: result.poll.expiresAt
+        }
+      }));
+
+      // Batch create in-app notifications
+      await prisma.notification.createMany({
+        data: notificationData
+      });
+
+      console.log(`✅ Created ${notificationData.length} in-app notifications`);
+
+      // Send push notifications
+      if (pushNotificationService.initialized) {
+        // Send topic-based notification for better performance
+        try {
+          await pushNotificationService.sendToTopic({
+            topic: 'all_users',
+            title: 'New Poll Available',
+            body: `A new poll "${result.poll.title}" has been created. Cast your vote now!`,
+            data: {
+              type: 'poll_created',
+              pollId: result.poll.id,
+              pollTitle: result.poll.title,
+              createdBy: req.user.fullName || 'Admin'
+            },
+            priority: 'normal'
+          });
+          console.log('✅ Topic-based push notification sent');
+        } catch (topicError) {
+          console.log('📱 Topic notification failed, sending individual notifications');
+          
+          // Fallback to individual notifications
+          for (const user of allUsers.slice(0, 10)) { // Limit to first 10 for demo
+            try {
+              const mockToken = `mock_token_${user.id}`;
+              await pushNotificationService.sendToToken({
+                token: mockToken,
+                title: 'New Poll Available',
+                body: `A new poll "${result.poll.title}" has been created. Cast your vote now!`,
+                data: {
+                  type: 'poll_created',
+                  pollId: result.poll.id,
+                  pollTitle: result.poll.title,
+                  createdBy: req.user.fullName || 'Admin'
+                },
+                priority: 'normal'
+              });
+              console.log(`✅ Push notification sent to: ${user.fullName}`);
+            } catch (notifError) {
+              console.error(`❌ Failed to send notification to user ${user.id}:`, notifError.message);
+            }
+          }
+        }
+      }
+
+      // Update activity log with notification stats
+      await prisma.activityLog.update({
+        where: { id: activityLog.id },
+        data: {
+          details: {
+            ...activityLog.details,
+            notificationsStarted: true,
+            usersNotified: allUsers.length,
+            notificationsSent: true
+          }
+        }
+      });
+
+      console.log('📢 Poll creation notifications completed');
+    } catch (notificationError) {
+      console.error('Failed to send poll creation notifications:', notificationError);
+      
+      // Update activity log with error info
+      try {
+        await prisma.activityLog.update({
+          where: { id: activityLog.id },
+          data: {
+            details: {
+              ...activityLog.details,
+              notificationsStarted: true,
+              notificationError: notificationError.message,
+              notificationsSent: false
+            }
+          }
+        });
+      } catch (logError) {
+        console.error('Failed to update activity log:', logError);
+      }
+      // Don't fail poll creation if notifications fail
+    }
+
     // Fetch complete poll data for response
     const createdPoll = await prisma.poll.findUnique({
       where: { id: result.poll.id },
@@ -382,8 +536,7 @@ const createPoll = async (req, res) => {
         creator: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true
+            fullName: true
           }
         },
         options: {
@@ -425,8 +578,18 @@ const createPoll = async (req, res) => {
 const updatePoll = async (req, res) => {
   try {
     const { pollId } = req.params;
-    const { title, description, isActive, allowMultiple, expiresAt, isAnonymous } = req.body;
+    const { title, description, isActive, allowMultiple, expiresAt, isAnonymous, addOptions, removeOptionIds } = req.body;
     const userId = req.user.id;
+
+    console.log('🔍 Update poll request:', {
+      pollId,
+      body: req.body,
+      userId,
+      userRole: req.user.role,
+      hasAddOptions: !!addOptions,
+      addOptionsLength: addOptions?.length,
+      addOptionsData: addOptions
+    });
 
     // Check if poll has votes (some fields cannot be changed)
     const voteCount = await prisma.pollVote.count({
@@ -439,12 +602,14 @@ const updatePoll = async (req, res) => {
     if (description !== undefined) updateData.description = description?.trim() || null;
     if (isActive !== undefined) updateData.isActive = isActive;
     
-    // These fields can only be changed if no votes exist
-    if (voteCount === 0) {
+    // These fields can only be changed if no votes exist OR user is SUPER_ADMIN
+    const isAdmin = req.user.role === 'SUPER_ADMIN';
+    
+    if (voteCount === 0 || isAdmin) {
       if (allowMultiple !== undefined) updateData.allowMultiple = allowMultiple;
       if (isAnonymous !== undefined) updateData.isAnonymous = isAnonymous;
     } else {
-      // If votes exist and these fields are being changed, warn user
+      // If votes exist and these fields are being changed by non-admin, warn user
       if (allowMultiple !== undefined || isAnonymous !== undefined) {
         return errorResponse(res, 'Cannot change voting type or anonymity settings after votes have been cast', 400, {
           voteCount
@@ -457,6 +622,52 @@ const updatePoll = async (req, res) => {
       updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
     }
 
+    // Handle adding new options (admin only)
+    console.log('🔍 Adding options debug:', { addOptions, isAdmin, userId: req.user.id, userRole: req.user.role });
+    if (addOptions && addOptions.length > 0 && isAdmin) {
+      console.log('✅ Adding new options:', addOptions);
+      const currentOptions = await prisma.pollOption.findMany({
+        where: { pollId },
+        select: { displayOrder: true },
+        orderBy: { displayOrder: 'desc' },
+        take: 1
+      });
+      
+      const nextDisplayOrder = currentOptions.length > 0 ? currentOptions[0].displayOrder + 1 : 1;
+      
+      for (let i = 0; i < addOptions.length; i++) {
+        const newOption = await prisma.pollOption.create({
+          data: {
+            pollId,
+            text: addOptions[i].trim(),
+            displayOrder: nextDisplayOrder + i
+          }
+        });
+        console.log('✅ Created new option:', newOption);
+      }
+    } else {
+      console.log('❌ Not adding options:', { hasOptions: !!addOptions && addOptions.length > 0, isAdmin });
+    }
+
+    // Handle removing options (admin only)
+    if (removeOptionIds && removeOptionIds.length > 0 && isAdmin) {
+      // First remove all votes for these options
+      await prisma.pollVote.deleteMany({
+        where: {
+          pollId,
+          optionId: { in: removeOptionIds }
+        }
+      });
+      
+      // Then remove the options
+      await prisma.pollOption.deleteMany({
+        where: {
+          pollId,
+          id: { in: removeOptionIds }
+        }
+      });
+    }
+
     // Update poll
     const poll = await prisma.poll.update({
       where: { id: pollId },
@@ -465,8 +676,7 @@ const updatePoll = async (req, res) => {
         creator: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true
+            fullName: true
           }
         },
         options: {
@@ -502,6 +712,81 @@ const updatePoll = async (req, res) => {
       }
     });
 
+    // Send push notifications to existing voters if poll was updated
+    if (voteCount > 0) {
+      try {
+        // Get all unique voters for this poll
+        const existingVoters = await prisma.pollVote.findMany({
+          where: { pollId },
+          select: {
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                fullName: true
+              }
+            }
+          },
+          distinct: ['userId']
+        });
+
+        console.log('📨 Sending notifications to', existingVoters.length, 'voters');
+        
+        // Get push notification service
+        const pushNotificationService = require('../../utils/push-notification.util');
+        
+        for (const voter of existingVoters) {
+          // Skip notification to the user who updated the poll
+          if (voter.userId === userId) continue;
+
+          console.log('📱 Processing notification for voter:', voter.userId, voter.user.fullName);
+
+          // Create an in-app notification
+          await prisma.notification.create({
+            data: {
+              userId: voter.userId,
+              type: 'GENERAL',
+              title: 'Poll Updated',
+              message: `The poll "${poll.title}" you voted on has been updated by an admin`,
+              payload: {
+                pollId: poll.id,
+                pollTitle: poll.title,
+                updatedBy: req.user.fullName || 'Admin',
+                type: 'poll_updated'
+              }
+            }
+          });
+
+          // Send push notification (will be mocked in development)
+          try {
+            // Note: In real implementation, you would fetch user's FCM tokens from database
+            // For now, using mock tokens to demonstrate the functionality
+            const mockToken = `mock_token_${voter.userId}`;
+            
+            await pushNotificationService.sendToToken({
+              token: mockToken,
+              title: 'Poll Updated',
+              body: `The poll "${poll.title}" you voted on has been updated by an admin`,
+              data: {
+                type: 'poll_updated',
+                pollId: poll.id,
+                pollTitle: poll.title,
+                updatedBy: req.user.fullName || 'Admin'
+              },
+              priority: 'normal'
+            });
+
+            console.log('✅ Push notification sent to:', voter.user.fullName);
+          } catch (pushError) {
+            console.error('❌ Push notification failed for user:', voter.userId, pushError.message);
+          }
+        }
+      } catch (notificationError) {
+        console.error('Failed to send poll update notifications:', notificationError);
+        // Don't fail the update if notifications fail
+      }
+    }
+
     const responseData = formatPollData(poll, true);
 
     return successResponse(res, responseData, 'Poll updated successfully');
@@ -521,7 +806,7 @@ const deletePoll = async (req, res) => {
     const { pollId } = req.params;
     const userId = req.user.id;
 
-    // Get poll details for logging
+    // Get poll details for logging (including counts for audit)
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       select: {
@@ -529,7 +814,10 @@ const deletePoll = async (req, res) => {
         title: true,
         createdBy: true,
         _count: {
-          select: { votes: true }
+          select: { 
+            votes: true,
+            options: true 
+          }
         }
       }
     });
@@ -538,10 +826,21 @@ const deletePoll = async (req, res) => {
       return errorResponse(res, 'Poll not found', 404);
     }
 
-    // Delete poll (cascade will handle options and votes)
+    console.log('🗑️ Deleting poll:', {
+      pollId: poll.id,
+      title: poll.title,
+      voteCount: poll._count.votes,
+      optionCount: poll._count.options
+    });
+
+    // Delete poll (CASCADE will automatically handle:)
+    // - All PollOptions (via onDelete: Cascade)
+    // - All PollVotes (via onDelete: Cascade from both Poll and PollOption)
     await prisma.poll.delete({
       where: { id: pollId }
     });
+
+    console.log('✅ Poll deleted successfully with all related data');
 
     // Log activity
     await prisma.activityLog.create({
@@ -551,7 +850,8 @@ const deletePoll = async (req, res) => {
         details: {
           pollId: poll.id,
           pollTitle: poll.title,
-          voteCount: poll._count.votes
+          voteCount: poll._count.votes,
+          optionCount: poll._count.options
         },
         ipAddress: req.ip,
         userAgent: req.get('User-Agent')
@@ -564,7 +864,8 @@ const deletePoll = async (req, res) => {
         deletedPoll: { 
           id: poll.id, 
           title: poll.title,
-          voteCount: poll._count.votes
+          voteCount: poll._count.votes,
+          optionCount: poll._count.options
         }
       },
       'Poll deleted successfully'
@@ -920,6 +1221,142 @@ const getPollStatistics = async (req, res) => {
 };
 
 /**
+ * Get detailed poll statistics with voter information
+ * GET /api/polls/:pollId/stats
+ * Access: Public (respects anonymity settings)
+ */
+const getPollStats = async (req, res) => {
+  try {
+    const { pollId } = req.params;
+    
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            fullName: true
+          }
+        },
+        options: {
+          select: {
+            id: true,
+            text: true,
+            displayOrder: true,
+            votes: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    batch: true,
+                    profileImage: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'desc' }
+            },
+            _count: {
+              select: { votes: true }
+            }
+          },
+          orderBy: { displayOrder: 'asc' }
+        },
+        _count: {
+          select: { votes: true }
+        }
+      }
+    });
+
+    if (!poll) {
+      return errorResponse(res, 'Poll not found', 404);
+    }
+
+    const totalVotes = poll._count?.votes || 0;
+
+    // Calculate detailed statistics
+    const optionsStats = poll.options.map(option => {
+      const voteCount = option._count?.votes || 0;
+      const percentage = totalVotes > 0 ? parseFloat(((voteCount / totalVotes) * 100).toFixed(1)) : 0;
+      
+      // Include voter information only if poll is not anonymous
+      const voters = poll.isAnonymous ? [] : option.votes.map(vote => ({
+        id: vote.user.id,
+        fullName: vote.user.fullName,
+        batch: vote.user.batch,
+        profileImage: vote.user.profileImage,
+        votedAt: vote.createdAt
+      }));
+
+      return {
+        id: option.id,
+        text: option.text,
+        voteCount,
+        percentage,
+        voters: voters
+      };
+    });
+
+    // Get all unique voters
+    const allVoters = poll.isAnonymous ? [] : poll.options.flatMap(option => 
+      option.votes.map(vote => ({
+        id: vote.user.id,
+        fullName: vote.user.fullName,
+        batch: vote.user.batch,
+        profileImage: vote.user.profileImage,
+        votedAt: vote.createdAt,
+        optionId: option.id,
+        optionText: option.text
+      }))
+    );
+
+    // Remove duplicates for multiple choice polls
+    const uniqueVoters = allVoters.reduce((acc, voter) => {
+      const existingVoter = acc.find(v => v.id === voter.id);
+      if (existingVoter) {
+        existingVoter.options = existingVoter.options || [];
+        existingVoter.options.push({
+          id: voter.optionId,
+          text: voter.optionText
+        });
+      } else {
+        acc.push({
+          ...voter,
+          options: [{
+            id: voter.optionId,
+            text: voter.optionText
+          }]
+        });
+      }
+      return acc;
+    }, []);
+
+    const statsData = {
+      poll: {
+        id: poll.id,
+        title: poll.title,
+        description: poll.description,
+        isActive: poll.isActive,
+        allowMultiple: poll.allowMultiple,
+        isAnonymous: poll.isAnonymous,
+        expiresAt: poll.expiresAt,
+        createdAt: poll.createdAt,
+        creator: poll.creator
+      },
+      totalVotes,
+      totalVoters: uniqueVoters.length,
+      options: optionsStats,
+      voters: uniqueVoters.sort((a, b) => new Date(b.votedAt) - new Date(a.votedAt))
+    };
+
+    return successResponse(res, statsData, 'Poll statistics retrieved successfully');
+  } catch (error) {
+    console.error('Get poll stats error:', error);
+    return errorResponse(res, 'Failed to retrieve poll statistics', 500);
+  }
+};
+
+/**
  * Get active polls for quick access
  * GET /api/polls/active
  * Access: Public
@@ -927,6 +1364,7 @@ const getPollStatistics = async (req, res) => {
 const getActivePolls = async (req, res) => {
   try {
     const now = new Date();
+    const userId = req.user?.id;
     
     const polls = await prisma.poll.findMany({
       where: {
@@ -940,8 +1378,7 @@ const getActivePolls = async (req, res) => {
         creator: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true
+            fullName: true
           }
         },
         options: {
@@ -963,8 +1400,36 @@ const getActivePolls = async (req, res) => {
       take: 10
     });
 
+    // Get user votes for all polls if user is authenticated
+    let userVotes = [];
+    if (userId) {
+      userVotes = await prisma.pollVote.findMany({
+        where: {
+          userId,
+          pollId: { in: polls.map(poll => poll.id) }
+        },
+        select: {
+          pollId: true,
+          optionId: true
+        }
+      });
+    }
+
+    // Format polls with user voting data
+    const formattedPolls = polls.map(poll => {
+      const pollUserVotes = userVotes.filter(vote => vote.pollId === poll.id);
+      const hasVoted = pollUserVotes.length > 0;
+      const userVoteOptionIds = pollUserVotes.map(vote => vote.optionId);
+
+      return {
+        ...formatPollData(poll, true),
+        hasVoted,
+        userVote: hasVoted ? userVoteOptionIds : null
+      };
+    });
+
     const responseData = {
-      activePolls: polls.map(poll => formatPollData(poll, true)),
+      activePolls: formattedPolls,
       count: polls.length,
       lastUpdated: new Date().toISOString()
     };
@@ -996,6 +1461,7 @@ module.exports = {
   // Voting
   votePoll,
   getPollResults,
+  getPollStats,
 
   // User-specific
   getUserVotes,

@@ -5,6 +5,9 @@ const { connectDB, disconnectDB } = require("./config/database");
 const MembershipExpiryJob = require("./jobs/membershipExpiry.job");
 const DailyCelebrationJob = require("./jobs/dailyCelebrationJob");
 const WeeklyFestivalSyncJob = require("./jobs/weeklyFestivalSyncJob");
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
 
 let server;
 
@@ -13,14 +16,37 @@ async function startServer() {
 		// Connect to database
 		await connectDB();
 
-		// Start the server
-		server = app.listen(config.port, () => {
-			console.log(
-				`🚀 Server running on port ${config.port} in ${config.nodeEnv} mode`
-			);
-			console.log(`📱 Health check: http://localhost:${config.port}/health`);
-			console.log(`🔗 API base URL: http://localhost:${config.port}/api`);
-		});
+		// Try to start HTTPS server if certificates exist, fallback to HTTP
+		try {
+			const httpsOptions = {
+				key: fs.readFileSync(path.join(__dirname, '..', 'key.pem')),
+				cert: fs.readFileSync(path.join(__dirname, '..', 'cert.pem')),
+				// Allow self-signed certificates for development
+				rejectUnauthorized: false
+			};
+
+			// Start HTTPS server
+			server = https.createServer(httpsOptions, app);
+			server.listen(config.port, '0.0.0.0', () => {
+				console.log(
+					`🔒 HTTPS Server running on port ${config.port} in ${config.nodeEnv} mode`
+				);
+				console.log(`📱 Health check: https://localhost:${config.port}/health`);
+				console.log(`🔗 API base URL: https://localhost:${config.port}/api`);
+				console.log(`📱 Mobile access: https://192.168.1.3:${config.port}/api`);
+			});
+		} catch (certError) {
+			console.log('⚠️  HTTPS certificates not found, falling back to HTTP');
+			// Fallback to HTTP server
+			server = app.listen(config.port, '0.0.0.0', () => {
+				console.log(
+					`🚀 HTTP Server running on port ${config.port} in ${config.nodeEnv} mode`
+				);
+				console.log(`📱 Health check: http://localhost:${config.port}/health`);
+				console.log(`🔗 API base URL: http://localhost:${config.port}/api`);
+				console.log(`📱 Mobile access: http://192.168.1.3:${config.port}/api`);
+			});
+		}
 
 		// Handle server errors
 		server.on("error", (error) => {
@@ -58,18 +84,26 @@ async function startServer() {
 		// }
 		try {
 			// Initialize daily celebration job (birthdays + festivals at 8 AM)
-			//   DailyCelebrationJob.initialize();
-			//   console.log('✅ Daily celebration job initialized');
-			// Initialize weekly festival sync job (external API sync on Sundays at 3 AM)
-			//   WeeklyFestivalSyncJob.initialize();
-			//   console.log('✅ Weekly festival sync job initialized');
+			DailyCelebrationJob.initialize();
+			console.log('✅ Daily celebration job initialized');
+			
+			// TODO: Initialize weekly festival sync job (external API sync on Sundays at 3 AM)
+			// WeeklyFestivalSyncJob.initialize();
+			// console.log('✅ Weekly festival sync job initialized');
+			
 			// For development/testing - optional manual trigger on startup
-			//   if (process.env.NODE_ENV === "development") {
-			//     console.log('🧪 Development mode: Setting up test triggers...');
-			// console.log('🎊 Celebration system initialization completed');
+			if (process.env.NODE_ENV === "development") {
+				console.log('🧪 Development mode: Setting up test triggers...');
+				// Uncomment below for manual testing:
+				// setTimeout(() => {
+				//   DailyCelebrationJob.runNow();
+				// }, 10000); // Run after 10 seconds on dev startup
+			}
+			
+			console.log('🎊 Celebration system initialization completed');
 
 		} catch (error) {
-			// console.error("❌ Failed to initialize celebration system:", error);
+			console.error("❌ Failed to initialize celebration system:", error);
 			// Don't exit - let server continue running without celebration jobs
 		}
 	} catch (error) {

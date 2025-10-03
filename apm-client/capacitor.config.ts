@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'GUILD - Alumni Network',
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'http'
   },
   plugins: {
     // Splash Screen Configuration
@@ -115,9 +115,9 @@ const config: CapacitorConfig = {
 
   // Android specific configuration
   android: {
-    allowMixedContent: false,
+    allowMixedContent: true,
     captureInput: true,
-    webContentsDebuggingEnabled: false,
+    webContentsDebuggingEnabled: true,
     appendUserAgent: 'GUILD-Alumni-App',
     backgroundColor: '#3b82f6',
     // Custom intent filters for deep linking

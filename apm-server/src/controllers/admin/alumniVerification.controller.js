@@ -1,30 +1,27 @@
 // ==========================================
-// STEP 4B: ALUMNI VERIFICATION CONTROLLER
-// File: apm-server/src/controllers/admin/alumniVerification.controller.js
+// ALUMNI VERIFICATION CONTROLLER - SIMPLIFIED
 // ==========================================
 
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
-const { CacheService } = require('../../config/redis');
+const NotificationService = require('../../services/notification.service');
+const emailManager = require('../../services/email/EmailManager');
 const SerialIdService = require('../../services/serialID.service');
-const { sendVerificationNotifications } = require('../auth/auth.controller');
 
 /**
  * Get pending verification users
- * Batch admins see only their batches, super admins see all
  */
 const getPendingVerifications = async (req, res) => {
   try {
     const { page = 1, limit = 20, batch: filterBatch, search = '' } = req.query;
-    const { role, id: adminId } = req.user;
     const offset = (page - 1) * limit;
     
-    // Build where clause based on admin role
+    // Build where clause
     let whereClause = {
       pendingVerification: true,
       isAlumniVerified: false,
       isActive: true,
-      isRejected: false // Don't show rejected users in pending list
+      isRejected: false
     };
     
     // Add search filter
@@ -35,30 +32,8 @@ const getPendingVerifications = async (req, res) => {
       ];
     }
     
-    // Batch admin: only see their managed batches
-    if (role === 'BATCH_ADMIN') {
-      const managedBatches = await prisma.batchAdminAssignment.findMany({
-        where: {
-          userId: adminId,
-          isActive: true
-        },
-        select: { batchYear: true }
-      });
-      
-      const batchYears = managedBatches.map(b => b.batchYear);
-      
-      if (batchYears.length === 0) {
-        return successResponse(res, {
-          users: [],
-          pagination: { currentPage: 1, totalPages: 0, totalUsers: 0, limit: parseInt(limit) },
-          adminContext: { role, managedBatches: [], canViewAllBatches: false }
-        });
-      }
-      
-      whereClause.batch = { in: batchYears };
-    } 
-    // Super admin: can filter by specific batch if requested
-    else if (filterBatch && role === 'SUPER_ADMIN') {
+    // Add batch filter
+    if (filterBatch) {
       whereClause.batch = parseInt(filterBatch);
     }
     
@@ -67,54 +42,96 @@ const getPendingVerifications = async (req, res) => {
         where: whereClause,
         select: {
           id: true,
-          email: true,
           fullName: true,
+          email: true,
           batch: true,
-          admissionYear: true,
-          passoutYear: true,
           createdAt: true,
-          pendingVerification: true,
-          isEmailVerified: true,
-          lastLoginAt: true
+          lastLoginAt: true,
+          isEmailVerified: true
         },
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: parseInt(limit)
+        skip: parseInt(offset),
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' }
       }),
       prisma.user.count({ where: whereClause })
     ]);
     
-    // Add batch display names
-    const enhancedUsers = users.map(user => ({
+    // Add profile completeness calculation
+    const usersWithCompleteness = users.map(user => ({
       ...user,
-      batchDisplayName: user.admissionYear && user.passoutYear 
-        ? `${user.admissionYear}-${user.passoutYear.toString().slice(-2)}`
-        : `Class of ${user.batch}`
+      registeredAt: user.createdAt,
+      profileCompleteness: user.fullName && user.email ? 85 : 60 // Simple calculation
     }));
     
+    const pagination = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limit)
+    };
+    
     return successResponse(res, {
-      users: enhancedUsers,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / limit),
-        totalUsers: totalCount,
-        limit: parseInt(limit)
-      },
-      adminContext: {
-        role,
-        canViewAllBatches: role === 'SUPER_ADMIN',
-        managedBatches: role === 'BATCH_ADMIN' ? req.managedBatches || [] : null
-      }
+      users: usersWithCompleteness,
+      pagination
     });
     
   } catch (error) {
-    console.error('Get pending verifications error:', error);
-    return errorResponse(res, 'Failed to fetch pending verifications', 500);
+    console.error('getPendingVerifications error:', error);
+    return errorResponse(res, 'Failed to retrieve pending verifications', 500);
   }
 };
 
 /**
- * Get verification details for specific user
+ * Get verification statistics
+ */
+const getVerificationStats = async (req, res) => {
+  try {
+    
+    const [pendingCount, verifiedCount, rejectedCount] = await Promise.all([
+      prisma.user.count({
+        where: {
+          pendingVerification: true,
+          isAlumniVerified: false,
+          isActive: true,
+          isRejected: false
+        }
+      }),
+      prisma.user.count({
+        where: {
+          isAlumniVerified: true,
+          isActive: true
+        }
+      }),
+      prisma.user.count({
+        where: {
+          isRejected: true,
+          isActive: true
+        }
+      })
+    ]);
+
+    const stats = {
+      pending: {
+        total: pendingCount,
+        byBatch: []
+      },
+      processed: {
+        approved: verifiedCount,
+        rejected: rejectedCount,
+        total: verifiedCount + rejectedCount
+      },
+      recentActivity: []
+    };
+    
+    return successResponse(res, stats, 'Verification stats retrieved successfully');
+  } catch (error) {
+    console.error('getVerificationStats error:', error);
+    return errorResponse(res, 'Failed to retrieve verification stats', 500);
+  }
+};
+
+/**
+ * Get user verification details  
  */
 const getVerificationDetails = async (req, res) => {
   try {
@@ -124,104 +141,56 @@ const getVerificationDetails = async (req, res) => {
       where: { id: userId },
       select: {
         id: true,
-        email: true,
         fullName: true,
+        email: true,
         batch: true,
-        admissionYear: true,
-        passoutYear: true,
         createdAt: true,
         lastLoginAt: true,
-        
-        // Verification status
         isAlumniVerified: true,
         pendingVerification: true,
         isRejected: true,
-        rejectionReason: true,
-        verificationNotes: true,
-        alumniVerifiedAt: true,
-        rejectedAt: true,
-        
-        // Verification history
-        verifiedAdmin: {
-          select: { fullName: true, role: true }
-        },
-        rejectedAdmin: {
-          select: { fullName: true, role: true }
-        },
-        
-        serialId: true,
-        isEmailVerified: true,
-        
-        // Profile information for verification
         bio: true,
-        employmentStatus: true,
-        linkedinUrl: true,
-        
-        // Activity summary for admin review
-        _count: {
-          select: {
-            activityLogs: true
-          }
-        }
+        employmentStatus: true
       }
     });
     
     if (!user) {
       return errorResponse(res, 'User not found', 404);
     }
-    
-    // Add batch display name
-    user.batchDisplayName = user.admissionYear && user.passoutYear 
-      ? `${user.admissionYear}-${user.passoutYear.toString().slice(-2)}`
-      : `Class of ${user.batch}`;
-    
-    // Get recent activity for verification context
-    const recentActivity = await prisma.activityLog.findMany({
-      where: { userId: user.id },
-      select: {
-        action: true,
-        createdAt: true,
-        ipAddress: true
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10
-    });
     
     return successResponse(res, { 
       user: {
         ...user,
-        recentActivity,
-        totalActivity: user._count.activityLogs
-      }
+        profileImage: null,
+        currentLocation: null,
+        whatsappNumber: null
+      }, 
+      verificationHistory: [] 
     });
-    
   } catch (error) {
-    console.error('Get verification details error:', error);
-    return errorResponse(res, 'Failed to fetch user details', 500);
+    console.error('getVerificationDetails error:', error);
+    return errorResponse(res, 'Failed to get verification details', 500);
   }
 };
 
 /**
- * Verify alumni user - APPROVE
- */
+ * Verify alumni user
+ */  
 const verifyAlumniUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const { notes = '' } = req.body;
-    const { id: adminId, role, fullName: adminName } = req.user;
+    const { id: adminId } = req.user;
     
-    const user = req.targetUser || await prisma.user.findUnique({
+    // Get user details first to generate serial ID
+    const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
-        email: true,
         fullName: true,
+        email: true,
         batch: true,
-        admissionYear: true,
-        passoutYear: true,
-        pendingVerification: true,
-        isAlumniVerified: true,
-        isRejected: true
+        serialId: true
       }
     });
     
@@ -229,135 +198,110 @@ const verifyAlumniUser = async (req, res) => {
       return errorResponse(res, 'User not found', 404);
     }
     
-    // Validation checks
-    if (user.isAlumniVerified) {
-      return errorResponse(res, 'User is already verified as alumni', 400);
+    // Generate serial ID if not already assigned
+    let serialId = user.serialId;
+    let userSerialCounter = null;
+    if (!serialId) {
+      try {
+        // Parse batch years from user's batch (passout year)
+        const { admissionYear, passoutYear } = SerialIdService.parseBatchYears(user.batch);
+        
+        // Generate unique serial ID using static method
+        const { serialId: generatedSerialId, counter } = await SerialIdService.generateUniqueSerialId(
+          user.fullName,
+          admissionYear,
+          passoutYear
+        );
+        
+        serialId = generatedSerialId;
+        userSerialCounter = counter;
+        console.log(`✅ Generated Serial ID: ${serialId} (Counter: ${counter}) for user: ${user.fullName} (Batch: ${user.batch})`);
+      } catch (serialError) {
+        console.error('Failed to generate serial ID:', serialError);
+        // Don't fail verification if serial ID generation fails
+        // Admin can manually assign it later
+      }
     }
     
-    if (!user.pendingVerification) {
-      return errorResponse(res, 'User is not in pending verification status', 400);
-    }
-    
-    // ==========================================
-    // GENERATE SERIAL ID FOR VERIFIED USER
-    // ==========================================
-    
-    const { serialId, counter } = await SerialIdService.generateUniqueSerialId(
-      user.fullName,
-      user.admissionYear,
-      user.passoutYear
-    );
-    
-    // ==========================================
-    // UPDATE USER WITH VERIFICATION
-    // ==========================================
-    
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      // Update user verification status
-      const updated = await tx.user.update({
-        where: { id: userId },
-        data: {
-          isAlumniVerified: true,
-          pendingVerification: false,
-          isRejected: false,
-          alumniVerifiedBy: adminId,
-          alumniVerifiedAt: new Date(),
-          verificationNotes: notes.trim(),
-          
-          // Generate and assign serial ID
-          serialId: serialId,
-          serialCounter: counter,
-          
-          // Clear any previous rejection data
-          rejectionReason: null,
-          rejectedBy: null,
-          rejectedAt: null
-        },
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          batch: true,
-          serialId: true,
-          alumniVerifiedAt: true,
-          isAlumniVerified: true
-        }
-      });
-      
-      // Log verification activity
-      await tx.activityLog.create({
-        data: {
-          userId: adminId,
-          action: 'alumni_verified',
-          details: {
-            verifiedUserId: userId,
-            verifiedUserEmail: user.email,
-            verifiedUserName: user.fullName,
-            verifiedUserBatch: user.batch,
-            serialId: serialId,
-            verificationNotes: notes.trim(),
-            adminRole: role
-          },
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      // Log activity for the verified user
-      await tx.activityLog.create({
-        data: {
-          userId: userId,
-          action: 'alumni_status_verified',
-          details: {
-            verifiedBy: adminName,
-            serialId: serialId,
-            verifiedAt: new Date()
-          }
-        }
-      });
-      
-      return updated;
-    });
-    
-    // ==========================================
-    // SEND APPROVAL NOTIFICATIONS
-    // ==========================================
-    
-    await sendVerificationNotifications(user, adminName, 'approved', null, serialId);
-    
-    // Clear relevant caches
-    await Promise.all([
-      CacheService.del(`user:${userId}:verification:status`),
-      CacheService.del(`batch:${user.batch}:pending:count`),
-      CacheService.del(`admin:${adminId}:verification:stats`)
-    ]);
-    
-    return successResponse(res, {
-      message: `${user.fullName} has been successfully verified as alumni`,
-      user: {
-        id: updatedUser.id,
-        fullName: updatedUser.fullName,
-        email: updatedUser.email,
-        batch: updatedUser.batch,
-        batchDisplayName: `${user.admissionYear}-${user.passoutYear.toString().slice(-2)}`,
-        serialId: updatedUser.serialId,
-        verifiedAt: updatedUser.alumniVerifiedAt,
-        isAlumniVerified: updatedUser.isAlumniVerified
-      },
-      admin: {
-        verifiedBy: adminName,
-        role: role
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        isAlumniVerified: true,
+        pendingVerification: false,
+        alumniVerifiedBy: adminId,
+        alumniVerifiedAt: new Date(),
+        verificationNotes: notes,
+        ...(serialId && { serialId }), // Only update if serial ID was generated
+        ...(userSerialCounter && { serialCounter: userSerialCounter }) // Store the counter number used
       }
     });
-    
-  } catch (error) {
-    console.error('Verify alumni user error:', error);
-    
-    if (error.message.includes('Failed to generate serial ID')) {
-      return errorResponse(res, 'Verification failed: Could not generate serial ID. Please ensure organization details are configured.', 500);
+
+    // Send email notification and push notification
+    try {
+      // Create push notification
+      await prisma.notification.create({
+        data: {
+          type: 'VERIFICATION_APPROVED',
+          title: 'Account Activated - Welcome!',
+          message: `Congratulations! Your alumni status has been verified and your account is now active. Welcome to the Alumni Portal!`,
+          payload: { 
+            adminId, 
+            verifiedAt: new Date().toISOString(),
+            notes: notes || 'Welcome to the community',
+            accountActivated: true
+          },
+          userId: userId
+        }
+      });
+
+      // Send email notification (if email service is available)
+      if (emailManager && emailManager.isInitialized) {
+        const emailService = emailManager.getService();
+        await emailService.sendEmail({
+          to: updated.email,
+          subject: 'Alumni Account Activated - Welcome to the Portal!',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #10b981;">🎉 Welcome to Alumni Portal!</h2>
+              
+              <p>Dear ${updated.fullName},</p>
+              
+              <p>Congratulations! Your alumni status has been verified and your account is now active.</p>
+              
+              <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0;">
+                <strong>Your account is now activated!</strong>
+                <p>You can now access all portal features and connect with your fellow alumni.</p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/login" 
+                   style="display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                   Login to Portal
+                </a>
+              </div>
+              
+              <p>Welcome to the community!</p>
+              
+              <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
+                <h4 style="margin-top: 0;">Need Help?</h4>
+                <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
+              </div>
+              
+              <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Please do not reply directly to this email.</p>
+            </div>
+          `
+        });
+        console.log(`✅ Account activation email sent to ${updated.email}`);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send verification notifications:', notificationError);
+      // Don't fail the verification if notification fails
     }
     
-    return errorResponse(res, 'Failed to verify user as alumni', 500);
+    return successResponse(res, null, 'User verified successfully');
+  } catch (error) {
+    console.error('verifyAlumniUser error:', error);
+    return errorResponse(res, 'Failed to verify user', 500);
   }
 };
 
@@ -366,22 +310,23 @@ const verifyAlumniUser = async (req, res) => {
  */
 const rejectAlumniUser = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId } = req.params; 
     const { reason } = req.body;
-    const { id: adminId, role, fullName: adminName } = req.user;
+    const { id: adminId, role } = req.user;
     
-    const user = req.targetUser || await prisma.user.findUnique({
+    // Only SUPER_ADMIN can reject users
+    if (role !== 'SUPER_ADMIN') {
+      return errorResponse(res, 'Only Super Admins can reject users', 403);
+    }
+    
+    // Get user details first
+    const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         email: true,
         fullName: true,
-        batch: true,
-        admissionYear: true,
-        passoutYear: true,
-        pendingVerification: true,
-        isRejected: true,
-        isAlumniVerified: true
+        batch: true
       }
     });
     
@@ -389,342 +334,192 @@ const rejectAlumniUser = async (req, res) => {
       return errorResponse(res, 'User not found', 404);
     }
     
-    // Validation checks
-    if (user.isRejected) {
-      return errorResponse(res, 'User is already rejected', 400);
-    }
-    
-    if (user.isAlumniVerified) {
-      return errorResponse(res, 'Cannot reject a verified alumni user', 400);
-    }
-    
-    // ==========================================
-    // REJECT USER AND ADD TO BLACKLIST
-    // ==========================================
-    
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      // Update user rejection status
-      const updated = await tx.user.update({
+    // Update user and add to blacklist in transaction
+    const updated = await prisma.$transaction(async (tx) => {
+      // Update user status
+      const updatedUser = await tx.user.update({
         where: { id: userId },
         data: {
           isRejected: true,
           pendingVerification: false,
-          isAlumniVerified: false,
           rejectedBy: adminId,
           rejectedAt: new Date(),
           rejectionReason: reason
-        },
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          batch: true,
-          rejectedAt: true,
-          isRejected: true
         }
       });
       
-      // Add email to blacklist
+      // Add email to blacklist table
       await tx.blacklistedEmail.create({
         data: {
-          email: user.email,
-          reason: `Alumni verification rejected by ${adminName}: ${reason}`,
-          blacklistedBy: adminId
+          email: user.email.toLowerCase(),
+          reason: `User verification rejected: ${reason}`,
+          blacklistedBy: adminId,
+          isActive: true
         }
       });
       
-      // Log rejection activity for admin
-      await tx.activityLog.create({
-        data: {
-          userId: adminId,
-          action: 'alumni_rejected',
-          details: {
-            rejectedUserId: userId,
-            rejectedUserEmail: user.email,
-            rejectedUserName: user.fullName,
-            rejectedUserBatch: user.batch,
-            rejectionReason: reason,
-            adminRole: role
-          },
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      // Log activity for the rejected user
-      await tx.activityLog.create({
-        data: {
-          userId: userId,
-          action: 'alumni_status_rejected',
-          details: {
-            rejectedBy: adminName,
-            rejectionReason: reason,
-            rejectedAt: new Date()
-          }
-        }
-      });
-      
-      return updated;
+      return updatedUser;
     });
-    
-    // ==========================================
-    // SEND REJECTION NOTIFICATIONS
-    // ==========================================
-    
-    await sendVerificationNotifications(user, adminName, 'rejected', reason);
-    
-    // Clear relevant caches
-    await Promise.all([
-      CacheService.del(`user:${userId}:verification:status`),
-      CacheService.del(`batch:${user.batch}:pending:count`),
-      CacheService.del(`admin:${adminId}:verification:stats`)
-    ]);
-    
-    return successResponse(res, {
-      message: `${user.fullName} has been rejected and email has been blacklisted`,
-      user: {
-        id: updatedUser.id,
-        fullName: updatedUser.fullName,
-        email: updatedUser.email,
-        batch: updatedUser.batch,
-        batchDisplayName: `${user.admissionYear}-${user.passoutYear.toString().slice(-2)}`,
-        isRejected: updatedUser.isRejected,
-        rejectedAt: updatedUser.rejectedAt,
-        rejectionReason: reason
-      },
-      admin: {
-        rejectedBy: adminName,
-        role: role
-      },
-      blacklist: {
-        emailBlacklisted: true,
-        canBeReversed: true // Only by super admin
+
+    // Send ONLY email notification to user about rejection (no push notification)
+    try {
+
+      if (emailManager && emailManager.isInitialized) {
+        const emailService = emailManager.getService();
+        
+        // Send simple rejection email with HTML content
+        await emailService.sendEmail({
+          to: user.email,
+          subject: 'Registration Application - Unable to Proceed',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #dc3545;">Registration Review Update</h2>
+              
+              <p>Dear ${user.fullName},</p>
+              
+              <p>Thank you for your interest in joining our alumni portal. After reviewing your registration application, we are unable to proceed with your registration at this time.</p>
+              
+              <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0;">
+                <strong>Reason:</strong> ${reason || 'Unable to verify your alumni status with our records'}
+              </div>
+              
+              <p>Your registration has been rejected. Please contact support for more details. Currently, we will not be able to proceed with your registration with us.</p>
+              
+              <div style="margin: 30px 0; padding: 15px; background-color: #e9ecef; border-radius: 5px;">
+                <h4 style="margin-top: 0;">Need Help?</h4>
+                <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
+              </div>
+              
+              <p style="color: #6c757d; font-size: 12px; margin-top: 30px;">This is an automated message. Please do not reply directly to this email.</p>
+            </div>
+          `
+        });
+        
+        console.log(`✅ Rejection email sent to ${user.email}`);
+      } else {
+        console.warn('⚠️ Email service not initialized - rejection email not sent');
       }
-    });
+    } catch (emailError) {
+      console.error('Failed to send rejection email:', emailError);
+      // Don't fail the rejection if email fails
+    }
     
+    return successResponse(res, null, 'User rejected successfully');
   } catch (error) {
-    console.error('Reject alumni user error:', error);
+    console.error('rejectAlumniUser error:', error);
     return errorResponse(res, 'Failed to reject user', 500);
   }
 };
 
 /**
- * Get verification statistics and analytics
+ * Unblock user (remove from blacklist and reset verification status)
  */
-const getVerificationStats = async (req, res) => {
+const unblockAlumniUser = async (req, res) => {
   try {
-    const { role, id: adminId } = req.user;
-    const { timeframe = '30' } = req.query; // Days
+    const { userId } = req.params;
+    const { reason = 'User unblocked by admin' } = req.body;
+    const { id: adminId, role } = req.user;
     
-    // Cache key based on admin and timeframe
-    const cacheKey = `verification:stats:${adminId}:${role}:${timeframe}d`;
-    let stats = await CacheService.get(cacheKey);
-    
-    if (!stats) {
-      let batchFilter = {};
-      
-      // Batch admin: only their managed batches
-      if (role === 'BATCH_ADMIN') {
-        const managedBatches = await prisma.batchAdminAssignment.findMany({
-          where: {
-            userId: adminId,
-            isActive: true
-          },
-          select: { batchYear: true }
-        });
-        
-        const batchYears = managedBatches.map(b => b.batchYear);
-        batchFilter = { batch: { in: batchYears } };
-      }
-      
-      const timeframeDays = parseInt(timeframe);
-      const timeframeDate = new Date(Date.now() - timeframeDays * 24 * 60 * 60 * 1000);
-      
-      const [
-        pendingCount,
-        verifiedCount,
-        rejectedCount,
-        totalRegistrations,
-        recentVerifications,
-        recentRejections,
-        batchWiseStats
-      ] = await Promise.all([
-        // Pending verifications
-        prisma.user.count({
-          where: {
-            ...batchFilter,
-            pendingVerification: true,
-            isAlumniVerified: false,
-            isActive: true,
-            isRejected: false
-          }
-        }),
-        
-        // Total verified users
-        prisma.user.count({
-          where: {
-            ...batchFilter,
-            isAlumniVerified: true,
-            isActive: true
-          }
-        }),
-        
-        // Total rejected users
-        prisma.user.count({
-          where: {
-            ...batchFilter,
-            isRejected: true,
-            isActive: true
-          }
-        }),
-        
-        // Total registrations
-        prisma.user.count({
-          where: {
-            ...batchFilter,
-            role: 'USER',
-            isActive: true
-          }
-        }),
-        
-        // Recent verifications (within timeframe)
-        prisma.user.findMany({
-          where: {
-            ...batchFilter,
-            alumniVerifiedAt: { gte: timeframeDate },
-            isAlumniVerified: true
-          },
-          select: {
-            id: true,
-            fullName: true,
-            batch: true,
-            alumniVerifiedAt: true,
-            serialId: true,
-            verifiedAdmin: { select: { fullName: true } }
-          },
-          orderBy: { alumniVerifiedAt: 'desc' },
-          take: 10
-        }),
-        
-        // Recent rejections (within timeframe)
-        prisma.user.findMany({
-          where: {
-            ...batchFilter,
-            rejectedAt: { gte: timeframeDate },
-            isRejected: true
-          },
-          select: {
-            id: true,
-            fullName: true,
-            batch: true,
-            rejectedAt: true,
-            rejectionReason: true,
-            rejectedAdmin: { select: { fullName: true } }
-          },
-          orderBy: { rejectedAt: 'desc' },
-          take: 10
-        }),
-        
-        // Batch-wise statistics
-        prisma.user.groupBy({
-          by: ['batch'],
-          where: {
-            ...batchFilter,
-            isActive: true,
-            role: 'USER'
-          },
-          _count: {
-            id: true
-          },
-          _sum: {
-            isAlumniVerified: true
-          }
-        })
-      ]);
-      
-      // Calculate verification rate
-      const verificationRate = totalRegistrations > 0 
-        ? ((verifiedCount / totalRegistrations) * 100).toFixed(1) 
-        : 0;
-      
-      // Process batch-wise stats
-      const batchStats = await Promise.all(
-        batchWiseStats.map(async (batch) => {
-          const [pending, verified, rejected] = await Promise.all([
-            prisma.user.count({
-              where: { 
-                batch: batch.batch, 
-                pendingVerification: true, 
-                isActive: true 
-              }
-            }),
-            prisma.user.count({
-              where: { 
-                batch: batch.batch, 
-                isAlumniVerified: true, 
-                isActive: true 
-              }
-            }),
-            prisma.user.count({
-              where: { 
-                batch: batch.batch, 
-                isRejected: true, 
-                isActive: true 
-              }
-            })
-          ]);
-          
-          return {
-            batch: batch.batch,
-            batchDisplayName: `Class of ${batch.batch}`,
-            total: batch._count.id,
-            verified,
-            pending,
-            rejected,
-            verificationRate: batch._count.id > 0 ? ((verified / batch._count.id) * 100).toFixed(1) : 0
-          };
-        })
-      );
-      
-      stats = {
-        summary: {
-          pending: pendingCount,
-          verified: verifiedCount,
-          rejected: rejectedCount,
-          total: totalRegistrations,
-          verificationRate: parseFloat(verificationRate)
-        },
-        recentActivity: {
-          verifications: recentVerifications,
-          rejections: recentRejections
-        },
-        batchWiseStats: batchStats.sort((a, b) => b.batch - a.batch), // Latest batches first
-        adminContext: {
-          role,
-          canViewAllBatches: role === 'SUPER_ADMIN',
-          timeframe: timeframeDays
-        }
-      };
-      
-      // Cache for 5 minutes
-      await CacheService.set(cacheKey, stats, 300);
+    // Only SUPER_ADMIN can unblock users
+    if (role !== 'SUPER_ADMIN') {
+      return errorResponse(res, 'Only Super Admins can unblock users', 403);
     }
     
-    return successResponse(res, stats);
+    // Get user details first
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        batch: true,
+        isEmailVerified: true,
+        isRejected: true
+      }
+    });
+    
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+    
+    if (!user.isRejected) {
+      return errorResponse(res, 'User is not rejected/blacklisted', 400);
+    }
+    
+    // Unblock user and remove from blacklist in transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete from blacklisted_emails table completely
+      await tx.blacklistedEmail.deleteMany({
+        where: { 
+          email: user.email.toLowerCase(),
+          isActive: true
+        }
+      });
+      
+      // 2. Reset user verification status (preserve email verification)
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          isRejected: false,
+          // Keep isEmailVerified as it was (preserve email verification status)
+          pendingVerification: true,
+          rejectedBy: null,
+          rejectedAt: null,
+          rejectionReason: null
+        }
+      });
+      
+      // 3. Log admin activity
+      await tx.activityLog.create({
+        data: {
+          userId: adminId,
+          action: 'user_unblocked',
+          details: {
+            unblockedUserId: userId,
+            unblockedUserEmail: user.email,
+            unblockedUserName: user.fullName,
+            unblockedUserBatch: user.batch,
+            reason: reason.trim(),
+            emailVerificationPreserved: user.isEmailVerified
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        }
+      });
+    });
+    
+    return successResponse(res, {
+      message: `User ${user.fullName} has been successfully unblocked and can now proceed with verification`,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        batch: user.batch,
+        isEmailVerified: user.isEmailVerified,
+        pendingVerification: true,
+        isRejected: false,
+        canProceedWithVerification: true
+      },
+      action: {
+        performedBy: adminId,
+        performedAt: new Date(),
+        reason: reason.trim()
+      }
+    });
     
   } catch (error) {
-    console.error('Get verification stats error:', error);
-    return errorResponse(res, 'Failed to fetch verification statistics', 500);
+    console.error('unblockAlumniUser error:', error);
+    return errorResponse(res, 'Failed to unblock user', 500);
   }
 };
 
 /**
- * Bulk approve users (Super Admin only)
+ * Bulk verify users
  */
 const bulkVerifyUsers = async (req, res) => {
   try {
     const { userIds, notes = '' } = req.body;
-    const { id: adminId, role, fullName: adminName } = req.user;
+    const { id: adminId, role } = req.user;
     
     // Only super admins can bulk verify
     if (role !== 'SUPER_ADMIN') {
@@ -735,114 +530,118 @@ const bulkVerifyUsers = async (req, res) => {
       return errorResponse(res, 'User IDs array is required', 400);
     }
     
-    if (userIds.length > 50) {
-      return errorResponse(res, 'Cannot verify more than 50 users at once', 400);
-    }
+    // For bulk verification, process each user individually to generate serial IDs
+    let successCount = 0;
+    const failedUsers = [];
     
-    // Get users to verify
-    const users = await prisma.user.findMany({
-      where: {
-        id: { in: userIds },
-        pendingVerification: true,
-        isAlumniVerified: false,
-        isActive: true
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        batch: true,
-        admissionYear: true,
-        passoutYear: true
-      }
-    });
-    
-    if (users.length === 0) {
-      return errorResponse(res, 'No eligible users found for verification', 400);
-    }
-    
-    const results = {
-      successful: [],
-      failed: [],
-      total: users.length
-    };
-    
-    // Process each user
-    for (const user of users) {
+    for (const userId of userIds) {
       try {
-        // Generate serial ID
-        const { serialId, counter } = await SerialIdService.generateUniqueSerialId(
-          user.fullName,
-          user.admissionYear,
-          user.passoutYear
-        );
+        // Get user details including batch information
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            fullName: true,
+            batch: true,
+            serialId: true,
+            pendingVerification: true,
+            isAlumniVerified: true
+          }
+        });
         
-        // Update user
+        if (!user || user.isAlumniVerified || !user.pendingVerification) {
+          continue; // Skip if already verified or not pending
+        }
+        
+        // Generate serial ID if not already assigned
+        let serialId = user.serialId;
+        let userSerialCounter = null;
+        if (!serialId) {
+          try {
+            // Parse batch years from user's batch (passout year)
+            const { admissionYear, passoutYear } = SerialIdService.parseBatchYears(user.batch);
+            
+            // Generate unique serial ID using static method
+            const { serialId: generatedSerialId, counter } = await SerialIdService.generateUniqueSerialId(
+              user.fullName,
+              admissionYear,
+              passoutYear
+            );
+            
+            serialId = generatedSerialId;
+            userSerialCounter = counter;
+            console.log(`✅ Generated Serial ID: ${serialId} (Counter: ${counter}) for user: ${user.fullName} (Batch: ${user.batch})`);
+          } catch (serialError) {
+            console.error(`Failed to generate serial ID for ${user.fullName}:`, serialError);
+          }
+        }
+        
+        // Update user with verification and serial ID
         await prisma.user.update({
-          where: { id: user.id },
+          where: { id: userId },
           data: {
             isAlumniVerified: true,
             pendingVerification: false,
             alumniVerifiedBy: adminId,
             alumniVerifiedAt: new Date(),
-            verificationNotes: notes.trim(),
-            serialId: serialId,
-            serialCounter: counter
+            verificationNotes: notes,
+            ...(serialId && { serialId }),
+            ...(userSerialCounter && { serialCounter: userSerialCounter })
           }
         });
         
-        // Send notification
-        await sendVerificationNotifications(user, adminName, 'approved', null, serialId);
-        
-        results.successful.push({
-          id: user.id,
-          name: user.fullName,
-          email: user.email,
-          serialId: serialId
-        });
-        
-      } catch (userError) {
-        console.error(`Failed to verify user ${user.id}:`, userError);
-        results.failed.push({
-          id: user.id,
-          name: user.fullName,
-          error: userError.message
-        });
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to verify user ${userId}:`, error);
+        failedUsers.push(userId);
       }
     }
     
-    // Log bulk operation
-    await prisma.activityLog.create({
-      data: {
-        userId: adminId,
-        action: 'bulk_alumni_verification',
-        details: {
-          totalUsers: results.total,
-          successful: results.successful.length,
-          failed: results.failed.length,
-          notes: notes.trim()
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+    const results = { count: successCount };
+
+    // Send bulk notifications to all verified users
+    if (results.count > 0) {
+      try {
+        const notificationPromises = userIds.map(userId => 
+          prisma.notification.create({
+            data: {
+              type: 'VERIFICATION_APPROVED',
+              title: 'Alumni Verification Approved',
+              message: `Congratulations! Your alumni status has been verified. Welcome to the Alumni Portal!`,
+              payload: { 
+                adminId, 
+                verifiedAt: new Date().toISOString(),
+                notes: notes || 'No additional notes provided',
+                bulkVerification: true
+              },
+              userId: userId
+            }
+          })
+        );
+        await Promise.all(notificationPromises);
+      } catch (notificationError) {
+        console.error('Failed to send bulk verification notifications:', notificationError);
+        // Don't fail the bulk verification if notifications fail
       }
-    });
+    }
     
-    return successResponse(res, {
-      message: `Bulk verification completed: ${results.successful.length} successful, ${results.failed.length} failed`,
-      results
+    return successResponse(res, { 
+      success: true,
+      verifiedCount: results.count,
+      message: `${results.count} users verified successfully`
     });
-    
   } catch (error) {
-    console.error('Bulk verify users error:', error);
-    return errorResponse(res, 'Bulk verification failed', 500);
+    console.error('bulkVerifyUsers error:', error);
+    return errorResponse(res, 'Failed to bulk verify users', 500);
   }
 };
 
 module.exports = {
   getPendingVerifications,
+  getVerificationStats,
   getVerificationDetails,
   verifyAlumniUser,
   rejectAlumniUser,
-  getVerificationStats,
+  unblockAlumniUser,
   bulkVerifyUsers
 };

@@ -71,6 +71,12 @@ router.post(
 // Initiate payment transaction
 router.post(
   '/initiate',
+  (req, res, next) => {
+    console.log('=== PAYMENT ROUTE HIT ===');
+    console.log('Raw body:', req.body);
+    console.log('Registration data:', req.body.registrationData);
+    next();
+  },
   [
     authenticateToken,
     requireAlumniVerification,

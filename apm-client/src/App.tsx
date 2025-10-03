@@ -17,7 +17,6 @@ import { useDevice } from './hooks/useDevice'
 
 // FIXED: Correct file names with proper casing
 const PublicLayout = React.lazy(() => import('./components/common/Layout/PublicLayout'))
-const UserLayout = React.lazy(() => import('./components/common/Layout/UserLayout'))
 const AdminLayout = React.lazy(() => import('./components/common/Layout/AdminLayout'))
 
 // Public pages
@@ -29,6 +28,10 @@ const ContactPage = React.lazy(() => import('./pages/public/ContactPage'))
 // Auth pages
 const LoginPage = React.lazy(() => import('./pages/auth/LoginPage'))
 const RegisterPage = React.lazy(() => import('./pages/auth/RegisterPage'))
+
+// Common pages
+const MobileNotifications = React.lazy(() => import('./pages/common/MobileNotifications'))
+const OrganizationView = React.lazy(() => import('./pages/common/OrganizationView'))
 const ForgotPasswordPage = React.lazy(() => import('./pages/auth/ForgotPasswordPage'))
 const ResetPasswordPage = React.lazy(() => import('./pages/auth/ResetPasswordPage'))
 const VerifyEmailPage = React.lazy(() => import('./pages/auth/VerifyEmailPage'))
@@ -36,17 +39,28 @@ const VerificationPendingPage = React.lazy(() => import('./pages/auth/Verificati
 
 // User pages
 const UserDashboard = React.lazy(() => import('./pages/user/Dashboard'))
-// const UserProfile = React.lazy(() => import('./pages/user/Profile'))
-// const UserEvents = React.lazy(() => import('./pages/user/Events'))
-// const UserSocial = React.lazy(() => import('./pages/user/Social'))
+const UserProfile = React.lazy(() => import('./pages/user/Profile'))
+const AlumniDirectory = React.lazy(() => import('./pages/user/AlumniDirectory'))
+const AlumniProfile = React.lazy(() => import('./pages/user/AlumniProfile'))
+const Groups = React.lazy(() => import('./pages/user/Groups'))
+const Posts = React.lazy(() => import('./pages/user/Posts'))
+const UserSocial = React.lazy(() => import('./pages/user/Social'))
+const UserEvents = React.lazy(() => import('./pages/user/Events'))
 // const UserLifeLink = React.lazy(() => import('./pages/user/LifeLink'))
 // const UserSupport = React.lazy(() => import('./pages/user/Support'))
 // const UserSettings = React.lazy(() => import('./pages/user/Settings'))
 
 // Admin pages
-// const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'))
-// const AdminUsers = React.lazy(() => import('./pages/admin/Users'))
-// const AdminEvents = React.lazy(() => import('./pages/admin/Events'))
+const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'))
+const BatchAdminDashboard = React.lazy(() => import('./pages/admin/BatchAdminDashboard'))
+const UserManagement = React.lazy(() => import('./pages/admin/UserManagement'))
+const OrganizationManagement = React.lazy(() => import('./pages/admin/OrganizationManagement'))
+const PostsManagement = React.lazy(() => import('./pages/admin/PostsManagement'))
+const PollManagement = React.lazy(() => import('./pages/admin/PollManagement'))
+const GroupsManagement = React.lazy(() => import('./pages/admin/GroupsManagement'))
+const EventsManagement = React.lazy(() => import('./pages/admin/EventsManagement'))
+const AdminSocial = React.lazy(() => import('./pages/admin/Social'))
+const AdminEvents = React.lazy(() => import('./pages/admin/Events'))
 // const AdminFinance = React.lazy(() => import('./pages/admin/Finance'))
 // const AdminContent = React.lazy(() => import('./pages/admin/Content'))
 // const AdminSystem = React.lazy(() => import('./pages/admin/System'))
@@ -107,11 +121,22 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const user = useSelector(selectUser)
   const location = useLocation()
 
-  if (!user || user.role !== 'SUPER_ADMIN') {
+  if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'BATCH_ADMIN')) {
     return <Navigate to="/user/dashboard" state={{ from: location }} replace />
   }
 
   return <>{children}</>
+}
+
+// Dashboard router component
+const DashboardRouter = () => {
+  const user = useSelector(selectUser)
+  
+  if (user?.role === 'BATCH_ADMIN') {
+    return <BatchAdminDashboard />
+  }
+  
+  return <AdminDashboard />
 }
 
 // Verified user route component
@@ -180,13 +205,23 @@ function App() {
       '/auth/forgot-password': 'Forgot Password - GUILD',
       '/user/dashboard': 'Dashboard - GUILD',
       '/user/profile': 'Profile - GUILD',
+      '/user/alumni': 'Alumni Directory - GUILD',
+      '/user/groups': 'Groups - GUILD',
+      '/user/social': 'Social - GUILD',
+      '/user/posts': 'Posts - GUILD',
       '/user/events': 'My Events - GUILD',
-      '/user/social': 'Social Feed - GUILD',
       '/user/lifelink': 'LifeLink - GUILD',
       '/user/support': 'Support - GUILD',
       '/admin/dashboard': 'Admin Dashboard - GUILD',
       '/admin/users': 'User Management - GUILD',
-      '/admin/events': 'Event Management - GUILD',
+      '/admin/organization': 'Organization Management - GUILD',
+      '/admin/groups': 'Groups Management - GUILD',
+      '/admin/social': 'Social - GUILD',
+      '/admin/posts': 'Posts Management - GUILD',
+      '/admin/polls': 'Poll Management - GUILD',
+      '/admin/events-management': 'Event Management - GUILD',
+      '/admin/events': 'Events - GUILD',
+      '/organization': 'Organization - GUILD',
     }
 
     document.title = titles[location.pathname] || 'GUILD - Alumni Network'
@@ -219,21 +254,39 @@ function App() {
             <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
             <Route path="/auth/verification-pending" element={<VerificationPendingPage />} />
 
-            {/* User Protected Routes */}
+            {/* Common Protected Routes */}
+            <Route path="/notifications" element={
+              <ProtectedRoute>
+                <MobileNotifications />
+              </ProtectedRoute>
+            } />
+
+            {/* User Protected Routes - Using AdminLayout for all users */}
             <Route path="/user" element={
               <ProtectedRoute>
-                <UserLayout />
+                <AdminLayout />
               </ProtectedRoute>
             }>
               <Route index element={<Navigate to="/user/dashboard" replace />} />
-              <Route path="dashboard" element={<UserDashboard />} />
-              {/* <Route path="profile" element={<UserProfile />} />
-              <Route path="settings" element={<UserSettings />} /> */}
-              
-              {/* Verified user routes */}
-              {/* <Route path="events" element={
+              <Route path="dashboard" element={
                 <VerifiedRoute>
-                  <UserEvents />
+                  <UserDashboard />
+                </VerifiedRoute>
+              } />
+              <Route path="profile" element={<UserProfile />} />
+              <Route path="alumni" element={
+                <VerifiedRoute>
+                  <AlumniDirectory />
+                </VerifiedRoute>
+              } />
+              <Route path="alumni/:userId" element={
+                <VerifiedRoute>
+                  <AlumniProfile />
+                </VerifiedRoute>
+              } />
+              <Route path="groups" element={
+                <VerifiedRoute>
+                  <Groups />
                 </VerifiedRoute>
               } />
               <Route path="social" element={
@@ -241,16 +294,25 @@ function App() {
                   <UserSocial />
                 </VerifiedRoute>
               } />
-              <Route path="lifelink" element={
+              <Route path="posts" element={
                 <VerifiedRoute>
-                  <UserLifeLink />
+                  <Posts />
                 </VerifiedRoute>
               } />
-              <Route path="support" element={
+              <Route path="events" element={
                 <VerifiedRoute>
-                  <UserSupport />
+                  <UserEvents />
                 </VerifiedRoute>
-              } /> */}
+              } />
+            </Route>
+
+            {/* Organization route - accessible to all authenticated users */}
+            <Route path="/organization" element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<OrganizationView />} />
             </Route>
 
             {/* Admin Protected Routes */}
@@ -262,18 +324,31 @@ function App() {
               </ProtectedRoute>
             }>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
-              {/* <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="users" element={<AdminUsers />} />
+              <Route path="dashboard" element={<DashboardRouter />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="organization" element={<OrganizationManagement />} />
+              <Route path="groups" element={<GroupsManagement />} />
+              <Route path="events-management" element={<EventsManagement />} />
               <Route path="events" element={<AdminEvents />} />
-              <Route path="finance" element={<AdminFinance />} />
-              <Route path="content" element={<AdminContent />} />
-              <Route path="system" element={<AdminSystem />} /> */}
+              <Route path="social" element={<AdminSocial />} />
+              <Route path="posts" element={<PostsManagement />} />
+              <Route path="polls" element={<PollManagement />} />
+              <Route path="profile" element={<UserProfile />} />
+            </Route>
+
+            {/* Common Profile Route - accessible to all authenticated users */}
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<UserProfile />} />
             </Route>
 
             {/* Redirect based on auth status */}
             <Route path="/dashboard" element={
               isAuthenticated 
-                ? user?.role === 'SUPER_ADMIN'
+                ? (user?.role === 'SUPER_ADMIN' || user?.role === 'BATCH_ADMIN')
                   ? <Navigate to="/admin/dashboard" replace />
                   : <Navigate to="/user/dashboard" replace />
                 : <Navigate to="/auth/login" replace />

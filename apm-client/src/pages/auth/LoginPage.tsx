@@ -1,14 +1,27 @@
 // src/pages/auth/LoginPage.tsx - FIXED undefined result issue
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import ThemeToggle from '@/components/common/UI/ThemeToggle'
+import OrganizationLogo from '@/components/common/UI/OrganizationLogo'
+import toast from 'react-hot-toast'
 
 const LoginPage = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const { login, isLoading, error } = useAuth()
+  const location = useLocation()
+  
+  // Check for email verification success
+  useEffect(() => {
+    if (location.state?.emailVerified) {
+      toast.success(location.state.message || 'Email verified successfully! You can now sign in.')
+      if (location.state.email) {
+        setEmail(location.state.email)
+      }
+    }
+  }, [location.state])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,13 +48,23 @@ const LoginPage = () => {
         <div className="glass-card p-8">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-guild-500 to-guild-600 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-2xl">G</span>
-              </div>
+              <OrganizationLogo size="2xl" className="flex-shrink-0" />
             </div>
-            <h1 className="text-3xl font-bold text-gradient-guild mb-2">Welcome to GUILD</h1>
+            <h1 className="text-3xl font-bold text-gradient-guild mb-2">Welcome to Alumni Portal</h1>
             <p className="text-gray-600 dark:text-gray-300">Sign in to your account</p>
           </div>
+
+          {/* Success message for email verification */}
+          {location.state?.emailVerified && (
+            <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 p-4 rounded-lg mb-6 border border-green-200 dark:border-green-800">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                {location.state.message || 'Email verified successfully! You can now sign in.'}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="bg-error-50 dark:bg-error-900/20 text-error-700 dark:text-error-200 p-4 rounded-lg mb-6 border border-error-200 dark:border-error-800">

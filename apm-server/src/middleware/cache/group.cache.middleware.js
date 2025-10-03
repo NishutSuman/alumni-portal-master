@@ -94,7 +94,7 @@ const cacheGroupDetails = async (req, res, next) => {
     }
 
     req.cacheKey = cacheKey;
-    req.cacheTTL = 600; // 10 minutes
+    req.cacheTTL = 180; // 3 minutes for faster updates
     next();
   } catch (error) {
     console.error('Group details cache error:', error);

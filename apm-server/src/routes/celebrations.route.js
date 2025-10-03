@@ -53,7 +53,8 @@ const {
 // ============================================
 // CONTROLLER IMPORTS
 // ============================================
-const celebrationController = require('../controllers/celebrations/birthday.controller');
+const birthdayController = require('../controllers/celebrations/birthday.controller');
+const festivalController = require('../controllers/celebrations/festival.controller');
 
 // ============================================
 // PUBLIC ROUTES (No authentication required)
@@ -69,7 +70,7 @@ router.get('/festivals/today',
     optionalAuth,
     cacheTodaysFestivals
   ],
-  asyncHandler(celebrationController.getTodaysFestivals)
+  asyncHandler(festivalController.getTodaysFestivals)
 );
 
 /**
@@ -83,7 +84,7 @@ router.get('/festivals/upcoming',
     validateUpcomingFestivals,
     cacheUpcomingFestivals
   ],
-  asyncHandler(celebrationController.getUpcomingFestivals)
+  asyncHandler(festivalController.getUpcomingFestivals)
 );
 
 // ============================================
@@ -101,7 +102,7 @@ router.get('/birthdays/today',
     requireAlumniVerification,
     cacheTodaysBirthdays
   ],
-  asyncHandler(celebrationController.getTodaysBirthdays)
+  asyncHandler(birthdayController.getTodaysBirthdays)
 );
 
 /**
@@ -116,7 +117,7 @@ router.get('/birthdays/upcoming',
     validateUpcomingBirthdays,
     cacheUpcomingBirthdays
   ],
-  asyncHandler(celebrationController.getUpcomingBirthdays)
+  asyncHandler(birthdayController.getUpcomingBirthdays)
 );
 
 /**
@@ -130,7 +131,7 @@ router.get('/today',
     requireAlumniVerification,
     cacheTodaysCelebrations
   ],
-  asyncHandler(celebrationController.getTodaysCelebrations)
+  asyncHandler(festivalController.getTodaysCelebrations)
 );
 
 /**
@@ -145,22 +146,21 @@ router.get('/festivals/search',
     validateSearchFestivals,
     cacheFestivalSearch
   ],
-  asyncHandler(celebrationController.searchFestivals)
+  asyncHandler(festivalController.searchFestivals)
 );
 
 /**
  * Get festival calendar for year
  * GET /api/celebrations/festivals/calendar
- * Access: Authenticated users
+ * Access: Public (with optional auth)
  */
 router.get('/festivals/calendar',
   [
-    authenticateToken,
-    requireAlumniVerification,
+    optionalAuth,
     validateFestivalCalendar,
     cacheFestivalCalendar
   ],
-  asyncHandler(celebrationController.getFestivalCalendar)
+  asyncHandler(festivalController.getFestivalCalendar)
 );
 
 // ============================================
@@ -178,7 +178,7 @@ router.get('/admin/birthdays/stats',
     requireRole('SUPER_ADMIN'),
     cacheBirthdayStats
   ],
-  asyncHandler(celebrationController.getBirthdayStats)
+  asyncHandler(birthdayController.getBirthdayStats)
 );
 
 /**
@@ -192,7 +192,7 @@ router.get('/admin/birthdays/distribution',
     requireRole('SUPER_ADMIN'),
     cacheBirthdayDistribution
   ],
-  asyncHandler(celebrationController.getBirthdayDistribution)
+  asyncHandler(birthdayController.getBirthdayDistribution)
 );
 
 /**
@@ -207,7 +207,7 @@ router.get('/admin/birthdays/month/:month',
     validateMonthBirthdays,
     cacheBirthdaysInMonth
   ],
-  asyncHandler(celebrationController.getBirthdaysInMonth)
+  asyncHandler(birthdayController.getBirthdaysInMonth)
 );
 
 /**
@@ -221,7 +221,7 @@ router.get('/admin/festivals/stats',
     requireRole('SUPER_ADMIN'),
     cacheFestivalStats
   ],
-  asyncHandler(celebrationController.getFestivalStats)
+  asyncHandler(festivalController.getFestivalStats)
 );
 
 /**
@@ -235,7 +235,7 @@ router.get('/admin/summary',
     requireRole('SUPER_ADMIN'),
     cacheCelebrationSummary
   ],
-  asyncHandler(celebrationController.getCelebrationSummary)
+  asyncHandler(festivalController.getCelebrationSummary)
 );
 
 // ============================================
@@ -256,7 +256,7 @@ router.put('/admin/festivals/:festivalId/notifications',
     validateToggleNotifications,
     autoInvalidateFestivalCaches
   ],
-  asyncHandler(celebrationController.toggleFestivalNotifications)
+  asyncHandler(festivalController.toggleFestivalNotifications)
 );
 
 /**
@@ -270,7 +270,7 @@ router.get('/admin/festivals/notifications',
     requireRole('SUPER_ADMIN'),
     validateNotificationHistory
   ],
-  asyncHandler(celebrationController.getFestivalNotificationHistory)
+  asyncHandler(festivalController.getFestivalNotificationHistory)
 );
 
 /**
@@ -284,7 +284,7 @@ router.get('/admin/birthdays/notifications',
     requireRole('SUPER_ADMIN'),
     validateNotificationHistory
   ],
-  asyncHandler(celebrationController.getBirthdayNotificationHistory)
+  asyncHandler(festivalController.getBirthdayNotificationHistory)
 );
 
 // ============================================
@@ -303,7 +303,7 @@ router.post('/admin/festivals/sync',
     validateSyncRateLimit,
     autoInvalidateFestivalCaches
   ],
-  asyncHandler(celebrationController.triggerFestivalSync)
+  asyncHandler(festivalController.triggerFestivalSync)
 );
 
 /**
@@ -317,7 +317,7 @@ router.get('/admin/festivals/sync-history',
     requireRole('SUPER_ADMIN'),
     validateSyncHistory
   ],
-  asyncHandler(celebrationController.getFestivalSyncHistory)
+  asyncHandler(festivalController.getFestivalSyncHistory)
 );
 
 /**
@@ -330,7 +330,7 @@ router.get('/admin/api-usage',
     authenticateToken,
     requireRole('SUPER_ADMIN')
   ],
-  asyncHandler(celebrationController.getAPIUsageStats)
+  asyncHandler(festivalController.getAPIUsageStats)
 );
 
 // ============================================
@@ -348,7 +348,21 @@ router.post('/admin/birthdays/trigger',
     requireRole('SUPER_ADMIN'),
     autoInvalidateBirthdayCaches
   ],
-  asyncHandler(celebrationController.triggerBirthdayNotifications)
+  asyncHandler(birthdayController.triggerBirthdayNotifications)
+);
+
+/**
+ * Manually trigger birthday emails (Admin testing)
+ * POST /api/celebrations/admin/birthdays/emails/trigger
+ * Access: SUPER_ADMIN
+ */
+router.post('/admin/birthdays/emails/trigger',
+  [
+    authenticateToken,
+    requireRole('SUPER_ADMIN'),
+    autoInvalidateBirthdayCaches
+  ],
+  asyncHandler(birthdayController.triggerBirthdayEmails)
 );
 
 // ============================================

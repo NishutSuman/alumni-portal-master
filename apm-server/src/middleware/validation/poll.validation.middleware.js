@@ -43,12 +43,12 @@ const pollValidationSchemas = {
           })
       )
       .min(2)
-      .max(5)
+      .max(10)
       .unique()
       .required()
       .messages({
         'array.min': 'Poll must have at least 2 options',
-        'array.max': 'Poll cannot have more than 5 options',
+        'array.max': 'Poll cannot have more than 10 options',
         'array.unique': 'Poll options must be unique',
         'any.required': 'Poll options are required'
       }),
@@ -98,28 +98,63 @@ const pollValidationSchemas = {
         'date.min': 'Expiry date must be in the future'
       }),
     isAnonymous: Joi.boolean()
+      .optional(),
+    // New fields for admin option management
+    addOptions: Joi.array()
+      .items(
+        Joi.string()
+          .trim()
+          .min(1)
+          .max(500)
+          .required()
+          .messages({
+            'string.min': 'Poll option cannot be empty',
+            'string.max': 'Poll option cannot exceed 500 characters'
+          })
+      )
+      .max(5)
+      .unique()
       .optional()
+      .messages({
+        'array.max': 'Cannot add more than 5 options at once',
+        'array.unique': 'New poll options must be unique'
+      }),
+    removeOptionIds: Joi.array()
+      .items(
+        Joi.string()
+          .length(25)
+          .pattern(/^c[a-z0-9]{24}$/)
+          .messages({
+            'string.length': 'Invalid option ID format',
+            'string.pattern.base': 'Invalid option ID format'
+          })
+      )
+      .max(10)
+      .unique()
+      .optional()
+      .messages({
+        'array.max': 'Cannot remove more than 10 options at once',
+        'array.unique': 'Option IDs must be unique'
+      })
   }),
 
   votePoll: Joi.object({
     optionIds: Joi.array()
       .items(
         Joi.string()
-          .uuid()
-          .required()
+          .length(25)
+          .pattern(/^c[a-z0-9]{24}$/)
           .messages({
-            'string.uuid': 'Invalid option ID format'
+            'string.length': 'Invalid option ID format',
+            'string.pattern.base': 'Invalid option ID format'
           })
       )
-      .min(1)
       .max(5)
       .unique()
-      .required()
+      .default([])
       .messages({
-        'array.min': 'At least one option must be selected',
         'array.max': 'Cannot select more than 5 options',
-        'array.unique': 'Cannot select the same option twice',
-        'any.required': 'Option selection is required'
+        'array.unique': 'Cannot select the same option twice'
       })
   })
 };
@@ -128,10 +163,12 @@ const pollValidationSchemas = {
 const pollParamSchemas = {
   pollIdParam: Joi.object({
     pollId: Joi.string()
-      .uuid()
+      .length(25)
+      .pattern(/^c[a-z0-9]{24}$/)
       .required()
       .messages({
-        'string.uuid': 'Invalid poll ID format',
+        'string.length': 'Invalid poll ID format',
+        'string.pattern.base': 'Invalid poll ID format',
         'any.required': 'Poll ID is required'
       })
   })
@@ -152,6 +189,7 @@ const pollQuerySchemas = {
     search: Joi.string()
       .trim()
       .max(100)
+      .allow('')
       .optional(),
     page: Joi.number()
       .integer()
@@ -197,6 +235,11 @@ const validatePollData = (schemaName) => {
         field: detail.path.join('.'),
         message: detail.message
       }));
+
+      console.log('Validation error for poll data:', {
+        body: req.body,
+        errors
+      });
 
       return errorResponse(res, 'Validation failed', 400, { errors });
     }

@@ -20,6 +20,15 @@ export interface User {
   lastLoginAt?: string
   createdAt: string
   updatedAt: string
+  isRejected?: boolean
+  rejectionReason?: string
+  verificationContext?: {
+    isBlacklisted?: boolean
+    blacklistInfo?: {
+      reason?: string
+      blacklistedAt?: string
+    }
+  }
 }
 
 export type UserRole = 'USER' | 'BATCH_ADMIN' | 'SUPER_ADMIN'

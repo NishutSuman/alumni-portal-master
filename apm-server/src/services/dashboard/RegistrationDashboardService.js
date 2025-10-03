@@ -154,16 +154,17 @@ class RegistrationDashboardService {
         SELECT 
           u.batch,
           COUNT(DISTINCT er.id) as registration_count,
-          COUNT(DISTINCT er.user_id) as unique_users,
-          SUM(er.total_amount) as total_revenue,
-          AVG(er.total_amount) as average_amount,
-          SUM(er.total_guests) as total_guests,
-          COUNT(DISTINCT CASE WHEN er.payment_status = 'COMPLETED' THEN er.id END) as paid_registrations,
-          COUNT(DISTINCT ci.registration_id) as checked_in_count
+          COUNT(DISTINCT er."userId") as unique_users,
+          SUM(er."totalAmount") as total_revenue,
+          SUM(er."donationAmount") as total_donations,
+          AVG(er."totalAmount") as average_amount,
+          SUM(er."totalGuests") as total_guests,
+          COUNT(DISTINCT CASE WHEN er."paymentStatus" = 'COMPLETED' THEN er.id END) as paid_registrations,
+          COUNT(DISTINCT ci."registrationId") as checked_in_count
         FROM event_registrations er
-        JOIN users u ON er.user_id = u.id
-        LEFT JOIN event_check_ins ci ON er.id = ci.registration_id
-        WHERE er.event_id = ${eventId}
+        JOIN users u ON er."userId" = u.id
+        LEFT JOIN event_check_ins ci ON er.id = ci."registrationId"
+        WHERE er."eventId" = ${eventId}
           AND er.status = 'CONFIRMED'
         GROUP BY u.batch
         ORDER BY u.batch DESC
@@ -196,20 +197,25 @@ class RegistrationDashboardService {
             orderBy: { registrationDate: 'desc' }
           });
 
+          const registrationCount = Number(batch.registration_count);
+          const paidRegistrations = Number(batch.paid_registrations);
+          const checkedInCount = Number(batch.checked_in_count);
+          
           return {
             batch: batch.batch,
             statistics: {
-              registrationCount: Number(batch.registration_count),
+              registrationCount,
               uniqueUsers: Number(batch.unique_users),
               totalRevenue: Number(batch.total_revenue || 0),
+              totalDonations: Number(batch.total_donations || 0),
               averageAmount: Number(batch.average_amount || 0),
               totalGuests: Number(batch.total_guests || 0),
-              paidRegistrations: Number(batch.paid_registrations),
-              checkedInCount: Number(batch.checked_in_count),
-              paymentRate: batch.registration_count > 0 ? 
-                Math.round((batch.paid_registrations / batch.registration_count) * 100) : 0,
-              attendanceRate: batch.registration_count > 0 ? 
-                Math.round((batch.checked_in_count / batch.registration_count) * 100) : 0
+              paidRegistrations,
+              checkedInCount,
+              paymentRate: registrationCount > 0 ? 
+                Math.round((paidRegistrations / registrationCount) * 100) : 0,
+              attendanceRate: registrationCount > 0 ? 
+                Math.round((checkedInCount / registrationCount) * 100) : 0
             },
             recentRegistrations: registrations
           };
@@ -231,6 +237,63 @@ class RegistrationDashboardService {
 
     } catch (error) {
       console.error('Batch-wise registrations error:', error);
+      throw error;
+    }
+  }
+
+  // ==========================================
+  // PUBLIC ANALYTICS (PRIVACY-FILTERED)
+  // ==========================================
+
+  /**
+   * Get public analytics with privacy settings applied
+   * @param {string} eventId 
+   * @returns {Object} Public analytics data with privacy filters
+   */
+  async getPublicAnalytics(eventId) {
+    try {
+      // First get privacy settings to determine what to show
+      const privacySettings = await this.getPrivacySettings(eventId);
+      
+      // Get basic analytics data (same as admin but filtered)
+      const data = await this.getAdminRegistrationDashboard(eventId, {
+        page: 1,
+        limit: 1,
+        status: 'CONFIRMED'
+      });
+
+      // Apply privacy filters to the analytics
+      const publicAnalytics = {
+        statistics: {
+          totalRegistrations: data.statistics.totalRegistrations,
+          totalGuests: privacySettings.showGuestDetails ? data.statistics.totalGuests : 0,
+          totalRevenue: privacySettings.showPaymentAmounts ? data.statistics.totalRevenue : 0,
+          totalDonations: privacySettings.showDonationAmounts ? data.statistics.totalDonations : 0
+        },
+        batchStats: {
+          batches: data.batchStats.batches.map(batch => ({
+            batch: batch.batch,
+            statistics: {
+              registrationCount: batch.statistics.registrationCount,
+              uniqueUsers: batch.statistics.uniqueUsers,
+              totalRevenue: privacySettings.showPaymentAmounts ? batch.statistics.totalRevenue : 0,
+              totalDonations: privacySettings.showDonationAmounts ? batch.statistics.totalDonations : 0
+            }
+          }))
+        },
+        privacySettings: {
+          showPaymentAmounts: privacySettings.showPaymentAmounts,
+          showDonationAmounts: privacySettings.showDonationAmounts,
+          showUserEmails: privacySettings.showUserEmails,
+          showUserPhones: privacySettings.showUserPhones,
+          showGuestDetails: privacySettings.showGuestDetails
+        }
+      };
+
+      return publicAnalytics;
+
+    } catch (error) {
+      console.error('Get public analytics error:', error);
       throw error;
     }
   }
@@ -432,6 +495,7 @@ class RegistrationDashboardService {
         include: {
           user: {
             select: {
+              id: true,
               fullName: true,
               email: true,
               whatsappNumber: true,
@@ -592,6 +656,80 @@ class RegistrationDashboardService {
 
   async getBatchWiseStats(eventId) {
     return await this.getBatchWiseRegistrations(eventId);
+  }
+
+  async getPublicRegistrations(eventId) {
+    try {
+      // Get privacy settings first
+      const privacySettings = await this.getPrivacySettings(eventId);
+      
+      if (!privacySettings.enablePublicDashboard) {
+        throw new Error('Public registrations are disabled for this event');
+      }
+
+      // Build select object based on privacy settings
+      const userSelect = {
+        id: true,
+        fullName: true,
+        batch: true, // Always show batch
+        profileImage: true
+      };
+
+      if (privacySettings.showUserEmails) {
+        userSelect.email = true;
+      }
+
+      if (privacySettings.showUserPhones) {
+        userSelect.whatsappNumber = true;
+      }
+
+      // Get registrations with privacy-filtered data
+      const registrations = await prisma.eventRegistration.findMany({
+        where: {
+          eventId,
+          status: 'CONFIRMED'
+        },
+        select: {
+          id: true,
+          registrationDate: true, // Always show date
+          totalGuests: true, // Always show guest count
+          ...(privacySettings.showPaymentAmounts && { totalAmount: true, paymentStatus: true }),
+          ...(privacySettings.showDonationAmounts && { donationAmount: true }),
+          user: {
+            select: userSelect
+          },
+          ...(privacySettings.showGuestDetails && {
+            guests: {
+              where: { status: 'ACTIVE' },
+              select: {
+                name: true,
+                mealPreference: true
+              }
+            }
+          })
+        },
+        orderBy: {
+          registrationDate: 'desc'
+        }
+      });
+
+      return {
+        registrations,
+        privacySettings: {
+          showPaymentAmounts: privacySettings.showPaymentAmounts,
+          showDonationAmounts: privacySettings.showDonationAmounts,
+          showUserEmails: privacySettings.showUserEmails,
+          showUserPhones: privacySettings.showUserPhones,
+          showGuestDetails: privacySettings.showGuestDetails,
+          showBatchInfo: privacySettings.showBatchInfo,
+          showRegistrationDate: privacySettings.showRegistrationDate
+        }
+      };
+
+    } catch (error) {
+      console.error('Get public registrations error:', error);
+      throw error;
+    }
   }
 
   // Cache invalidation

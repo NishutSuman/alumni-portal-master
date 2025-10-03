@@ -91,6 +91,18 @@ router.post('/users/:userId/reject',
 );
 
 /**
+ * Unblock alumni user (remove from blacklist and reset to pending verification)
+ * POST /api/admin/verification/users/:userId/unblock  
+ * Body: { reason?: string }
+ * Access: SUPER_ADMIN only
+ */
+router.post('/users/:userId/unblock',
+  requireRole('SUPER_ADMIN'),
+  verificationRateLimit,
+  asyncHandler(alumniVerificationController.unblockAlumniUser)
+);
+
+/**
  * Bulk verify multiple users
  * POST /api/admin/verification/bulk-verify
  * Body: { userIds: string[], notes?: string }

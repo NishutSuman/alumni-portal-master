@@ -110,6 +110,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Memory storage for R2 uploads (keeps file in memory as buffer)
+const memoryStorage = multer.memoryStorage();
+
 // Base multer configuration
 const upload = multer({
   storage: storage,
@@ -122,9 +125,9 @@ const upload = multer({
 
 // Specific upload configurations for different use cases
 
-// Profile picture upload (single file, 5MB limit)
+// Profile picture upload (single file, 5MB limit) - using memory storage for R2
 const uploadProfilePicture = multer({
-  storage: storage,
+  storage: memoryStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB for profile pictures
@@ -627,4 +630,34 @@ module.exports = {
   // Ticket Uploads
   uploadTicketAttachments,     // For ticket creation & admin responses
   uploadMessageAttachments,    // For message attachments
+
+  // Organization file uploads (uses memory storage for R2 upload)
+  uploadOrganizationFiles: multer({
+    storage: multer.memoryStorage(), // Store in memory for R2 upload
+    fileFilter: (req, file, cb) => {
+      let allowedTypes = [];
+      
+      if (file.fieldname === 'logoFile') {
+        allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      } else if (file.fieldname === 'bylawFile') {
+        allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      } else if (file.fieldname === 'certFile') {
+        allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      }
+      
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Invalid file type for ${file.fieldname}. Allowed types: ${allowedTypes.join(', ')}`), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB max
+      files: 3 // logo, bylaw, certificate
+    }
+  }).fields([
+    { name: 'logoFile', maxCount: 1 },
+    { name: 'bylawFile', maxCount: 1 },
+    { name: 'certFile', maxCount: 1 }
+  ]),
 };

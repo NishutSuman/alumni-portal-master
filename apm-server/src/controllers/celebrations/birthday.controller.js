@@ -132,11 +132,28 @@ const triggerBirthdayNotifications = async (req, res) => {
   }
 };
 
+/**
+ * Manually trigger birthday emails (Admin testing)
+ * POST /api/celebrations/birthdays/emails/trigger
+ * Access: SUPER_ADMIN
+ */
+const triggerBirthdayEmails = async (req, res) => {
+  try {
+    const result = await BirthdayService.sendBirthdayEmails();
+    
+    return successResponse(res, result, 'Birthday emails triggered successfully');
+  } catch (error) {
+    console.error('Trigger birthday emails error:', error);
+    return errorResponse(res, 'Failed to trigger birthday emails', 500);
+  }
+};
+
 module.exports = {
   getTodaysBirthdays,
   getUpcomingBirthdays,
   getBirthdayStats,
   getBirthdayDistribution,
   getBirthdaysInMonth,
-  triggerBirthdayNotifications
+  triggerBirthdayNotifications,
+  triggerBirthdayEmails
 };

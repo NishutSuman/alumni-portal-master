@@ -14,6 +14,9 @@ import appSlice from './slices/appSlice'
 
 // Import API slice
 import { apiSlice } from './api/apiSlice'
+// Import APIs to inject endpoints
+import './api/pollApi'
+import './api/eventApi'
 
 // Persist configuration for auth (to maintain login state)
 const authPersistConfig = {
@@ -59,7 +62,15 @@ export const store = configureStore({
           'persist/REGISTER',
         ],
       },
-    }).concat(apiSlice.middleware),
+    })
+    .concat(apiSlice.middleware)
+    .concat((store) => (next) => (action) => {
+      // Clear RTK Query cache only on logout (user switching)
+      if (action.type === 'auth/logout') {
+        store.dispatch(apiSlice.util.resetApiState())
+      }
+      return next(action)
+    }),
   
   // Enable Redux DevTools in development
   devTools: import.meta.env.VITE_ENABLE_REDUX_DEVTOOLS === 'true',

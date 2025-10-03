@@ -1,6 +1,8 @@
 // src/controllers/celebrations/festival.controller.js
-const FestivalService = require('../../services/celebrations/FestivalService');
-const FestivalSyncService = require('../../services/celebrations/FestivalSyncService');
+const FestivalService = require('../../services/festival/FestivalService');
+const FestivalSyncService = require('../../services/festival/FestivalSyncService');
+const BirthdayService = require('../../services/birthday/BirthdayService');
+const { successResponse, errorResponse } = require('../../utils/response');
 
 /**
  * Get today's festivals
@@ -113,6 +115,7 @@ const getFestivalCalendar = async (req, res) => {
       year ? parseInt(year) : undefined
     );
     
+    // Return calendar with updated structure
     return successResponse(res, calendar, 'Festival calendar retrieved successfully');
   } catch (error) {
     console.error('Get festival calendar error:', error);
@@ -260,8 +263,6 @@ const getBirthdayNotificationHistory = async (req, res) => {
 
 module.exports = {
   // Public/User endpoints
-  getTodaysBirthdays,
-  getUpcomingBirthdays,
   getTodaysFestivals,
   getUpcomingFestivals,
   getTodaysCelebrations,
@@ -269,10 +270,6 @@ module.exports = {
   getFestivalCalendar,
   
   // Admin endpoints
-  getBirthdayStats,
-  getBirthdayDistribution,
-  getBirthdaysInMonth,
-  triggerBirthdayNotifications,
   getFestivalStats,
   getCelebrationSummary,
   toggleFestivalNotifications,

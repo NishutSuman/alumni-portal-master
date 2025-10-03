@@ -52,9 +52,8 @@ const formatGroupData = (group, includeMembers = false) => {
 			user: {
 				id: member.user.id,
 				fullName: member.user.fullName, 
-				profilePhoto: member.user.profilePhoto,
-				batchYear: member.user.batchYear,
-				email: member.user.email,
+				profileImage: member.user.profileImage,
+				batch: member.user.batch,
 			},
 		}));
 	}
@@ -111,20 +110,27 @@ const getGroups = async (req, res) => {
 
 		// Build include clause
 		const include = {
-			_count: { select: { members: true } },
+			_count: { 
+				select: { 
+					members: { where: { isActive: true } } 
+				} 
+			},
 		};
 
 		if (includeMembers === "true") {
 			include.members = {
 				where: { isActive: true },
-				include: {
+				select: {
+					id: true,
+					role: true,
+					isActive: true,
+					createdAt: true,
 					user: {
 						select: {
 							id: true,
 							fullName: true,
-							profilePhoto: true,
-							batchYear: true,
-							email: true,
+							profileImage: true,
+							batch: true,
 						},
 					},
 				},
@@ -196,26 +202,29 @@ const getGroup = async (req, res) => {
 					fullName: true,
 				},
 			},
-			_count: { select: { members: true } },
+			_count: { 
+				select: { 
+					members: { where: { isActive: true } } 
+				} 
+			},
 		};
 
 		if (includeMembers === "true") {
 			include.members = {
-				include: {
+				where: {
+					isActive: true, // Only fetch active members for better performance
+				},
+				select: {
+					id: true,
+					role: true,
+					isActive: true,
+					createdAt: true,
 					user: {
 						select: {
 							id: true,
 							fullName: true,
-							profilePhoto: true,
-							batchYear: true,
-							email: true,
-							isActive: true,
-						},
-					},
-					adder: {
-						select: {
-							id: true,
-							fullName: true,
+							profileImage: true,
+							batch: true,
 						},
 					},
 				},
@@ -560,8 +569,8 @@ const getGroupMembers = async (req, res) => {
 							id: true,
 							fullName: true,
 							email: true,
-							profilePhoto: true,
-							batchYear: true,
+							profileImage: true,
+							batch: true,
 							isActive: true,
 						},
 					},
@@ -655,8 +664,8 @@ const addGroupMember = async (req, res) => {
 							id: true,
 							fullName: true,
 							email: true,
-							profilePhoto: true,
-							batchYear: true,
+							profileImage: true,
+							batch: true,
 						},
 					},
 					adder: {
@@ -682,8 +691,8 @@ const addGroupMember = async (req, res) => {
 							id: true,
 							fullName: true,
 							email: true,
-							profilePhoto: true,
-							batchYear: true,
+							profileImage: true,
+							batch: true,
 						},
 					},
 					adder: {
@@ -764,8 +773,8 @@ const updateGroupMember = async (req, res) => {
 						id: true,
 						fullName: true,
 						email: true,
-						profilePhoto: true,
-						batchYear: true,
+						profileImage: true,
+						batch: true,
 					},
 				},
 				adder: {
@@ -1056,8 +1065,8 @@ const getPublicGroups = async (req, res) => {
 							select: {
 								id: true,
 								fullName: true,
-								profilePhoto: true,
-								batchYear: true,
+								profileImage: true,
+								batch: true,
 								// Note: Not including email for privacy
 							},
 						},
@@ -1081,8 +1090,8 @@ const getPublicGroups = async (req, res) => {
 					id: member.user.id,
 					name: `${member.user.fullName}`,
 					role: member.role,
-					profilePhoto: member.user.profilePhoto,
-					batchYear: member.user.batchYear,
+					profileImage: member.user.profileImage,
+					batch: member.user.batch,
 				})),
 			})),
 			generatedAt: new Date().toISOString(),

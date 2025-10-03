@@ -135,10 +135,10 @@ model User {
   membershipAmountPaid    Decimal?  @db.Decimal(10, 2)
 
    // LifeLink Fields (NEW)
-  bloodGroup         BloodGroup?
-  isBloodDonor       Boolean     @default(false)
-  lastDonationDate   DateTime?
-  totalDonations     Int         @default(0)
+  bloodGroup              BloodGroup?
+  isBloodDonor            Boolean     @default(false)
+  lastBloodDonationDate   DateTime?
+  totalBloodDonations     Int         @default(0)
 
   
   // Timestamps
@@ -150,6 +150,7 @@ model User {
   posts             Post[]
   comments          Comment[]
   likes             Like[]
+  commentLikes      CommentLike[]
   transactions      Transaction[]
   notifications     Notification[]
   activityLogs      ActivityLog[]
@@ -226,9 +227,9 @@ model User {
   addedGroupMembers GroupMember[]       @relation("GroupMemberAdder")
 
 
-createdSponsors  Sponsor[]  @relation("SponsorCreator")
+  createdSponsors  Sponsor[]  @relation("SponsorCreator")
 
-// NEW TICKET RELATIONS (ADD THESE TO EXISTING USER MODEL)
+  // NEW TICKET RELATIONS (ADD THESE TO EXISTING USER MODEL)
   
   // User's own tickets
   tickets              Ticket[]               @relation("UserTickets")
@@ -309,6 +310,7 @@ model UserAddress {
   addressLine1  String
   addressLine2  String?
   city          String
+  district      String?
   state         String
   postalCode    String
   country       String      @default("India")
@@ -492,6 +494,17 @@ model Post {
   isArchived  Boolean     @default(false)
   isPublished Boolean     @default(true)
   
+  // Reaction counts for instant access
+  likeCount      Int @default(0)
+  loveCount      Int @default(0)
+  celebrateCount Int @default(0)
+  supportCount   Int @default(0)
+  funnyCount     Int @default(0)
+  wowCount       Int @default(0)
+  angryCount     Int @default(0)
+  sadCount       Int @default(0)
+  totalReactions Int @default(0)
+  
   // Relations
   createdBy   String
   author      User        @relation(fields: [createdBy], references: [id])
@@ -526,8 +539,22 @@ model Comment {
   
   // Nested replies
   parentId      String?
-  parent        Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  parent        Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies       Comment[] @relation("CommentReplies")
+  
+  // Reaction counts (for performance optimization)
+  likeCount     Int       @default(0)
+  loveCount     Int       @default(0)
+  celebrateCount Int      @default(0)
+  supportCount  Int       @default(0)
+  funnyCount    Int       @default(0)
+  wowCount      Int       @default(0)
+  angryCount    Int       @default(0)
+  sadCount      Int       @default(0)
+  totalReactions Int      @default(0)
+  
+  // Comment reactions
+  likes         CommentLike[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -546,12 +573,36 @@ model Like {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   
+  // Reaction type (default to LIKE for backward compatibility)
+  reactionType PostReactionType @default(LIKE)
+  
   createdAt DateTime @default(now())
   
-  @@unique([postId, userId])
+  @@unique([postId, userId, reactionType]) // One reaction type per user per post
+  @@index([postId])
+  @@index([userId])
   @@map("likes")
 }
 
+model CommentLike {
+  id        String   @id @default(cuid())
+  
+  // Relations
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  // Reaction type (same types as posts)
+  reactionType PostReactionType @default(LIKE)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([commentId, userId]) // Only one reaction per user per comment
+  @@index([commentId])
+  @@index([userId])
+  @@map("comment_likes")
+}
 
 model Album {
   id          String   @id @default(cuid())
@@ -756,6 +807,10 @@ model Event {
   // Images and attachments
   heroImage         String?
   images            String[]    // Array of image URLs
+  
+  // Additional details
+  prizeDetails      String?     @db.Text
+  organizerDetails  String?     @db.Text
   
   // Relations
   createdBy         String
@@ -2633,6 +2688,7 @@ enum NotificationType {
   VERIFICATION_REJECTED      // User gets notification when rejected
   BATCH_USER_VERIFIED        // Batch admin gets notification when user from their batch verified
   ADMIN_VERIFICATION_REMINDER // Periodic reminder for pending verifications
+  ROLE_UPDATED              // User gets notification when their role is changed
 
 }
 
@@ -2740,6 +2796,7 @@ enum PaymentProvider {
 
 enum PaymentReferenceType {
   EVENT_REGISTRATION    // Full event registration payment
+  EVENT_PAYMENT        // Direct event payment (creates registration after payment)
   MERCHANDISE          // Merchandise only payment
   GUEST_FEES          // Guest fees only payment
   ADDITIONAL_FEES     // Any additional fees
@@ -2910,6 +2967,17 @@ enum MessageReactionType {
   NEEDS_CLARIFICATION
   THUMBS_UP
   THUMBS_DOWN
+}
+
+enum PostReactionType {
+  LIKE         // 👍
+  LOVE         // ❤️  
+  CELEBRATE    // 🎉
+  SUPPORT      // 🙌
+  FUNNY        // 😂
+  WOW          // 😮
+  ANGRY        // 😠
+  SAD          // 😢
 }
 
 enum AuditActionType {

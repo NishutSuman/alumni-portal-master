@@ -199,6 +199,18 @@ router.delete(
 );
 
 // ==========================================
+// USER SEARCH FOR MENTIONS - REQUIRE AUTHENTICATION
+// ==========================================
+
+// Search users for mentions in posts
+router.get(
+	"/search",
+	authenticateToken,
+	optionalAlumniVerification, // Allow all authenticated users to search
+	asyncHandler(userController.searchUsersForMentions)
+);
+
+// ==========================================
 // PREMIUM FEATURES - REQUIRE VERIFICATION
 // ==========================================
 
@@ -224,6 +236,14 @@ router.get(
 	authenticateToken,
 	requireAlumniVerification, // 🔒 VERIFIED USERS ONLY
 	asyncHandler(userController.getUserActivity)
+);
+
+// Get user's event registrations (available to all authenticated users)
+router.get(
+	"/registrations",
+	authenticateToken,
+	// No verification required - all authenticated users can see their registrations
+	asyncHandler(userController.getMyEventRegistrations)
 );
 
 module.exports = router;

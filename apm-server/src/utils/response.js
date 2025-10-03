@@ -74,6 +74,8 @@ const paginatedResponse = (res, data, pagination, message = 'Success') => {
       pages: pagination.pages,
       hasNext: pagination.hasNext,
       hasPrev: pagination.hasPrev,
+      // Include any additional pagination fields
+      ...(pagination.totalAllComments !== undefined && { totalAllComments: pagination.totalAllComments }),
     },
     timestamp: getIndianTimestamp(),
   };

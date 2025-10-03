@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
  * @access  Private (User)
  */
 const initiatePayment = asyncHandler(async (req, res) => {
-	const { referenceType, referenceId, description } = req.body;
+	const { referenceType, referenceId, description, registrationData } = req.body;
 	const userId = req.user.id;
 
 	try {
@@ -25,6 +25,7 @@ const initiatePayment = asyncHandler(async (req, res) => {
 			referenceId,
 			userId,
 			description,
+			registrationData,
 		});
 
 		// Log activity following existing pattern
@@ -285,6 +286,13 @@ const calculatePaymentTotal = asyncHandler(async (req, res) => {
 			case "EVENT_REGISTRATION":
 				calculation =
 					await PaymentService.calculateEventRegistrationTotal(referenceId);
+				break;
+			case "EVENT_PAYMENT":
+				calculation = await PaymentService.calculateEventPaymentTotal(
+					referenceId,
+					req.user.id,
+					req.body.registrationData
+				);
 				break;
 			case "MERCHANDISE":
 				calculation =

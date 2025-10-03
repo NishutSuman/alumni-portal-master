@@ -225,7 +225,6 @@ const preventDuplicateRegistration = async (req, res, next) => {
       },
       select: {
         id: true,
-        registrationMode: true,
         status: true
       }
     });
@@ -236,7 +235,6 @@ const preventDuplicateRegistration = async (req, res, next) => {
         message: 'You are already registered for this event',
         existingRegistration: {
           id: existingRegistration.id,
-          mode: existingRegistration.registrationMode,
           status: existingRegistration.status
         },
         suggestion: 'Use the modify registration endpoint to update your details'

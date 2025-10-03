@@ -10,61 +10,12 @@ const path = require('path');
 
 // Import middleware
 const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
+const { uploadOrganizationFiles } = require('../../middleware/upload.middleware');
 const { asyncHandler } = require('../../utils/response');
 
 // Import controller
 const organizationController = require('../../controllers/admin/organization.controller');
 
-// ==========================================
-// FILE UPLOAD CONFIGURATION FOR ORGANIZATION FILES
-// ==========================================
-
-// Configure multer for organization file uploads
-const organizationStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../../../uploads/organization');
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: type_timestamp_original
-    const timestamp = Date.now();
-    const fileExtension = path.extname(file.originalname);
-    const fieldName = file.fieldname; // 'logo', 'bylaw', 'certificate'
-    const filename = `${fieldName}_${timestamp}${fileExtension}`;
-    cb(null, filename);
-  }
-});
-
-// File filter for organization uploads
-const organizationFileFilter = (req, file, cb) => {
-  const allowedTypes = {
-    'logo': ['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'],
-    'bylaw': ['application/pdf'],
-    'certificate': ['application/pdf', 'image/jpeg', 'image/png']
-  };
-  
-  const fieldName = file.fieldname;
-  const allowedMimeTypes = allowedTypes[fieldName];
-  
-  if (!allowedMimeTypes) {
-    return cb(new Error('Invalid file field'), false);
-  }
-  
-  if (allowedMimeTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Invalid file type for ${fieldName}. Allowed: ${allowedMimeTypes.join(', ')}`), false);
-  }
-};
-
-const uploadOrganizationFiles = multer({
-  storage: organizationStorage,
-  fileFilter: organizationFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 3 // Max 3 files at once
-  }
-});
 
 // ==========================================
 // PUBLIC ROUTES (NO AUTHENTICATION REQUIRED)
@@ -136,13 +87,27 @@ router.put('/admin/social-links',
 );
 
 /**
- * Upload organization logo
+ * Upload organization logo (legacy route)
  * POST /api/admin/organization/upload/logo
  * Form-data: logo file
  * Access: SUPER_ADMIN only
  */
 router.post('/admin/upload/logo',
-  uploadOrganizationFiles.single('logo'),
+  multer({
+    storage: multer.diskStorage({
+      destination: './public/uploads/organization',
+      filename: (req, file, cb) => {
+        const timestamp = Date.now();
+        const ext = path.extname(file.originalname);
+        cb(null, `logo_${timestamp}${ext}`);
+      }
+    }),
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      cb(null, allowedTypes.includes(file.mimetype));
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }
+  }).single('logo'),
   asyncHandler(organizationController.uploadOrganizationLogo)
 );
 
@@ -153,7 +118,25 @@ router.post('/admin/upload/logo',
  * Access: SUPER_ADMIN only
  */
 router.post('/admin/upload/documents',
-  uploadOrganizationFiles.fields([
+  multer({
+    storage: multer.diskStorage({
+      destination: './public/uploads/organization',
+      filename: (req, file, cb) => {
+        const timestamp = Date.now();
+        const ext = path.extname(file.originalname);
+        cb(null, `${file.fieldname}_${timestamp}${ext}`);
+      }
+    }),
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = {
+        'bylaw': ['application/pdf'],
+        'certificate': ['application/pdf', 'image/jpeg', 'image/png']
+      };
+      const fieldAllowedTypes = allowedTypes[file.fieldname] || [];
+      cb(null, fieldAllowedTypes.includes(file.mimetype));
+    },
+    limits: { fileSize: 10 * 1024 * 1024 }
+  }).fields([
     { name: 'bylaw', maxCount: 1 },
     { name: 'certificate', maxCount: 1 }
   ]),
@@ -255,6 +238,35 @@ router.post('/admin/upload/documents',
 );
 
 /**
+ * Upload organization files with Cloudflare R2
+ * POST /api/admin/organization/upload/files
+ * Form-data: logoFile?, bylawFile?, certFile?
+ * Access: SUPER_ADMIN only
+ */
+router.post('/admin/upload/files',
+  uploadOrganizationFiles,
+  asyncHandler(organizationController.uploadOrganizationFiles)
+);
+
+/**
+ * Upload organization logo with Cloudflare R2 (single file)
+ * POST /api/admin/organization/upload/logo-r2
+ * Form-data: logoFile
+ * Access: SUPER_ADMIN only
+ */
+router.post('/admin/upload/logo-r2',
+  uploadOrganizationFiles,
+  asyncHandler((req, res) => {
+    // Ensure only logoFile is present for single logo upload
+    if (req.files && req.files.logoFile) {
+      req.file = req.files.logoFile[0];
+      delete req.files;
+    }
+    return organizationController.uploadOrganizationLogo(req, res);
+  })
+);
+
+/**
  * Reset serial counter (EMERGENCY USE ONLY)
  * POST /api/admin/organization/reset-serial-counter
  * Body: { newCounter: number, confirmationText: "RESET_SERIAL_COUNTER_CONFIRMED" }
@@ -262,6 +274,26 @@ router.post('/admin/upload/documents',
  */
 router.post('/admin/reset-serial-counter',
   asyncHandler(organizationController.resetSerialCounter)
+);
+
+/**
+ * View organization file through authenticated proxy
+ * POST /api/admin/organization/files/view
+ * Body: { fileUrl: string, fileType: string }
+ * Access: SUPER_ADMIN only
+ */
+router.post('/files/view',
+  asyncHandler(organizationController.viewOrganizationFile)
+);
+
+/**
+ * Delete organization file
+ * DELETE /api/admin/organization/files/delete
+ * Body: { fileType: 'logo' | 'bylaw' | 'certificate' }
+ * Access: SUPER_ADMIN only
+ */
+router.delete('/files/delete',
+  asyncHandler(organizationController.deleteOrganizationFile)
 );
 
 module.exports = router;

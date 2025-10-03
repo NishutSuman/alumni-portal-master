@@ -1,6 +1,6 @@
 // src/services/analytics/AnalyticsService.js
 const { prisma } = require("../../config/database");
-const CacheService = require("../../config/redis");
+const { CacheService } = require("../../config/redis");
 
 class AnalyticsService {
 	constructor() {
@@ -133,16 +133,16 @@ class AnalyticsService {
       SELECT 
         u.batch,
         COUNT(DISTINCT u.id) as total_users,
-        COUNT(DISTINCT er.user_id) as active_participants,
+        COUNT(DISTINCT er."userId") as active_participants,
         ROUND(
-          (COUNT(DISTINCT er.user_id)::decimal / COUNT(DISTINCT u.id) * 100), 2
+          (COUNT(DISTINCT er."userId")::decimal / COUNT(DISTINCT u.id) * 100), 2
         ) as participation_rate,
-        SUM(er.total_amount) as total_revenue
+        SUM(er."totalAmount") as total_revenue
       FROM users u
-      LEFT JOIN event_registrations er ON u.id = er.user_id 
+      LEFT JOIN event_registrations er ON u.id = er."userId" 
         AND er.status = 'CONFIRMED'
-        AND er.registration_date >= NOW() - INTERVAL '1 year'
-      WHERE u.is_active = true
+        AND er."registrationDate" >= NOW() - INTERVAL '1 year'
+      WHERE u."isActive" = true
       GROUP BY u.batch
       ORDER BY u.batch DESC
     `;
@@ -178,18 +178,18 @@ class AnalyticsService {
 		// Get revenue breakdown
 		const breakdown = await prisma.$queryRaw`
       SELECT 
-        SUM(registration_fee_paid) as registration_revenue,
-        SUM(guest_fees_paid) as guest_revenue, 
-        SUM(merchandise_total) as merchandise_revenue,
-        SUM(donation_amount) as donation_revenue,
-        SUM(total_amount) as total_revenue,
+        SUM("registrationFeePaid") as registration_revenue,
+        SUM("guestFeesPaid") as guest_revenue, 
+        SUM("merchandiseTotal") as merchandise_revenue,
+        SUM("donationAmount") as donation_revenue,
+        SUM("totalAmount") as total_revenue,
         COUNT(*) as total_transactions,
-        AVG(total_amount) as average_order_value
+        AVG("totalAmount") as average_order_value
       FROM event_registrations er
-      JOIN events e ON er.event_id = e.id
-      WHERE er.payment_status = 'COMPLETED'
-        AND er.registration_date >= ${startDate}
-        AND er.registration_date <= ${endDate}
+      JOIN events e ON er."eventId" = e.id
+      WHERE er."paymentStatus" = 'COMPLETED'
+        AND er."registrationDate" >= ${startDate}
+        AND er."registrationDate" <= ${endDate}
         AND er.status = 'CONFIRMED'
     `;
 
@@ -309,24 +309,23 @@ class AnalyticsService {
         COUNT(DISTINCT er.id) as total_registrations,
         COUNT(DISTINCT CASE WHEN er.status = 'CONFIRMED' THEN er.id END) as confirmed_registrations,
         COUNT(DISTINCT CASE WHEN er.status = 'CANCELLED' THEN er.id END) as cancelled_registrations,
-        SUM(DISTINCT er.total_guests) as total_guests,
-        SUM(er.total_amount) as total_revenue,
-        SUM(er.registration_fee_paid) as registration_revenue,
-        SUM(er.merchandise_total) as merchandise_revenue,
-        SUM(er.donation_amount) as donation_revenue,
-        AVG(er.total_amount) as average_order_value,
-        AVG(CASE WHEN fb.rating IS NOT NULL THEN fb.rating::decimal END) as avg_feedback_score
+        SUM(DISTINCT er."totalGuests") as total_guests,
+        SUM(er."totalAmount") as total_revenue,
+        SUM(er."registrationFeePaid") as registration_revenue,
+        SUM(er."merchandiseTotal") as merchandise_revenue,
+        SUM(er."donationAmount") as donation_revenue,
+        AVG(er."totalAmount") as average_order_value,
+        0 as avg_feedback_score
       FROM events e
-      LEFT JOIN event_registrations er ON e.id = er.event_id
-      LEFT JOIN event_feedback_responses fb ON e.id = fb.event_id
+      LEFT JOIN event_registrations er ON e.id = er."eventId"
       WHERE e.id = ${eventId}
       GROUP BY e.id
     `;
 
 		const calc = calculations[0];
 		const conversionRate =
-			calc.total_registrations > 0
-				? (calc.confirmed_registrations / calc.total_registrations) * 100
+			Number(calc.total_registrations) > 0
+				? (Number(calc.confirmed_registrations) / Number(calc.total_registrations)) * 100
 				: 0;
 
 		// Upsert analytics
@@ -872,16 +871,16 @@ class AnalyticsService {
 		try {
 			const trends = await prisma.$queryRaw`
         SELECT 
-          DATE(completed_at) as date,
-          reference_type,
+          DATE("completedAt") as date,
+          "referenceType",
           SUM(amount) as daily_revenue,
           COUNT(*) as daily_count
         FROM payment_transactions 
         WHERE status = 'COMPLETED'
-          AND completed_at >= ${startDate}
-          AND completed_at <= ${endDate}
-        GROUP BY DATE(completed_at), reference_type
-        ORDER BY date ASC, reference_type ASC
+          AND "completedAt" >= ${startDate}
+          AND "completedAt" <= ${endDate}
+        GROUP BY DATE("completedAt"), "referenceType"
+        ORDER BY date ASC, "referenceType" ASC
       `;
 
 			// Group by date for easier frontend consumption
@@ -903,7 +902,7 @@ class AnalyticsService {
 
 				groupedTrends[dateStr].totalRevenue += revenue;
 				groupedTrends[dateStr].totalCount += count;
-				groupedTrends[dateStr].breakdown[trend.reference_type] = {
+				groupedTrends[dateStr].breakdown[trend.referenceType] = {
 					revenue,
 					count,
 				};

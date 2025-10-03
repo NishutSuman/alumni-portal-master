@@ -585,6 +585,7 @@ const cacheAdminRegistrationsList = cacheEvent((req) => {
 	const filters = {
 		status: req.query.status,
 		search: req.query.search,
+		batch: req.query.batch,  // Include batch parameter in cache key
 		page: req.query.page || 1,
 		limit: req.query.limit || 20,
 	};

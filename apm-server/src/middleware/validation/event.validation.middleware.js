@@ -42,9 +42,9 @@ const eventSchemas = {
 			"string.max": "Event description must be less than 10,000 characters",
 		}),
 
-		categoryId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid category ID format",
-			"any.required": "Category is required",
+		categoryId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid category ID format",
+			"any.required": "Event category is required",
 		}),
 
 		eventDate: Joi.date().min("now").required().messages({
@@ -71,8 +71,20 @@ const eventSchemas = {
 		registrationStartDate: Joi.date().optional().allow(null),
 		registrationEndDate: Joi.date().optional().allow(null),
 
-		venue: Joi.string().trim().max(300).optional().allow(null, ""),
-		meetingLink: Joi.string().uri().optional().allow(null, ""),
+		venue: Joi.string().trim().max(300).optional().allow(null, "")
+			.when('eventMode', {
+				is: Joi.valid('PHYSICAL', 'HYBRID'),
+				then: Joi.required().messages({
+					'any.required': 'Venue is required for physical and hybrid events'
+				})
+			}),
+		meetingLink: Joi.string().uri().optional().allow(null, "")
+			.when('eventMode', {
+				is: Joi.valid('VIRTUAL', 'HYBRID'),
+				then: Joi.required().messages({
+					'any.required': 'Meeting link is required for virtual and hybrid events'
+				})
+			}),
 
 		maxCapacity: Joi.number()
 			.integer()
@@ -123,14 +135,40 @@ const eventSchemas = {
 			.optional(), // Max 1 week
 
 		// Fees
-		registrationFee: Joi.number().min(0).max(100000).default(0).optional(),
-		guestFee: Joi.number().min(0).max(100000).default(0).optional(),
+		registrationFee: Joi.number().integer().min(0).max(100000).default(0).optional().messages({
+			"number.integer": "Registration fee must be a whole number",
+			"number.min": "Registration fee cannot be negative",
+			"number.max": "Registration fee cannot exceed ₹100,000",
+		}),
+		guestFee: Joi.number().integer().min(0).max(100000).default(0).optional().messages({
+			"number.integer": "Guest fee must be a whole number",
+			"number.min": "Guest fee cannot be negative",
+			"number.max": "Guest fee cannot exceed ₹100,000",
+		}),
+
+		// Additional details
+		prizeDetails: Joi.string().trim().max(5000).optional().allow(null, "")
+			.when('hasPrizes', {
+				is: true,
+				then: Joi.string().required().min(10).messages({
+					'any.required': 'Prize details are required when prizes are enabled',
+					'string.min': 'Prize details must be at least 10 characters long'
+				})
+			}),
+		organizerDetails: Joi.string().trim().max(5000).optional().allow(null, "")
+			.when('hasOrganizers', {
+				is: true,
+				then: Joi.string().required().min(10).messages({
+					'any.required': 'Organizer details are required when organizers are enabled',
+					'string.min': 'Organizer details must be at least 10 characters long'
+				})
+			}),
 	}),
 
 	updateEvent: Joi.object({
 		title: Joi.string().trim().min(3).max(200).optional(),
 		description: Joi.string().trim().min(10).max(10000).optional(),
-		categoryId: Joi.string().uuid().optional(),
+		categoryId: Joi.string().pattern(/^c[a-z0-9]{24}$/).optional(),
 		eventDate: Joi.date().optional(),
 		startTime: Joi.string()
 			.pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)
@@ -262,7 +300,7 @@ const eventSchemas = {
 		sectionOrders: Joi.array()
 			.items(
 				Joi.object({
-					sectionId: Joi.string().uuid().required(),
+					sectionId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required(),
 					orderIndex: Joi.number().integer().min(0).max(1000).required(),
 				})
 			)
@@ -287,8 +325,8 @@ const eventSchemas = {
 		formResponses: Joi.array()
 			.items(
 				Joi.object({
-					fieldId: Joi.string().uuid().required().messages({
-						"string.uuid": "Invalid field ID format",
+					fieldId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+						"string.pattern.base": "Invalid field ID format",
 						"any.required": "Field ID is required",
 					}),
 					response: Joi.string().trim().required().messages({
@@ -445,7 +483,7 @@ const eventSchemas = {
 			fieldOrders: Joi.array()
 				.items(
 					Joi.object({
-						fieldId: Joi.string().uuid().required(),
+						fieldId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required(),
 						orderIndex: Joi.number().integer().min(0).max(1000).required(),
 					})
 				)
@@ -464,7 +502,7 @@ const eventSchemas = {
 		formResponses: Joi.array()
 			.items(
 				Joi.object({
-					fieldId: Joi.string().uuid().required(),
+					fieldId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required(),
 					response: Joi.string().trim().required(),
 				})
 			)
@@ -533,8 +571,8 @@ const eventSchemas = {
 		formResponses: Joi.array()
 			.items(
 				Joi.object({
-					fieldId: Joi.string().uuid().required().messages({
-						"string.uuid": "Invalid field ID format",
+					fieldId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+						"string.pattern.base": "Invalid field ID format",
 						"any.required": "Field ID is required",
 					}),
 					response: Joi.string().trim().required().messages({
@@ -556,7 +594,7 @@ const eventSchemas = {
 		formResponses: Joi.array()
 			.items(
 				Joi.object({
-					fieldId: Joi.string().uuid().required(),
+					fieldId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required(),
 					response: Joi.string().trim().required(),
 				})
 			)
@@ -571,8 +609,8 @@ const eventSchemas = {
 		eventId: Joi.string().required().messages({
 			"any.required": "Event ID is required",
 		}),
-		guestId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid guest ID format",
+		guestId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid guest ID format",
 			"any.required": "Guest ID is required",
 		}),
 	}),
@@ -802,8 +840,8 @@ const eventParamSchemas = {
 	}),
 
 	categoryId: Joi.object({
-		categoryId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid category ID format",
+		categoryId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid category ID format",
 			"any.required": "Category ID is required",
 		}),
 	}),
@@ -812,8 +850,8 @@ const eventParamSchemas = {
 		eventId: Joi.string().required().messages({
 			"any.required": "Event ID is required",
 		}),
-		sectionId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid section ID format",
+		sectionId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid section ID format",
 			"any.required": "Section ID is required",
 		}),
 	}),
@@ -822,8 +860,8 @@ const eventParamSchemas = {
 		eventId: Joi.string().required().messages({
 			"any.required": "Event ID is required",
 		}),
-		guestId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid guest ID format",
+		guestId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid guest ID format",
 			"any.required": "Guest ID is required",
 		}),
 	}),

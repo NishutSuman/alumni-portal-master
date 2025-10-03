@@ -1,0 +1,115 @@
+Hey, I am listing out the below plan which will be helpful for our frontend development and we will know exactly what we are going to build.
+
+We will go phase by phase. And you have to stick to the plan. No deviations. I will mention eacch task and subtask we need to develop and we will ensure that everything works fine.
+
+Current Frontend Development So far:
+
+- User Authentication (Login, Signup, Password Reset)
+- Uniform UI for all the users, batch_admins and super_admins
+- User management page is available for super_admins and batch_admins
+
+
+Following fixes required:
+
+
+3. When user is clicking on Verify My Email button on email, user is getting redirected to a page, where it's showing first that verification failed and on right side toast is showing verifying and then verified. This should be fixed. User should see only one message. Only display verifying with an animation or gif and then show the verified message.
+
+
+5. Same issue for passwordResetToken. Please check and fix it.
+6. There is another col with name passwordResetExpires. Please check and let me know why are we using it. That is also null even after chnaging the password.
+
+# Notification issues:
+
+
+# User Verification Fixes:
+
+10. Adding user to blacklist:(User Rejection)
+- On user rejection, We will only send a rejection mail to the user with message that your registration has been rejected. Please contact support for more details. Currently we will not able to proceed with your registration with us.
+- Fix why the user is not getting the rejection mail. Check the codes and fix it.
+- Only admin can reject and add it to blacklist. Batch admin should not have this right.
+- Admin is able to see the rejected users in the user management page with a filter. But there is no option to unblock the user.There is a shield button which is not working. Fix it and unblock the user on clicking that button. Here user should get removed from blacklisted_emails table and on user table make
+isRejected - false, isEmailVerified - false, pendingVerification - true, and set rejectedAt, rejectedBy and rejectedReason - null.
+
+11. Alumni Verification Approve:
+- User is still not getting approval mail. Check and fix. Send an approval mail that account created successfully. Please login to your account.
+
+
+Batch Admin Side User Management Fixes:
+16. Now batch admin can able to see all the users from all the batches. Fix it. Batch admin should only able to see the users from his/her batch only.
+17. Batch admin should able to see the approval button only, not the reject button. 
+18. Batch admin should not able to see the role change option. 
+
+UI Fixes:
+19. Keep the sidebar User Name, email and logout button fixed to the buttom of sidebar. So that when admin is scrolling down, user info and logout button should be visible all the time.
+20. For batch admin and user, UI components are not aligned properly. Fix the alignment issues. Cards are overlapping the sidebar. Fix it.
+21. On mobile view the notification count is overflowing the screen. Fix the size and position.
+
+# Upcoming features: 
+- Admin should able to add organisation details. Admin should be able to add only one organisation details. Let's provide predefined input fields as per our model. Only admin need to update the data. Admin should not able to add multiple organisation details.
+
+- Need to integrate cloudfare r2 bucket for file storage.
+
+- Will give edit profile option to users, batch admins and admins. All should able to edit their profile except email, batch. 
+
+Debugging:
+- Shield button for unblocking is throwing below error:
+UserManagement.tsx:168 Failed to fetch blacklist: 
+{success: false, message: 'Invalid token'}
+handleUnblockUser	@	UserManagement.tsx:168
+await in handleUnblockUser		
+onClick	@	UserManagement.tsx:565
+
+- Clear All notification is ot working as well. Throwing below error:
+Failed to clear all notifications: data
+: 
+message
+: 
+"Notification not found"
+success
+: 
+false
+timestamp
+: 
+"07-09-2025 21:26:56"
+[[Prototype]]
+: 
+Object
+status
+: 
+404
+[[Prototype]]
+: 
+Object
+handleClearAll	@	NotificationPanel.tsx:64
+
+- Admin is still unable to update user role. Throwing below error:
+Failed to update user role:
+data
+: 
+message
+: 
+"Route /api/auth/users/cmf9tn4nx000uvvgcmpjop4kj/role not found"
+success
+: 
+false
+suggestion
+: 
+"Check if the API endpoint exists and is properly registered"
+[[Prototype]]
+: 
+Object
+status
+: 
+404
+
+Profile Page:
+
+- Hero Section:
+    - profile picture(delete and upload both options)
+    - alumni verified badge
+    - membership status
+    - email
+    - whatsapp number
+    - profile public or private
+    - role
+    - social media icons whichever available (linkedin, facebook, instagram, twitter, github)

@@ -37,40 +37,60 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             position="top-right"
             toastOptions={{
               duration: 4000,
+              className: '',
               style: {
-                background: 'var(--tw-color-gray-900)',
-                color: 'var(--tw-color-white)',
-                borderRadius: '0.75rem',
+                borderRadius: 'var(--radius-lg)',
                 fontSize: '0.875rem',
                 fontWeight: '500',
                 padding: '12px 16px',
                 maxWidth: '400px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
               },
               success: {
                 iconTheme: {
-                  primary: 'var(--tw-color-success-500)',
+                  primary: '#10b981',
                   secondary: 'white',
                 },
                 style: {
-                  background: 'var(--tw-color-success-500)',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
                 },
+                className: 'dark:bg-green-600 dark:text-white',
               },
               error: {
                 iconTheme: {
-                  primary: 'var(--tw-color-error-500)',
+                  primary: '#ef4444',
                   secondary: 'white',
                 },
                 style: {
-                  background: 'var(--tw-color-error-500)',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: 'white',
                 },
+                className: 'dark:bg-red-600 dark:text-white',
               },
               loading: {
                 iconTheme: {
-                  primary: 'var(--tw-color-guild-500)',
+                  primary: '#3b82f6',
                   secondary: 'white',
                 },
+                style: {
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: 'white',
+                },
+                className: 'dark:bg-blue-600 dark:text-white',
+              },
+              // Default toast for info messages
+              blank: {
+                style: {
+                  background: 'white',
+                  color: '#374151',
+                },
+                className: 'dark:bg-gray-800 dark:text-white dark:border-gray-700',
               },
             }}
+            containerClassName=""
+            containerStyle={{}}
           />
         </BrowserRouter>
       </PersistGate>

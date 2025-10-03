@@ -329,11 +329,11 @@ router.post(
 	requireRole("SUPER_ADMIN"),
 	uploadEventFiles.fields([
 		{ name: "heroImage", maxCount: 1 },
-		{ name: "galleryImages", maxCount: 10 },
+		{ name: "images", maxCount: 10 },
 	]),
+	handleUploadError,
 	validateCreateEvent,
 	validateEventDates,
-	handleUploadError,
 	// Auto-invalidate event caches after successful creation
 	asyncHandler(async (req, res, next) => {
 		const result = await eventController.createEvent(req, res);
@@ -557,6 +557,7 @@ router.delete(
 	autoInvalidateRegistrationCaches, // 🆕 AUTO INVALIDATE AFTER SUCCESS
 	asyncHandler(eventRegistrationController.cancelMyRegistration)
 );
+
 
 // ==========================================
 // EVENT FORM MANAGEMENT (PHASE 2)
@@ -1692,6 +1693,18 @@ router.get(
 router.get('/:eventId/registrations/public',
   validateEventIdParam,
   asyncHandler(RegistrationDashboardController.getPublicRegistrationDashboard)
+);
+
+// PUBLIC: Get public analytics with privacy settings applied (NO AUTH REQUIRED)
+router.get('/:eventId/public-analytics',
+  validateEventIdParam,
+  asyncHandler(RegistrationDashboardController.getPublicAnalytics)
+);
+
+// PUBLIC: Get public registrations with privacy settings applied (NO AUTH REQUIRED)
+router.get('/:eventId/public-registrations',
+  validateEventIdParam,
+  asyncHandler(RegistrationDashboardController.getPublicRegistrations)
 );
 
 // ADMIN: Get admin registration dashboard with advanced features

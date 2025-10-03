@@ -24,6 +24,8 @@ const searchAlumni = async (req, res) => {
     const whereClause = {
       isActive: true,
       isProfilePublic: true,
+      isAlumniVerified: true, // Only show verified alumni
+      isRejected: false, // Exclude rejected users
     };
     
     // General search across multiple fields
@@ -173,7 +175,12 @@ const getAlumniStats = async (req, res) => {
     ] = await Promise.all([
       // Total active alumni
       prisma.user.count({
-        where: { isActive: true, isProfilePublic: true }
+        where: { 
+          isActive: true, 
+          isProfilePublic: true,
+          isAlumniVerified: true,
+          isRejected: false
+        }
       }),
       
       // Alumni by batch
@@ -190,7 +197,12 @@ const getAlumniStats = async (req, res) => {
       // Employment status distribution
       prisma.user.groupBy({
         by: ['employmentStatus'],
-        where: { isActive: true, isProfilePublic: true },
+        where: { 
+          isActive: true, 
+          isProfilePublic: true,
+          isAlumniVerified: true,
+          isRejected: false
+        },
         _count: true,
       }),
       
@@ -198,6 +210,8 @@ const getAlumniStats = async (req, res) => {
       prisma.user.count({
         where: {
           isActive: true,
+          isAlumniVerified: true,
+          isRejected: false,
           createdAt: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           }
@@ -233,6 +247,8 @@ const getAlumniProfile = async (req, res) => {
         id: userId,
         isActive: true,
         isProfilePublic: true,
+        isAlumniVerified: true,
+        isRejected: false,
       },
       select: {
         id: true,

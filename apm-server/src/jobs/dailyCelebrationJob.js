@@ -11,31 +11,78 @@ class DailyCelebrationJob {
   constructor() {
     this.isRunning = false;
     this.jobSchedule = '0 8 * * *'; // Every day at 8:00 AM IST
+    this.birthdayEmailSchedule = '5 0 * * *'; // Every day at 00:05 AM IST for birthday emails
     this.timezone = 'Asia/Kolkata';
   }
 
   /**
-   * Initialize the daily celebration cron job
+   * Initialize the daily celebration cron jobs
    */
   static initialize() {
     const job = new DailyCelebrationJob();
     
-    console.log('🕐 Initializing daily celebration cron job...');
+    console.log('🕐 Initializing daily celebration cron jobs...');
     
+    // Birthday email cron job at 00:05 AM (midnight for birthday wishes)
+    cron.schedule(job.birthdayEmailSchedule, async () => {
+      console.log('🎂 Running birthday email notifications (midnight)...');
+      await job.runBirthdayEmails();
+    }, {
+      scheduled: true,
+      timezone: job.timezone
+    });
+    
+    // Main celebration notifications at 8:00 AM (push notifications)
     cron.schedule(job.jobSchedule, async () => {
-      console.log('🎉 Running daily celebration notifications...');
+      console.log('🎉 Running daily celebration push notifications...');
       await job.runDailyCelebrations();
     }, {
       scheduled: true,
       timezone: job.timezone
     });
     
-    console.log(`✅ Daily celebration job initialized (runs daily at 8:00 AM ${job.timezone})`);
+    console.log(`✅ Birthday email job initialized (runs daily at 00:05 AM ${job.timezone})`);
+    console.log(`✅ Celebration push notification job initialized (runs daily at 8:00 AM ${job.timezone})`);
     return job;
   }
 
   /**
-   * Main function to run daily celebrations
+   * Run birthday emails at midnight (00:05 AM)
+   */
+  async runBirthdayEmails() {
+    if (this.isRunning) {
+      console.log('⚠️ Birthday email job already running, skipping...');
+      return;
+    }
+
+    this.isRunning = true;
+    const startTime = new Date();
+    
+    try {
+      console.log('🎂 Starting birthday email notifications...');
+      
+      const result = await this.processBirthdayEmails();
+
+      // TODO: Log birthday email completion (requires valid userId)
+      // Skip activity logging for system jobs
+
+      console.log('✅ Birthday email job completed successfully');
+      return result;
+
+    } catch (error) {
+      console.error('❌ Birthday email job error:', error);
+      
+      // TODO: Log error (requires valid userId)
+      // Skip activity logging for system jobs
+      
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
+  /**
+   * Main function to run daily celebrations (push notifications)
    */
   async runDailyCelebrations() {
     if (this.isRunning) {
@@ -58,21 +105,8 @@ class DailyCelebrationJob {
       // Log results
       this.logResults(birthdayResult, festivalResult);
 
-      // Log job completion in existing ActivityLog table
-      await prisma.activityLog.create({
-        data: {
-          userId: 'system',
-          action: 'daily_celebration_job_completed',
-          details: {
-            startTime: startTime,
-            endTime: new Date(),
-            duration: Date.now() - startTime.getTime(),
-            birthdayResult: birthdayResult.status === 'fulfilled' ? birthdayResult.value : { error: birthdayResult.reason?.message },
-            festivalResult: festivalResult.status === 'fulfilled' ? festivalResult.value : { error: festivalResult.reason?.message },
-            jobType: 'daily_scheduled'
-          }
-        }
-      });
+      // TODO: Log job completion (requires valid userId)
+      // Skip activity logging for system jobs
 
       const summary = {
         success: true,
@@ -89,19 +123,8 @@ class DailyCelebrationJob {
     } catch (error) {
       console.error('❌ Daily celebration job error:', error);
       
-      // Log error in existing ActivityLog table
-      await prisma.activityLog.create({
-        data: {
-          userId: 'system',
-          action: 'daily_celebration_job_error',
-          details: {
-            error: error.message,
-            startTime,
-            endTime: new Date(),
-            jobType: 'daily_scheduled'
-          }
-        }
-      });
+      // TODO: Log error (requires valid userId)
+      // Skip activity logging for system jobs
       
       throw error;
     } finally {
@@ -111,16 +134,38 @@ class DailyCelebrationJob {
   }
 
   /**
-   * Process birthday notifications
+   * Process birthday emails (for birthday people at midnight)
+   */
+  async processBirthdayEmails() {
+    try {
+      console.log('🎂 Processing birthday emails...');
+      
+      const result = await BirthdayService.sendBirthdayEmails();
+      
+      if (result.birthdaysCount > 0) {
+        console.log(`🎉 Processed ${result.birthdaysCount} birthday(s), sent ${result.emailsSent} emails`);
+      } else {
+        console.log('ℹ️ No birthday emails to send today');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Birthday email processing error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process birthday notifications (push notifications to other users)
    */
   async processBirthdayNotifications() {
     try {
-      console.log('🎂 Processing birthday notifications...');
+      console.log('🎂 Processing birthday push notifications...');
       
       const result = await BirthdayService.sendBirthdayNotifications();
       
       if (result.birthdaysCount > 0) {
-        console.log(`🎉 Processed ${result.birthdaysCount} birthday(s), sent ${result.notificationsSent} notifications`);
+        console.log(`🎉 Processed ${result.birthdaysCount} birthday(s), sent ${result.notificationsSent} push notifications`);
       } else {
         console.log('ℹ️ No birthdays today');
       }
@@ -133,16 +178,16 @@ class DailyCelebrationJob {
   }
 
   /**
-   * Process festival notifications
+   * Process festival notifications (includes both emails and push notifications)
    */
   async processFestivalNotifications() {
     try {
-      console.log('🎊 Processing festival notifications...');
+      console.log('🎊 Processing festival notifications and emails...');
       
       const result = await FestivalService.sendFestivalNotifications();
       
       if (result.festivalsCount > 0) {
-        console.log(`🎊 Processed ${result.festivalsCount} festival(s), sent ${result.notificationsSent} notifications`);
+        console.log(`🎊 Processed ${result.festivalsCount} festival(s), sent ${result.notificationsSent} push notifications and ${result.emailsSent} emails`);
       } else {
         console.log('ℹ️ No festivals today');
       }
@@ -302,4 +347,4 @@ class DailyCelebrationJob {
   }
 }
 
-module.exports = new DailyCelebrationJob();
+module.exports = DailyCelebrationJob;

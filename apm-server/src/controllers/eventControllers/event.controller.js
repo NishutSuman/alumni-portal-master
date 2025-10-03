@@ -2,6 +2,7 @@
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
 const { deleteUploadedFile, getFileUrl } = require('../../middleware/upload.middleware');
+const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
 
 // Helper function to generate unique slug
 const generateSlug = (title, suffix = '') => {
@@ -31,19 +32,25 @@ const getAllEvents = async (req, res) => {
     // Build where clause
     const whereClause = {};
     
-    // Default status filter for public users
-    if (req.user?.role !== 'SUPER_ADMIN') {
+    console.log('🔍 Events API Request:', {
+      user: req.user?.role,
+      query: req.query
+    });
+    
+    // Default status filter for public users (exclude DRAFT for regular users only)
+    if (req.user?.role === 'USER') {
       whereClause.status = {
         in: ['PUBLISHED', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED']
       };
     }
+    // SUPER_ADMIN and BATCH_ADMIN can see all events including DRAFT
     
     // Apply filters
     if (category) {
       whereClause.categoryId = category;
     }
     
-    if (status && req.user?.role === 'SUPER_ADMIN') {
+    if (status && (req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'BATCH_ADMIN')) {
       whereClause.status = status;
     }
     
@@ -71,8 +78,12 @@ const getAllEvents = async (req, res) => {
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'eventDate';
     const order = sortOrder === 'desc' ? 'desc' : 'asc';
     
+    console.log('📊 Query whereClause:', JSON.stringify(whereClause, null, 2));
+    
     // Get total count
     const total = await prisma.event.count({ where: whereClause });
+    
+    console.log('📈 Total events found:', total);
     
     // Get events
     const events = await prisma.event.findMany({
@@ -121,6 +132,17 @@ const getAllEvents = async (req, res) => {
             sections: true,
           },
         },
+        registrations: {
+          where: { status: 'CONFIRMED' },
+          select: {
+            id: true,
+            _count: {
+              select: {
+                guests: true
+              }
+            }
+          }
+        },
         createdAt: true,
         updatedAt: true,
       },
@@ -152,14 +174,20 @@ const getAllEvents = async (req, res) => {
         registrationStatus = 'EXTERNAL';
       }
       
+      // Calculate total attendees (registrations + guests)
+      const totalGuests = event.registrations.reduce((total, reg) => total + reg._count.guests, 0);
+      const totalAttendees = event._count.registrations + totalGuests;
+      
       return {
         ...event,
         registrationCount: event._count.registrations,
+        totalAttendees: totalAttendees,
         sectionCount: event._count.sections,
         registrationStatus,
         isUpcoming: eventDate > now,
         isPast: eventDate < now,
         _count: undefined,
+        registrations: undefined, // Remove from output
       };
     });
     
@@ -346,6 +374,9 @@ const createEvent = async (req, res) => {
     // Fees
     registrationFee = 0,
     guestFee = 0,
+    // Additional details
+    prizeDetails,
+    organizerDetails,
   } = req.body;
   
   // Basic validation
@@ -398,14 +429,43 @@ const createEvent = async (req, res) => {
     let images = [];
     
     if (req.files) {
+      // Upload hero image to Cloudflare R2
       if (req.files.heroImage && req.files.heroImage[0]) {
-        heroImage = getFileUrl(req, req.files.heroImage[0].filename, 'events');
+        try {
+          const heroImageFile = req.files.heroImage[0];
+          const validation = cloudflareR2Service.validateEventImage(heroImageFile);
+          
+          if (!validation.valid) {
+            return errorResponse(res, validation.error, 400);
+          }
+          
+          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero');
+          heroImage = uploadResult.url;
+        } catch (error) {
+          console.error('Hero image upload failed:', error);
+          return errorResponse(res, 'Failed to upload hero image', 500);
+        }
       }
       
+      // Upload gallery images to Cloudflare R2
       if (req.files.images) {
-        images = req.files.images.map(file => 
-          getFileUrl(req, file.filename, 'events')
-        );
+        try {
+          const uploadPromises = req.files.images.map(async (file) => {
+            const validation = cloudflareR2Service.validateEventImage(file);
+            
+            if (!validation.valid) {
+              throw new Error(`Invalid image: ${validation.error}`);
+            }
+            
+            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery');
+            return uploadResult.url;
+          });
+          
+          images = await Promise.all(uploadPromises);
+        } catch (error) {
+          console.error('Gallery images upload failed:', error);
+          return errorResponse(res, 'Failed to upload gallery images', 500);
+        }
       }
     }
     
@@ -443,6 +503,8 @@ const createEvent = async (req, res) => {
         guestFee: parseFloat(guestFee),
         heroImage,
         images,
+        prizeDetails: prizeDetails?.trim(),
+        organizerDetails: organizerDetails?.trim(),
         createdBy: req.user.id,
       },
       include: {
@@ -599,28 +661,73 @@ const updateEvent = async (req, res) => {
     let images = existingEvent.images;
     
     if (req.files) {
+      // Update hero image
       if (req.files.heroImage && req.files.heroImage[0]) {
-        // Delete old hero image
-        if (existingEvent.heroImage && existingEvent.heroImage.includes('/uploads/')) {
-          const oldFileName = existingEvent.heroImage.split('/').pop();
-          deleteUploadedFile(`./public/uploads/events/${oldFileName}`);
+        try {
+          const heroImageFile = req.files.heroImage[0];
+          const validation = cloudflareR2Service.validateEventImage(heroImageFile);
+          
+          if (!validation.valid) {
+            return errorResponse(res, validation.error, 400);
+          }
+          
+          // Delete old hero image from R2 or local storage
+          if (existingEvent.heroImage) {
+            if (existingEvent.heroImage.includes('r2.cloudflarestorage.com')) {
+              try {
+                await cloudflareR2Service.deleteFileByUrl(existingEvent.heroImage);
+              } catch (error) {
+                console.error('Failed to delete old hero image from R2:', error);
+              }
+            } else if (existingEvent.heroImage.includes('/uploads/')) {
+              const oldFileName = existingEvent.heroImage.split('/').pop();
+              deleteUploadedFile(`./public/uploads/events/${oldFileName}`);
+            }
+          }
+          
+          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero');
+          heroImage = uploadResult.url;
+        } catch (error) {
+          console.error('Hero image upload failed:', error);
+          return errorResponse(res, 'Failed to upload hero image', 500);
         }
-        heroImage = getFileUrl(req, req.files.heroImage[0].filename, 'events');
       }
       
+      // Update gallery images
       if (req.files.images) {
-        // Delete old images
-        if (existingEvent.images && existingEvent.images.length > 0) {
-          existingEvent.images.forEach(imagePath => {
-            if (imagePath.includes('/uploads/')) {
-              const fileName = imagePath.split('/').pop();
-              deleteUploadedFile(`./public/uploads/events/${fileName}`);
+        try {
+          // Delete old images from R2 or local storage
+          if (existingEvent.images && existingEvent.images.length > 0) {
+            for (const imagePath of existingEvent.images) {
+              if (imagePath.includes('r2.cloudflarestorage.com')) {
+                try {
+                  await cloudflareR2Service.deleteFileByUrl(imagePath);
+                } catch (error) {
+                  console.error('Failed to delete old image from R2:', error);
+                }
+              } else if (imagePath.includes('/uploads/')) {
+                const fileName = imagePath.split('/').pop();
+                deleteUploadedFile(`./public/uploads/events/${fileName}`);
+              }
             }
+          }
+          
+          const uploadPromises = req.files.images.map(async (file) => {
+            const validation = cloudflareR2Service.validateEventImage(file);
+            
+            if (!validation.valid) {
+              throw new Error(`Invalid image: ${validation.error}`);
+            }
+            
+            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery');
+            return uploadResult.url;
           });
+          
+          images = await Promise.all(uploadPromises);
+        } catch (error) {
+          console.error('Gallery images upload failed:', error);
+          return errorResponse(res, 'Failed to upload gallery images', 500);
         }
-        images = req.files.images.map(file => 
-          getFileUrl(req, file.filename, 'events')
-        );
       }
     }
     
@@ -712,18 +819,34 @@ const deleteEvent = async (req, res) => {
     }
     
     // Delete associated files
-    if (event.heroImage && event.heroImage.includes('/uploads/')) {
-      const fileName = event.heroImage.split('/').pop();
-      deleteUploadedFile(`./public/uploads/events/${fileName}`);
+    // Delete hero image from R2 or local storage
+    if (event.heroImage) {
+      if (event.heroImage.includes('r2.cloudflarestorage.com')) {
+        try {
+          await cloudflareR2Service.deleteFileByUrl(event.heroImage);
+        } catch (error) {
+          console.error('Failed to delete hero image from R2:', error);
+        }
+      } else if (event.heroImage.includes('/uploads/')) {
+        const fileName = event.heroImage.split('/').pop();
+        deleteUploadedFile(`./public/uploads/events/${fileName}`);
+      }
     }
     
+    // Delete gallery images from R2 or local storage
     if (event.images && event.images.length > 0) {
-      event.images.forEach(imagePath => {
-        if (imagePath.includes('/uploads/')) {
+      for (const imagePath of event.images) {
+        if (imagePath.includes('r2.cloudflarestorage.com')) {
+          try {
+            await cloudflareR2Service.deleteFileByUrl(imagePath);
+          } catch (error) {
+            console.error('Failed to delete image from R2:', error);
+          }
+        } else if (imagePath.includes('/uploads/')) {
           const fileName = imagePath.split('/').pop();
           deleteUploadedFile(`./public/uploads/events/${fileName}`);
         }
-      });
+      }
     }
     
     // Delete event (cascade will handle related records)

@@ -36,27 +36,10 @@ const fs = require("fs");
 const postController = require("../controllers/post/post.controller");
 const likeController = require("../controllers/post/like.controller");
 const commentController = require("../controllers/post/comment.controller");
+const commentLikeController = require("../controllers/post/commentLike.controller");
 
-// Configure multer for post uploads (images and documents)
-const postUploadStorage = multer.diskStorage({
-	destination: (req, file, cb) => {
-		const uploadPath = "./public/uploads/posts/";
-		if (!fs.existsSync(uploadPath)) {
-			fs.mkdirSync(uploadPath, { recursive: true });
-		}
-		cb(null, uploadPath);
-	},
-	filename: (req, file, cb) => {
-		const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-		const extension = path.extname(file.originalname);
-		const baseName = path.basename(file.originalname, extension);
-		const cleanBaseName = baseName
-			.replace(/[^a-zA-Z0-9]/g, "_")
-			.substring(0, 50);
-		const filename = `${cleanBaseName}_${uniqueSuffix}${extension}`;
-		cb(null, filename);
-	},
-});
+// Configure multer for post uploads (images and documents) - using memory storage for R2
+const postUploadStorage = multer.memoryStorage();
 
 const postFileFilter = (req, file, cb) => {
 	// Allowed file types for posts
@@ -125,9 +108,9 @@ router.post(
 	"/",
 	authenticateToken,
 	requireAlumniVerification,
-	validateCreatePost,
 	uploadPostFiles,
 	handleUploadError,
+	validateCreatePost,
 	invalidatePostCache,
 	asyncHandler(postController.createPost)
 );
@@ -137,9 +120,9 @@ router.put(
 	authenticateToken,
 	requireAlumniVerification,
 	validatePostIdParam,
-	validateUpdatePost,
 	uploadPostFiles,
 	handleUploadError,
+	validateUpdatePost,
 	invalidatePostCache,
 	asyncHandler(postController.updatePost)
 );
@@ -174,7 +157,6 @@ router.patch(
 router.delete(
 	"/:postId",
 	authenticateToken,
-	requireRole("SUPER_ADMIN"),
 	validatePostIdParam,
 	invalidatePostCache,
 	asyncHandler(postController.deletePost)
@@ -209,6 +191,36 @@ router.get(
 	requireAlumniVerification,
 	validatePostIdParam,
 	asyncHandler(likeController.checkUserLike)
+);
+
+// ==========================================
+// REACTION ROUTES (NEW)
+// ==========================================
+
+// Toggle reaction on a post (supports multiple reaction types)
+router.post(
+	"/:postId/reactions",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostIdParam,
+	invalidatePostInteractionCache,
+	asyncHandler(likeController.toggleReaction)
+);
+
+// Get post reactions with counts
+router.get(
+	"/:postId/reactions",
+	optionalAuth,
+	validatePostIdParam,
+	asyncHandler(likeController.getPostReactions)
+);
+
+// Get detailed reaction users for modal (LinkedIn-style)
+router.get(
+	"/:postId/reactions/users",
+	optionalAuth,
+	validatePostIdParam,
+	asyncHandler(likeController.getPostReactionUsers)
 );
 
 // ==========================================
@@ -264,6 +276,36 @@ router.post(
 	validateCreateComment, // Same validation as regular comments
 	invalidatePostInteractionCache,
 	asyncHandler(commentController.createReply)
+);
+
+// ==========================================
+// COMMENT REACTION ROUTES
+// ==========================================
+
+// Toggle reaction on a comment (supports multiple reaction types)
+router.post(
+	"/:postId/comments/:commentId/reactions",
+	authenticateToken,
+	requireAlumniVerification,
+	validatePostAndCommentParams,
+	invalidatePostInteractionCache,
+	asyncHandler(commentLikeController.toggleCommentReaction)
+);
+
+// Get comment reactions with counts
+router.get(
+	"/:postId/comments/:commentId/reactions",
+	optionalAuth,
+	validatePostAndCommentParams,
+	asyncHandler(commentLikeController.getCommentReactions)
+);
+
+// Get detailed comment reaction users for modal (LinkedIn-style)
+router.get(
+	"/:postId/comments/:commentId/reactions/users",
+	optionalAuth,
+	validatePostAndCommentParams,
+	asyncHandler(commentLikeController.getCommentReactionUsers)
 );
 
 module.exports = router;

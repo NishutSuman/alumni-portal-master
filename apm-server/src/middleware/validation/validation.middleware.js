@@ -26,10 +26,10 @@ const schemas = {
 				"any.required": "Category is required",
 			}),
 
-		linkedEventId: Joi.string().uuid().optional().allow(null, ""),
+		linkedEventId: Joi.string().pattern(/^c[a-z0-9]{24}$/).optional().allow(null, ""),
 
 		tags: Joi.alternatives()
-			.try(Joi.array().items(Joi.string().uuid()), Joi.string())
+			.try(Joi.array().items(Joi.string().pattern(/^c[a-z0-9]{24}$/)), Joi.string())
 			.optional(),
 
 		allowComments: Joi.boolean().default(true).optional(),
@@ -47,10 +47,10 @@ const schemas = {
 			.valid("MOM", "STORY", "POST", "NOTICE", "ANNOUNCEMENT")
 			.optional(),
 
-		linkedEventId: Joi.string().uuid().optional().allow(null, ""),
+		linkedEventId: Joi.string().pattern(/^c[a-z0-9]{24}$/).optional().allow(null, ""),
 
 		tags: Joi.alternatives()
-			.try(Joi.array().items(Joi.string().uuid()), Joi.string())
+			.try(Joi.array().items(Joi.string().pattern(/^c[a-z0-9]{24}$/)), Joi.string())
 			.optional(),
 
 		allowComments: Joi.boolean().optional(),
@@ -76,7 +76,7 @@ const schemas = {
 			"string.max": "Comment must be less than 1000 characters",
 		}),
 
-		mentions: Joi.array().items(Joi.string().uuid()).optional().default([]),
+		mentions: Joi.array().items(Joi.string().pattern(/^c[a-z0-9]{24}$/)).optional().default([]),
 	}),
 
 	updateComment: Joi.object({
@@ -297,47 +297,47 @@ const validateParams = (schema) => {
 // Common parameter schemas
 const paramSchemas = {
 	postId: Joi.object({
-		postId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid post ID format",
+		postId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid post ID format",
 			"any.required": "Post ID is required",
 		}),
 	}),
 
 	userId: Joi.object({
-		userId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid user ID format",
+		userId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid user ID format",
 			"any.required": "User ID is required",
 		}),
 	}),
 
 	commentId: Joi.object({
-		commentId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid comment ID format",
+		commentId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid comment ID format",
 			"any.required": "Comment ID is required",
 		}),
 	}),
 
 	postAndComment: Joi.object({
-		postId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid post ID format",
+		postId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid post ID format",
 			"any.required": "Post ID is required",
 		}),
-		commentId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid comment ID format",
+		commentId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid comment ID format",
 			"any.required": "Comment ID is required",
 		}),
 	}),
 
 	educationId: Joi.object({
-		educationId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid education ID format",
+		educationId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid education ID format",
 			"any.required": "Education ID is required",
 		}),
 	}),
 
 	workId: Joi.object({
-		workId: Joi.string().uuid().required().messages({
-			"string.uuid": "Invalid work experience ID format",
+		workId: Joi.string().pattern(/^c[a-z0-9]{24}$/).required().messages({
+			"string.pattern.base": "Invalid work experience ID format",
 			"any.required": "Work experience ID is required",
 		}),
 	}),

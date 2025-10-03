@@ -73,11 +73,36 @@ const cacheBatchMembers = cache(
 	60 * 60
 );
 
-// Cache posts list (15 minutes)
+// Cache posts list (5 minutes for better real-time performance)
 const cachePosts = cache((req) => {
-	const { category, page, limit, search, status } = req.query;
-	return `posts:${category || "all"}:${status || "published"}:${search || "nosearch"}:page:${page || 1}:limit:${limit || 10}`;
-}, 15 * 60);
+	const { category, page, limit, search, status, isPublished, isArchived, sortBy, sortOrder, dateFrom, dateTo, tags } = req.query;
+	
+	// Handle both old status parameter and new isPublished/isArchived parameters
+	let publishedState;
+	if (isPublished !== undefined) {
+		publishedState = isPublished === 'true' ? 'published' : 'unpublished';
+	} else if (status) {
+		publishedState = status;
+	} else {
+		publishedState = 'published'; // default
+	}
+	
+	const archivedState = isArchived === 'true' ? 'archived' : 'notarchived';
+	
+	// Include user ID in cache key for user-specific data (userReactions)
+	const userId = req.user?.id || 'anonymous';
+	
+	// Include sort parameters in cache key
+	const sortParams = `${sortBy || 'createdAt'}:${sortOrder || 'desc'}`;
+	
+	// Include date range parameters in cache key
+	const dateParams = `${dateFrom || 'nostart'}:${dateTo || 'noend'}`;
+	
+	// Include tags in cache key (handle array of tags)
+	const tagsParam = tags ? (Array.isArray(tags) ? tags.join(',') : tags) : 'notags';
+	
+	return `posts:${category || "all"}:${publishedState}:${archivedState}:${search || "nosearch"}:user:${userId}:sort:${sortParams}:date:${dateParams}:tags:${tagsParam}:page:${page || 1}:limit:${limit || 10}`;
+}, 5 * 60);
 
 // Cache post details (30 minutes)
 const cachePost = cache((req) => CacheKeys.post(req.params.postId), 30 * 60);
@@ -138,6 +163,7 @@ class CacheInvalidator {
 		await CacheService.delPattern(`post:comments:${postId}*`); // Invalidate post comments
 		await CacheService.delPattern(`post:likes:${postId}*`); // Invalidate post likes
 		await CacheService.del(CacheKeys.post(postId)); // Invalidate post details (to update counts)
+		await CacheService.delPattern("posts:*"); // Invalidate all post lists for real-time updates
 		console.log(`🗑️ Invalidated post interactions cache: ${postId}`);
 	}
 

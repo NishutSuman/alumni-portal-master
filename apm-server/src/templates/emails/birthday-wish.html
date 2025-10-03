@@ -1,0 +1,164 @@
+<!-- src/templates/emails/birthday-wish.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Birthday!</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            margin: 0; 
+            padding: 20px; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 15px; 
+            overflow: hidden; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+        }
+        .header { 
+            background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%); 
+            color: white; 
+            padding: 40px 30px; 
+            text-align: center; 
+            position: relative;
+        }
+        .confetti {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            opacity: 0.8;
+        }
+        .birthday-emoji {
+            font-size: 80px;
+            margin-bottom: 15px;
+            display: block;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-30px); }
+            60% { transform: translateY(-15px); }
+        }
+        .content { 
+            padding: 40px 30px; 
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9ff 100%);
+        }
+        .birthday-card {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-left: 6px solid #ff6b6b;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .age-highlight {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff6b6b;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            margin: 10px 0;
+        }
+        .name-highlight { 
+            color: #ff6b6b; 
+            font-weight: bold; 
+            font-size: 1.2em;
+        }
+        .wish-text {
+            font-size: 18px;
+            line-height: 1.8;
+            color: #444;
+            margin: 20px 0;
+        }
+        .organization-name {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .batch-info {
+            background: #e3f2fd;
+            border-radius: 20px;
+            padding: 8px 16px;
+            display: inline-block;
+            color: #1976d2;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .footer { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white;
+            padding: 25px; 
+            text-align: center; 
+            font-size: 14px;
+        }
+        .celebration-icons {
+            font-size: 24px;
+            margin: 15px 0;
+            letter-spacing: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="confetti">🎊 🎉 🎈 🎂 🎈 🎉 🎊</div>
+            <div class="birthday-emoji">🎂</div>
+            <h1 style="margin: 0; font-size: 32px;">Happy Birthday!</h1>
+            <p style="margin: 10px 0; font-size: 18px;">It's your special day!</p>
+        </div>
+        
+        <div class="content">
+            <h2 style="color: #333; text-align: center;">Dear <span class="name-highlight">{{userName}}</span>! 🎉</h2>
+            
+            <div class="birthday-card">
+                <div class="celebration-icons">🎈 🎁 🎊 🎂 🎊 🎁 🎈</div>
+                <h3 style="margin: 15px 0; color: #333;">Celebrating Your Special Day!</h3>
+                <div class="age-highlight">{{age}}</div>
+                <p style="font-size: 16px; color: #666; margin: 0;">Years of Amazing Journey!</p>
+                {{#if batch}}
+                <div class="batch-info">Batch {{batch}} Alumni</div>
+                {{/if}}
+            </div>
+
+            <div class="wish-text">
+                <p>On behalf of the entire <span class="organization-name">{{organizationName}}</span> family, we wish you a very <strong>Happy {{age}}{{ordinalSuffix}} Birthday</strong>! 🥳</p>
+                
+                <p>May this new year of your life be filled with joy, success, and wonderful memories. Your journey as an alumnus continues to inspire us, and we're grateful to have you as part of our community.</p>
+                
+                <p>{{#if customMessage}}{{customMessage}}{{else}}Here's to another year of achievements, growth, and happiness. May all your dreams come true and may you continue to shine bright in everything you do!{{/if}}</p>
+                
+                <p style="text-align: center; font-size: 20px; color: #ff6b6b;">🎂 Make a wish and blow out the candles! 🕯️</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%); border-radius: 10px; padding: 20px; color: white;">
+                    <h3 style="margin: 0 0 10px 0;">🎊 Birthday Wishes From</h3>
+                    <p style="margin: 0; font-size: 18px; font-weight: bold;">{{organizationName}} Alumni Community</p>
+                </div>
+            </div>
+
+            <div style="text-align: center; font-size: 28px; margin: 20px 0;">
+                🎈 🎂 🎉 🎁 🥳 🎊 🎈
+            </div>
+
+            <p style="text-align: center; color: #666; font-style: italic;">
+                "Birthdays are nature's way of telling us to eat more cake!" 🍰
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p style="margin: 0 0 10px 0;">🎂 Birthday wishes from {{organizationName}}</p>
+            <p style="margin: 0; opacity: 0.8;">This birthday greeting was sent with love from your alumni community</p>
+        </div>
+    </div>
+</body>
+</html>

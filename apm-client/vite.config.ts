@@ -79,6 +79,7 @@ export default defineConfig({
       'react-hot-toast',
       'date-fns',
       'recharts',
+      'react-pdf',
     ],
   },
 

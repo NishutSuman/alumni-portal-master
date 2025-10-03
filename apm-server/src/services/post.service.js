@@ -71,8 +71,13 @@ const getFeaturedPosts = async (limit = 5) => {
         },
         _count: {
           select: {
-            likes: true,
             comments: true,
+          },
+        },
+        likes: {
+          select: {
+            reactionType: true,
+            userId: true,
           },
         },
       },
@@ -83,7 +88,25 @@ const getFeaturedPosts = async (limit = 5) => {
       take: limit,
     });
     
-    return featuredPosts;
+    // Transform posts to include reaction counts
+    const transformedPosts = featuredPosts.map(post => {
+      const reactions = {};
+      const totalReactions = post.likes?.length || 0;
+      
+      // Count reactions by type
+      post.likes?.forEach(like => {
+        reactions[like.reactionType] = (reactions[like.reactionType] || 0) + 1;
+      });
+      
+      return {
+        ...post,
+        reactions,
+        totalReactions,
+        userReactions: post.likes || [],
+      };
+    });
+    
+    return transformedPosts;
     
   } catch (error) {
     console.error('Get featured posts error:', error);
@@ -113,8 +136,13 @@ const getRecentPostsByCategory = async (category, limit = 10) => {
         },
         _count: {
           select: {
-            likes: true,
             comments: true,
+          },
+        },
+        likes: {
+          select: {
+            reactionType: true,
+            userId: true,
           },
         },
       },
@@ -122,7 +150,25 @@ const getRecentPostsByCategory = async (category, limit = 10) => {
       take: limit,
     });
     
-    return posts;
+    // Transform posts to include reaction counts
+    const transformedPosts = posts.map(post => {
+      const reactions = {};
+      const totalReactions = post.likes?.length || 0;
+      
+      // Count reactions by type
+      post.likes?.forEach(like => {
+        reactions[like.reactionType] = (reactions[like.reactionType] || 0) + 1;
+      });
+      
+      return {
+        ...post,
+        reactions,
+        totalReactions,
+        userReactions: post.likes || [],
+      };
+    });
+    
+    return transformedPosts;
     
   } catch (error) {
     console.error('Get recent posts by category error:', error);
@@ -227,8 +273,13 @@ const searchPosts = async (searchParams) => {
           },
           _count: {
             select: {
-              likes: true,
               comments: true,
+            },
+          },
+          likes: {
+            select: {
+              reactionType: true,
+              userId: true,
             },
           },
         },
@@ -239,8 +290,26 @@ const searchPosts = async (searchParams) => {
       prisma.post.count({ where: whereClause })
     ]);
     
+    // Transform posts to include reaction counts
+    const transformedPosts = posts.map(post => {
+      const reactions = {};
+      const totalReactions = post.likes?.length || 0;
+      
+      // Count reactions by type
+      post.likes?.forEach(like => {
+        reactions[like.reactionType] = (reactions[like.reactionType] || 0) + 1;
+      });
+      
+      return {
+        ...post,
+        reactions,
+        totalReactions,
+        userReactions: post.likes || [],
+      };
+    });
+    
     return {
-      posts,
+      posts: transformedPosts,
       total,
       page,
       limit,
@@ -285,8 +354,13 @@ const getUserPosts = async (userId, viewerId = null, page = 1, limit = 10) => {
           },
           _count: {
             select: {
-              likes: true,
               comments: true,
+            },
+          },
+          likes: {
+            select: {
+              reactionType: true,
+              userId: true,
             },
           },
         },
@@ -297,8 +371,26 @@ const getUserPosts = async (userId, viewerId = null, page = 1, limit = 10) => {
       prisma.post.count({ where: whereClause })
     ]);
     
+    // Transform posts to include reaction counts
+    const transformedPosts = posts.map(post => {
+      const reactions = {};
+      const totalReactions = post.likes?.length || 0;
+      
+      // Count reactions by type
+      post.likes?.forEach(like => {
+        reactions[like.reactionType] = (reactions[like.reactionType] || 0) + 1;
+      });
+      
+      return {
+        ...post,
+        reactions,
+        totalReactions,
+        userReactions: post.likes || [],
+      };
+    });
+    
     return {
-      posts,
+      posts: transformedPosts,
       total,
       page,
       limit,
@@ -338,8 +430,13 @@ const getTrendingPosts = async (days = 7, limit = 10) => {
         },
         _count: {
           select: {
-            likes: true,
             comments: true,
+          },
+        },
+        likes: {
+          select: {
+            reactionType: true,
+            userId: true,
           },
         },
       },
