@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.alumni.guild',
+  appId: 'com.alumni.guild.mvp',
   appName: 'GUILD - Alumni Network',
   webDir: 'dist',
   server: {
