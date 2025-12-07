@@ -53,10 +53,10 @@ const LOCAL_DEV_ORG: Organization = {
 export const ORGANIZATIONS: Organization[] = [
   {
     code: 'GUILD-DEMO',
-    name: 'GUILD ALUMNI PORTAL DEMO ',
+    name: 'GUILD Alumni Portal Demo',
     shortName: 'GUILD DEMO',
-    apiUrl: 'https://guild-alumni-portal-demo.railway.app/api',
-    description: 'An association of proud alumni of JNV Bagudi, Balasore',
+    apiUrl: 'https://guild-alumni-portal-demo.up.railway.app/api',
+    description: 'Demo instance for GUILD Alumni Portal testing',
   },
   {
     code: 'JNAAB',
