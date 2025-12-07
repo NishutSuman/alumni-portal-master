@@ -1,25 +1,38 @@
 // src/config/redis.js
 const Redis = require('ioredis');
 
-// Redis configuration
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || null,
-  db: 0,
-  retryDelayOnFailover: 100,
-  maxRetriesPerRequest: 3,
-  lazyConnect: true,
-  keepAlive: 30000,
-  
-  // Connection pool settings
-  family: 4,
-  connectTimeout: 10000,
-  commandTimeout: 5000,
-};
+// Redis configuration - supports both REDIS_URL (Railway) and individual env vars (local)
+let redis;
 
-// Create Redis client
-const redis = new Redis(redisConfig);
+if (process.env.REDIS_URL) {
+  // Use REDIS_URL for Railway/production
+  console.log('🔧 Connecting to Redis using REDIS_URL');
+  redis = new Redis(process.env.REDIS_URL, {
+    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 3,
+    lazyConnect: true,
+    keepAlive: 30000,
+    connectTimeout: 10000,
+    commandTimeout: 5000,
+  });
+} else {
+  // Use individual env vars for local development
+  console.log('🔧 Connecting to Redis using HOST/PORT');
+  const redisConfig = {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
+    password: process.env.REDIS_PASSWORD || null,
+    db: 0,
+    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 3,
+    lazyConnect: true,
+    keepAlive: 30000,
+    family: 4,
+    connectTimeout: 10000,
+    commandTimeout: 5000,
+  };
+  redis = new Redis(redisConfig);
+}
 
 // Connection event handlers
 redis.on('connect', () => {
