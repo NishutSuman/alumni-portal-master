@@ -12,7 +12,8 @@ import {
   PhoneIcon,
   AcademicCapIcon,
   DocumentArrowUpIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
@@ -20,6 +21,7 @@ import { useSelector } from 'react-redux';
 import { selectIsDark } from '@/store/slices/themeSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
 import { apiClient } from '@/services/api';
+import { getStoredOrgName, clearOrganization } from '@/config/organizations';
 
 // Validation Schema
 const registrationSchema = yup.object().shape({
@@ -73,6 +75,15 @@ const RegistrationPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [verificationDocuments, setVerificationDocuments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get current organization name
+  const currentOrgName = getStoredOrgName();
+
+  // Handle change organization
+  const handleChangeOrganization = () => {
+    clearOrganization();
+    window.location.href = '/select-organization';
+  };
   
   const {
     register,
@@ -233,6 +244,24 @@ const RegistrationPage = () => {
           </button>
 
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 md:p-10">
+            {/* Current Organization Banner */}
+            {currentOrgName && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 mb-6 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center space-x-2">
+                  <BuildingOfficeIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate max-w-[180px]">
+                    {currentOrgName}
+                  </span>
+                </div>
+                <button
+                  onClick={handleChangeOrganization}
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+
             {/* Header */}
             <div className="text-center mb-8">
               <div className="flex justify-center mb-6">

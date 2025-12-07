@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { 
-  UserCircleIcon, 
-  CogIcon, 
+import {
+  UserCircleIcon,
+  CogIcon,
   ArrowRightOnRectangleIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { switchOrganization } from '@/store';
+import { getStoredOrgName } from '@/config/organizations';
 
 interface UserProfileDropdownProps {
   className?: string;
@@ -44,6 +47,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
     logout();
     setIsOpen(false);
   };
+
+  const handleSwitchOrganization = () => {
+    setIsOpen(false);
+    switchOrganization();
+  };
+
+  // Get current organization name
+  const currentOrgName = getStoredOrgName();
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -145,6 +156,27 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
                 <button className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
                   <CogIcon className="h-5 w-5 mr-3" />
                   <span>Settings</span>
+                </button>
+
+                <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+
+                {/* Current Organization Info */}
+                {currentOrgName && (
+                  <div className="px-4 py-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Current Organization</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                      {currentOrgName}
+                    </p>
+                  </div>
+                )}
+
+                {/* Switch Organization */}
+                <button
+                  onClick={handleSwitchOrganization}
+                  className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                >
+                  <BuildingOfficeIcon className="h-5 w-5 mr-3" />
+                  <span>Change Organization</span>
                 </button>
 
                 <div className="border-t border-gray-200 dark:border-gray-700 my-2" />

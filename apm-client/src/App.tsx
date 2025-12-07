@@ -15,6 +15,9 @@ import { selectIsDark } from './store/slices/themeSlice'
 import { useAuth } from './hooks/useAuth'
 import { useDevice } from './hooks/useDevice'
 
+// Organization config
+import { hasOrganizationSelected, getStoredOrgName } from './config/organizations'
+
 // FIXED: Correct file names with proper casing
 const PublicLayout = React.lazy(() => import('./components/common/Layout/PublicLayout'))
 const AdminLayout = React.lazy(() => import('./components/common/Layout/AdminLayout'))
@@ -28,6 +31,7 @@ const ContactPage = React.lazy(() => import('./pages/public/ContactPage'))
 // Auth pages
 const LoginPage = React.lazy(() => import('./pages/auth/LoginPage'))
 const RegisterPage = React.lazy(() => import('./pages/auth/RegisterPage'))
+const OrganizationSelectPage = React.lazy(() => import('./pages/auth/OrganizationSelectPage'))
 
 // Common pages
 const MobileNotifications = React.lazy(() => import('./pages/common/MobileNotifications'))
@@ -153,6 +157,18 @@ const VerifiedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>
 }
 
+// Organization required route - redirects to org selection if no org selected
+const RequireOrganization = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation()
+
+  // Check if organization is selected
+  if (!hasOrganizationSelected()) {
+    return <Navigate to="/select-organization" state={{ from: location }} replace />
+  }
+
+  return <>{children}</>
+}
+
 // Main App component
 function App() {
   const dispatch = useDispatch()
@@ -197,8 +213,12 @@ function App() {
 
   // Page title management
   useEffect(() => {
+    const orgName = getStoredOrgName()
+    const appName = orgName || 'GUILD - Alumni Network'
+
     const titles: { [key: string]: string } = {
-      '/': 'GUILD - Alumni Network',
+      '/': appName,
+      '/select-organization': 'Select Organization - GUILD',
       '/events': 'Events - GUILD',
       '/gallery': 'Gallery - GUILD',
       '/contact': 'Contact - GUILD',
@@ -253,13 +273,40 @@ function App() {
               <Route path="contact" element={<ContactPage />} />
             </Route>
 
-            {/* Authentication Routes */}
-            <Route path="/auth/login" element={<LoginPage />} />
-            <Route path="/auth/register" element={<RegisterPage />} />
-            <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/auth/verification-pending" element={<VerificationPendingPage />} />
+            {/* Organization Selection Route - First screen for multi-tenant */}
+            <Route path="/select-organization" element={<OrganizationSelectPage />} />
+
+            {/* Authentication Routes - Require organization to be selected */}
+            <Route path="/auth/login" element={
+              <RequireOrganization>
+                <LoginPage />
+              </RequireOrganization>
+            } />
+            <Route path="/auth/register" element={
+              <RequireOrganization>
+                <RegisterPage />
+              </RequireOrganization>
+            } />
+            <Route path="/auth/forgot-password" element={
+              <RequireOrganization>
+                <ForgotPasswordPage />
+              </RequireOrganization>
+            } />
+            <Route path="/auth/reset-password" element={
+              <RequireOrganization>
+                <ResetPasswordPage />
+              </RequireOrganization>
+            } />
+            <Route path="/auth/verify-email" element={
+              <RequireOrganization>
+                <VerifyEmailPage />
+              </RequireOrganization>
+            } />
+            <Route path="/auth/verification-pending" element={
+              <RequireOrganization>
+                <VerificationPendingPage />
+              </RequireOrganization>
+            } />
 
             {/* Common Protected Routes */}
             <Route path="/notifications" element={

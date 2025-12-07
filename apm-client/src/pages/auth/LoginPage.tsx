@@ -5,7 +5,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectIsDark } from '@/store/slices/themeSlice'
 import ThemeToggle from '@/components/common/UI/ThemeToggle'
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
+import { getStoredOrgName, clearOrganization } from '@/config/organizations'
 import toast from 'react-hot-toast'
 
 const LoginPage = () => {
@@ -16,6 +17,15 @@ const LoginPage = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const isDark = useSelector(selectIsDark)
+
+  // Get current organization name
+  const currentOrgName = getStoredOrgName()
+
+  // Handle change organization
+  const handleChangeOrganization = () => {
+    clearOrganization()
+    window.location.href = '/select-organization'
+  }
 
   // Check for email verification success
   useEffect(() => {
@@ -73,6 +83,24 @@ const LoginPage = () => {
           </button>
 
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 md:p-10">
+            {/* Current Organization Banner */}
+            {currentOrgName && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 mb-6 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center space-x-2">
+                  <BuildingOfficeIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate max-w-[180px]">
+                    {currentOrgName}
+                  </span>
+                </div>
+                <button
+                  onClick={handleChangeOrganization}
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+
             {/* Header */}
             <div className="text-center mb-8">
               <div className="flex justify-center mb-6">

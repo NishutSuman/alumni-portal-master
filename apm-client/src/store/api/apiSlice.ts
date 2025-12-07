@@ -1,33 +1,47 @@
 // src/store/api/apiSlice.ts
 // GUILD RTK Query API Configuration
 
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
+import { createApi, fetchBaseQuery, type FetchArgs, type BaseQueryFn, type FetchBaseQueryError } from '@reduxjs/toolkit/query/react'
 import type { RootState } from '../index'
+import { getApiBaseUrl } from '@/config/organizations'
 
-// Base query configuration
-const baseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-  prepareHeaders: (headers, { getState }) => {
-    // Get the token from the auth state
-    const token = (getState() as RootState).auth.token
+// Dynamic base query that reads API URL from localStorage
+// This allows switching between different organization backends
+const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  // Get the current API base URL (from localStorage or env fallback)
+  const baseUrl = getApiBaseUrl()
 
-    // If we have a token, set the authorization header
-    if (token) {
-      headers.set('authorization', `Bearer ${token}`)
-    }
+  // Create a new fetchBaseQuery with the current baseUrl
+  const rawBaseQuery = fetchBaseQuery({
+    baseUrl,
+    prepareHeaders: (headers, { getState }) => {
+      // Get the token from the auth state
+      const token = (getState() as RootState).auth.token
 
-    // IMPORTANT: Don't set content-type here for any request
-    // Let fetchBaseQuery handle it automatically
-    // For FormData, browser will set multipart/form-data with boundary
-    // For JSON, fetchBaseQuery will set application/json
+      // If we have a token, set the authorization header
+      if (token) {
+        headers.set('authorization', `Bearer ${token}`)
+      }
 
-    return headers
-  },
-})
+      // IMPORTANT: Don't set content-type here for any request
+      // Let fetchBaseQuery handle it automatically
+      // For FormData, browser will set multipart/form-data with boundary
+      // For JSON, fetchBaseQuery will set application/json
 
-// Base query with token refresh  
+      return headers
+    },
+  })
+
+  return rawBaseQuery(args, api, extraOptions)
+}
+
+// Base query with token refresh
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
-  let result = await baseQuery(args, api, extraOptions)
+  let result = await dynamicBaseQuery(args, api, extraOptions)
   
   // If we get a 401 (unauthorized), try to refresh the token
   if (result.error && result.error.status === 401) {
@@ -35,7 +49,7 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
     
     if (refreshToken) {
       // Try to refresh the token
-      const refreshResult = await baseQuery(
+      const refreshResult = await dynamicBaseQuery(
         {
           url: '/auth/refresh',
           method: 'POST',
@@ -44,7 +58,7 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
         api,
         extraOptions
       )
-      
+
       if (refreshResult.data) {
         // Store the new tokens
         const { accessToken, refreshToken: newRefreshToken } = refreshResult.data as any
@@ -55,9 +69,9 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
             refreshToken: newRefreshToken,
           },
         })
-        
+
         // Retry the original query with the new token
-        result = await baseQuery(args, api, extraOptions)
+        result = await dynamicBaseQuery(args, api, extraOptions)
       } else {
         // Refresh failed, logout the user
         api.dispatch({ type: 'auth/sessionExpired' })

@@ -3,11 +3,11 @@
 
 import { configureStore } from '@reduxjs/toolkit'
 import { setupListeners } from '@reduxjs/toolkit/query'
-import { persistStore, persistReducer } from 'redux-persist'
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist'
 import storage from 'redux-persist/lib/storage'
 
 // Import slices
-import authSlice from './slices/authSlice'
+import authSlice, { logout } from './slices/authSlice'
 import userSlice from './slices/userSlice'
 import themeSlice from './slices/themeSlice'
 import appSlice from './slices/appSlice'
@@ -18,6 +18,9 @@ import { apiSlice } from './api/apiSlice'
 import './api/pollApi'
 import './api/eventApi'
 import './api/galleryApi'
+
+// Import organization utilities
+import { clearOrganization } from '@/config/organizations'
 
 // Persist configuration for auth (to maintain login state)
 const authPersistConfig = {
@@ -55,20 +58,15 @@ export const store = configureStore({
     getDefaultMiddleware({
       // Configure for redux-persist
       serializableCheck: {
-        ignoredActions: [
-          'persist/PERSIST',
-          'persist/REHYDRATE',
-          'persist/PAUSE',
-          'persist/PURGE',
-          'persist/REGISTER',
-        ],
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
     })
     .concat(apiSlice.middleware)
-    .concat((store) => (next) => (action) => {
-      // Clear RTK Query cache only on logout (user switching)
-      if (action.type === 'auth/logout') {
-        store.dispatch(apiSlice.util.resetApiState())
+    .concat((storeApi) => (next) => (action: unknown) => {
+      // Clear RTK Query cache on logout (user switching or org switching)
+      const typedAction = action as { type?: string }
+      if (typedAction.type === 'auth/logout') {
+        storeApi.dispatch(apiSlice.util.resetApiState())
       }
       return next(action)
     }),
@@ -89,6 +87,26 @@ export type AppDispatch = typeof store.dispatch
 
 // Typed hooks for components to use
 export type AppThunk = any // For complex async actions if needed
+
+/**
+ * Switch organization - clears auth state, API cache, and org selection
+ * Then redirects to organization selection page
+ * This should be called when user wants to switch to a different school/organization
+ */
+export const switchOrganization = () => {
+  // 1. Dispatch logout to clear auth state and API cache
+  store.dispatch(logout())
+
+  // 2. Clear organization from localStorage
+  clearOrganization()
+
+  // 3. Clear persisted auth data
+  persistor.purge()
+
+  // 4. Redirect to organization selection (use window.location to force full reload)
+  // This ensures the API is reinitialized with the new baseUrl
+  window.location.href = '/select-organization'
+}
 
 // Export store and persistor
 export default store
