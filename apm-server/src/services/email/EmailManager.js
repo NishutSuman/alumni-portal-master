@@ -33,7 +33,7 @@ class EmailManager {
 
   getEmailConfig() {
     const provider = process.env.EMAIL_PROVIDER || 'gmail';
-    
+
     const configs = {
       gmail: {
         provider: 'gmail',
@@ -41,11 +41,18 @@ class EmailManager {
         password: process.env.GMAIL_APP_PASSWORD,
         fromName: process.env.EMAIL_FROM_NAME || 'Alumni Portal'
       },
-      
+
       sendgrid: {
         provider: 'sendgrid',
         apiKey: process.env.SENDGRID_API_KEY,
         fromEmail: process.env.SENDGRID_FROM_EMAIL,
+        fromName: process.env.EMAIL_FROM_NAME || 'Alumni Portal'
+      },
+
+      resend: {
+        provider: 'resend',
+        apiKey: process.env.RESEND_API_KEY,
+        fromEmail: process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'onboarding@resend.dev',
         fromName: process.env.EMAIL_FROM_NAME || 'Alumni Portal'
       }
     };
@@ -57,14 +64,15 @@ class EmailManager {
 
     // Validate required fields
     this.validateConfig(provider, config);
-    
+
     return config;
   }
 
   validateConfig(provider, config) {
     const requiredFields = {
       gmail: ['user', 'password'],
-      sendgrid: ['apiKey', 'fromEmail']
+      sendgrid: ['apiKey', 'fromEmail'],
+      resend: ['apiKey']
     };
 
     const required = requiredFields[provider];
