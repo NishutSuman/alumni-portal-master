@@ -61,8 +61,8 @@ const photoValidationSchemas = {
         'string.max': 'Caption must be less than 500 characters'
       }),
     tags: Joi.array()
-      .items(Joi.string().uuid().messages({
-        'string.uuid': 'Invalid user ID format'
+      .items(Joi.string().pattern(/^c[a-z0-9]{24}$/).messages({
+        'string.pattern.base': 'Invalid user ID format'
       }))
       .max(20)
       .optional()
@@ -72,13 +72,6 @@ const photoValidationSchemas = {
   }),
 
   bulkUploadPhotos: Joi.object({
-    albumId: Joi.string()
-      .uuid()
-      .required()
-      .messages({
-        'string.uuid': 'Invalid album ID format',
-        'any.required': 'Album ID is required'
-      }),
     bulkCaption: Joi.string()
       .trim()
       .max(200)
@@ -91,7 +84,9 @@ const photoValidationSchemas = {
 
   bulkDeletePhotos: Joi.object({
     photoIds: Joi.array()
-      .items(Joi.string().uuid())
+      .items(Joi.string().pattern(/^c[a-z0-9]{24}$/).messages({
+        'string.pattern.base': 'Invalid photo ID format'
+      }))
       .min(1)
       .max(50)
       .required()
@@ -104,7 +99,9 @@ const photoValidationSchemas = {
 
   movePhotos: Joi.object({
     photoIds: Joi.array()
-      .items(Joi.string().uuid())
+      .items(Joi.string().pattern(/^c[a-z0-9]{24}$/).messages({
+        'string.pattern.base': 'Invalid photo ID format'
+      }))
       .min(1)
       .max(50)
       .required()
@@ -113,20 +110,20 @@ const photoValidationSchemas = {
         'array.max': 'Maximum 50 photos can be moved at once'
       }),
     targetAlbumId: Joi.string()
-      .uuid()
+      .pattern(/^c[a-z0-9]{24}$/)
       .required()
       .messages({
-        'string.uuid': 'Invalid target album ID format',
+        'string.pattern.base': 'Invalid target album ID format',
         'any.required': 'Target album ID is required'
       })
   }),
 
   setCover: Joi.object({
     photoId: Joi.string()
-      .uuid()
+      .pattern(/^c[a-z0-9]{24}$/)
       .required()
       .messages({
-        'string.uuid': 'Invalid photo ID format',
+        'string.pattern.base': 'Invalid photo ID format',
         'any.required': 'Photo ID is required'
       })
   })
@@ -136,20 +133,20 @@ const photoValidationSchemas = {
 const photoParamSchemas = {
   albumIdParam: Joi.object({
     albumId: Joi.string()
-      .uuid()
+      .pattern(/^c[a-z0-9]{24}$/)
       .required()
       .messages({
-        'string.uuid': 'Invalid album ID format',
+        'string.pattern.base': '"albumId" must be a valid GUID',
         'any.required': 'Album ID is required'
       })
   }),
 
   photoIdParam: Joi.object({
     photoId: Joi.string()
-      .uuid()
+      .pattern(/^c[a-z0-9]{24}$/)
       .required()
       .messages({
-        'string.uuid': 'Invalid photo ID format',
+        'string.pattern.base': '"photoId" must be a valid GUID',
         'any.required': 'Photo ID is required'
       })
   })

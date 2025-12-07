@@ -14,12 +14,15 @@ import {
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { useDevice } from '@/hooks/useDevice'
+import { useSelector } from 'react-redux'
+import { selectIsDark } from '@/store/slices/themeSlice'
 import ThemeToggle from '../UI/ThemeToggle'
 import LogoutButton from '../UI/LogoutButton'
 import OrganizationLogo from '../UI/OrganizationLogo'
 
 const UserLayout = () => {
   const { user } = useAuth()
+  const isDark = useSelector(selectIsDark)
   const location = useLocation()
   const { isMobile } = useDevice()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -74,9 +77,14 @@ const UserLayout = () => {
                 <Bars3Icon className="h-6 w-6" />
               </button>
 
-              <Link to="/user/dashboard" className="flex items-center space-x-3">
-                <OrganizationLogo size="lg" className="flex-shrink-0" />
-                <h1 className="text-2xl font-bold text-gradient-guild">Alumni Portal</h1>
+              <Link to="/user/dashboard" className="flex items-center">
+                <div className="h-10">
+                  <img
+                    src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                    alt="GUILD"
+                    className="h-full w-auto object-contain"
+                  />
+                </div>
               </Link>
             </div>
             
@@ -148,9 +156,14 @@ const UserLayout = () => {
             <div className="p-4">
               {/* Close button */}
               <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center space-x-3">
-                  <OrganizationLogo size="lg" className="flex-shrink-0" />
-                  <h1 className="text-xl font-bold text-gradient-guild">Alumni Portal</h1>
+                <div className="flex items-center">
+                  <div className="h-10">
+                    <img
+                      src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                      alt="GUILD"
+                      className="h-full w-auto object-contain"
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={() => setSidebarOpen(false)}

@@ -9,7 +9,7 @@ export interface User {
   isAlumniVerified: boolean
   pendingVerification: boolean
   isEmailVerified?: boolean  // ADDED: Missing property
-  profilePictureUrl?: string
+  profileImage?: string
   whatsappNumber?: string
   personalEmail?: string
   currentLocation?: string

@@ -17,6 +17,7 @@ import { apiSlice } from './api/apiSlice'
 // Import APIs to inject endpoints
 import './api/pollApi'
 import './api/eventApi'
+import './api/galleryApi'
 
 // Persist configuration for auth (to maintain login state)
 const authPersistConfig = {

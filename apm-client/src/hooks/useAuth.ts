@@ -301,7 +301,7 @@ export const useAuth = () => {
     return {
       name: user.fullName,
       email: user.email,
-      avatar: user.profilePictureUrl,
+      avatar: user.profileImage,
       batch: user.batch,
       role: user.role,
       isVerified: user.isAlumniVerified,

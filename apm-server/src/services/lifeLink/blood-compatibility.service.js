@@ -139,7 +139,19 @@ class BloodCompatibilityService {
       // Get compatible donor blood groups
       const compatibleBloodGroups = this.getCompatibleDonors(requiredBloodGroup);
       
-      // Find donors in database
+      // Debug: Check total blood donors first
+      const totalBloodDonors = await prisma.user.count({
+        where: {
+          isBloodDonor: true,
+          isActive: true
+        }
+      });
+      
+      console.log(`🩸 Total blood donors in database: ${totalBloodDonors}`);
+      console.log(`🩸 Searching for blood groups: ${compatibleBloodGroups.join(', ')}`);
+      console.log(`🩸 Searching in location: ${location}`);
+
+      // Find donors in database with broader search
       const donors = await prisma.user.findMany({
         where: {
           isBloodDonor: true,
@@ -147,25 +159,32 @@ class BloodCompatibilityService {
           bloodGroup: {
             in: compatibleBloodGroups
           },
-          // Location-based search (you may need to adjust this based on your address structure)
-          addresses: {
-            some: {
-              OR: [
-                { city: { contains: location, mode: 'insensitive' } },
-                { state: { contains: location, mode: 'insensitive' } }
-              ]
-            }
-          }
+          // Broader location search including both current and permanent addresses
+          OR: [
+            // Address-based search
+            {
+              addresses: {
+                some: {
+                  OR: [
+                    { city: { contains: location, mode: 'insensitive' } },
+                    { state: { contains: location, mode: 'insensitive' } },
+                    { district: { contains: location, mode: 'insensitive' } }
+                  ]
+                }
+              }
+            },
+            // If no specific location filtering needed, remove this constraint for testing
+            ...(location.toLowerCase() === 'any' ? [{}] : [])
+          ]
         },
         select: {
           id: true,
-          firstName: true,
-          lastName: true,
+          fullName: true,
           bloodGroup: true,
-          lastDonationDate: true,
-          totalDonations: true,
+          lastBloodDonationDate: true,
+          totalBloodDonations: true,
           showPhone: true,
-          phone: true,
+          whatsappNumber: true,
           addresses: {
             select: {
               city: true,
@@ -177,34 +196,49 @@ class BloodCompatibilityService {
         take: limit * 2 // Get more to filter eligible ones
       });
 
-      // Filter eligible donors and add eligibility info
-      const availableDonors = donors
-        .map(donor => {
-          const eligibility = this.checkDonorEligibility(donor.lastDonationDate);
-          
-          return {
-            id: donor.id,
-            name: `${donor.firstName} ${donor.lastName}`,
-            bloodGroup: donor.bloodGroup,
-            totalDonations: donor.totalDonations,
-            location: donor.addresses[0] ? `${donor.addresses[0].city}, ${donor.addresses[0].state}` : 'Location not specified',
-            eligibility,
-            contactAvailable: donor.showPhone,
-            phone: donor.showPhone ? donor.phone : null
-          };
-        })
-        .filter(donor => donor.eligibility.isEligible) // Only eligible donors
-        .sort((a, b) => {
-          // Sort by: 1) Total donations (desc), 2) Days since last donation (desc)
-          if (b.totalDonations !== a.totalDonations) {
-            return b.totalDonations - a.totalDonations;
-          }
-          return (b.eligibility.daysSinceLastDonation || 999) - (a.eligibility.daysSinceLastDonation || 999);
-        })
-        .slice(0, limit);
+      console.log(`🩸 Found ${donors.length} donors matching criteria`);
 
-      // Randomize order for fairness (after sorting by experience)
-      return this.shuffleArray(availableDonors);
+      // If no donors found with location filter, try without location for testing
+      if (donors.length === 0) {
+        console.log(`🩸 No donors found with location filter, trying without location...`);
+        const fallbackDonors = await prisma.user.findMany({
+          where: {
+            isBloodDonor: true,
+            isActive: true,
+            bloodGroup: {
+              in: compatibleBloodGroups
+            }
+          },
+          select: {
+            id: true,
+            fullName: true,
+            bloodGroup: true,
+            lastBloodDonationDate: true,
+            totalBloodDonations: true,
+            showPhone: true,
+            whatsappNumber: true,
+            addresses: {
+              select: {
+                city: true,
+                state: true,
+                addressType: true
+              }
+            }
+          },
+          take: limit
+        });
+        console.log(`🩸 Fallback search found ${fallbackDonors.length} donors`);
+        // Use fallback donors if found
+        if (fallbackDonors.length > 0) {
+          const formattedDonors = this.formatDonorResults(fallbackDonors, limit);
+          return this.shuffleArray(formattedDonors);
+        }
+      }
+
+      // Format and return regular search results
+      // For search/counting, show ALL donors (including ineligible) so requester knows total pool
+      const formattedDonors = this.formatDonorResults(donors, limit, false);
+      return formattedDonors; // Don't shuffle for search - keep sorted by eligibility
       
     } catch (error) {
       console.error('Find available donors error:', error);
@@ -236,9 +270,12 @@ class BloodCompatibilityService {
         await tx.user.update({
           where: { id: donorId },
           data: {
-            lastDonationDate: donation.donationDate,
-            totalDonations: {
-              increment: donation.units
+            lastBloodDonationDate: donation.donationDate,
+            totalBloodDonations: {
+              increment: 1  // Count of donation events (how many times donated)
+            },
+            totalUnitsDonated: {
+              increment: donation.units  // Total units donated
             }
           }
         });
@@ -249,6 +286,48 @@ class BloodCompatibilityService {
       console.error('Record donation error:', error);
       throw new Error('Failed to record donation');
     }
+  }
+
+  /**
+   * Format donor results with eligibility info
+   * @param {Array} donors - Raw donor data from database
+   * @param {number} limit - Maximum donors to return
+   * @param {boolean} eligibleOnly - Filter to show only eligible donors (default: true)
+   * @returns {Array} Formatted donor results
+   */
+  static formatDonorResults(donors, limit, eligibleOnly = true) {
+    const formatted = donors
+      .map(donor => {
+        const eligibility = this.checkDonorEligibility(donor.lastBloodDonationDate);
+
+        return {
+          id: donor.id,
+          name: donor.fullName || 'Unknown',
+          bloodGroup: donor.bloodGroup,
+          totalDonations: donor.totalBloodDonations,
+          location: donor.addresses[0] ? `${donor.addresses[0].city}, ${donor.addresses[0].state}` : 'Location not specified',
+          eligibility,
+          contactAvailable: donor.showPhone,
+          phone: donor.showPhone ? donor.whatsappNumber : null
+        };
+      })
+      .sort((a, b) => {
+        // Sort eligible donors first, then by total donations
+        if (a.eligibility.isEligible !== b.eligibility.isEligible) {
+          return b.eligibility.isEligible ? 1 : -1;
+        }
+        if (b.totalDonations !== a.totalDonations) {
+          return b.totalDonations - a.totalDonations;
+        }
+        return (b.eligibility.daysSinceLastDonation || 999) - (a.eligibility.daysSinceLastDonation || 999);
+      });
+
+    // Filter by eligibility if requested
+    const filtered = eligibleOnly
+      ? formatted.filter(donor => donor.eligibility.isEligible)
+      : formatted;
+
+    return filtered.slice(0, limit);
   }
 
   /**

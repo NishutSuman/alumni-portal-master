@@ -7,33 +7,20 @@ import type { RootState } from '../index'
 // Base query configuration
 const baseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-  prepareHeaders: (headers, { getState, endpoint, body }) => {
+  prepareHeaders: (headers, { getState }) => {
     // Get the token from the auth state
     const token = (getState() as RootState).auth.token
-    
+
     // If we have a token, set the authorization header
     if (token) {
       headers.set('authorization', `Bearer ${token}`)
     }
-    
-    // Check if body is FormData
-    const isFormData = body instanceof FormData
-    
-    // For FormData requests, don't set any content-type header - let browser handle it
-    if (isFormData) {
-      // Explicitly remove content-type header for FormData to prevent conflicts
-      if (headers.has('content-type')) {
-        headers.delete('content-type');
-      }
-      // Don't set any content-type for FormData
-      return headers;
-    }
-    
-    // For non-FormData requests, set JSON content-type if not already set
-    if (!headers.has('content-type')) {
-      headers.set('content-type', 'application/json')
-    }
-    
+
+    // IMPORTANT: Don't set content-type here for any request
+    // Let fetchBaseQuery handle it automatically
+    // For FormData, browser will set multipart/form-data with boundary
+    // For JSON, fetchBaseQuery will set application/json
+
     return headers
   },
 })

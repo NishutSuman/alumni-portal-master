@@ -29,44 +29,58 @@ class PushNotificationService {
         return;
       }
 
-      // Mock Firebase for development - Enable basic push notification logging
-      console.log('📱 Mock Firebase push notifications enabled for development');
-      this.initialized = true;
-      this.mockMode = true;
-      return;
-
-      /* FIREBASE INIT CODE - COMMENTED OUT UNTIL PROPERLY CONFIGURED
-      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
+      const fs = require('fs');
+      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
         || path.join(__dirname, '../config/firebase-service-account.json');
+
+      // Check if Firebase credentials are available
+      const hasEnvCredentials = process.env.FIREBASE_PROJECT_ID &&
+                                process.env.FIREBASE_CLIENT_EMAIL &&
+                                process.env.FIREBASE_PRIVATE_KEY;
+      const hasServiceAccountFile = fs.existsSync(serviceAccountPath);
+
+      if (!hasEnvCredentials && !hasServiceAccountFile) {
+        // No Firebase credentials - run in mock mode
+        console.log('📱 Mock Firebase push notifications enabled (no credentials found)');
+        console.log('💡 To enable real push notifications, set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY');
+        this.initialized = true;
+        this.mockMode = true;
+        return;
+      }
 
       // Check if Firebase is already initialized
       if (!admin.apps.length) {
-        // Initialize with service account file
-        if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH || require('fs').existsSync(serviceAccountPath)) {
+        // Initialize with service account file if it exists
+        if (hasServiceAccountFile) {
           admin.initializeApp({
             credential: admin.credential.cert(require(serviceAccountPath)),
             projectId: process.env.FIREBASE_PROJECT_ID
           });
-        } else {
+          console.log('✅ Firebase initialized with service account file');
+        } else if (hasEnvCredentials) {
           // Initialize with environment variables (for production)
           admin.initializeApp({
             credential: admin.credential.cert({
               projectId: process.env.FIREBASE_PROJECT_ID,
               clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-              privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+              privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
             }),
             projectId: process.env.FIREBASE_PROJECT_ID
           });
+          console.log('✅ Firebase initialized with environment variables');
         }
       }
 
       this.messaging = admin.messaging();
       this.initialized = true;
-      console.log('✅ Firebase Admin SDK initialized successfully');
-      */
+      this.mockMode = false;
+      console.log('✅ Firebase Admin SDK initialized successfully - Push notifications ENABLED');
+
     } catch (error) {
-      console.error('❌ Firebase initialization failed:', error);
-      this.initialized = false;
+      console.error('❌ Firebase initialization failed:', error.message);
+      console.log('📱 Falling back to mock mode for push notifications');
+      this.initialized = true;
+      this.mockMode = true;
     }
   }
 

@@ -193,7 +193,13 @@ class NotificationService {
       return notifications;
     } catch (error) {
       console.error('Create notifications error:', error);
-      throw new Error('Failed to create notifications in database');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack
+      });
+      throw new Error(`Failed to create notifications in database: ${error.message}`);
     }
   }
 

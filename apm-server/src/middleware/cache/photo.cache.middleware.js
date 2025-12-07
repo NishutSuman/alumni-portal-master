@@ -129,7 +129,10 @@ function createCacheMiddleware(keyGenerator, duration) {
 
 // Albums caching
 const cacheAlbumsList = createCacheMiddleware(
-  PhotoCacheKeys.ALBUMS_LIST,
+  (req) => {
+    const { includeArchived } = req.query;
+    return `${PhotoCacheKeys.ALBUMS_LIST}:${includeArchived || 'false'}`;
+  },
   CacheDurations.ALBUMS_LIST
 );
 
@@ -182,7 +185,10 @@ const cacheUserPhotoStats = createCacheMiddleware(
 
 // Admin caching
 const cacheAdminAlbumsList = createCacheMiddleware(
-  PhotoCacheKeys.ADMIN_ALBUMS_LIST,
+  (req) => {
+    const { includeArchived } = req.query;
+    return `${PhotoCacheKeys.ADMIN_ALBUMS_LIST}:${includeArchived || 'false'}`;
+  },
   CacheDurations.ADMIN_LISTS
 );
 
@@ -201,48 +207,49 @@ const cacheAdminPhotosList = createCacheMiddleware(
 const autoInvalidateAlbumCaches = async (req, res, next) => {
   // Store original res.json
   const originalJson = res.json;
-  
-  res.json = function(data) {
-    // Invalidate caches after successful operations
-    if (data.success !== false && res.statusCode === 200) {
-      setImmediate(async () => {
-        try {
-          const { albumId } = req.params;
-          const userId = req.user?.id;
-          
-          const cacheKeysToInvalidate = [
-            PhotoCacheKeys.ALBUMS_LIST,
-            PhotoCacheKeys.ADMIN_ALBUMS_LIST,
-            PhotoCacheKeys.PHOTOS_STATS,
-            PhotoCacheKeys.RECENT_PHOTOS
-          ];
-          
-          if (albumId) {
-            cacheKeysToInvalidate.push(
-              PhotoCacheKeys.ALBUM_DETAILS(albumId),
-              PhotoCacheKeys.ALBUM_PHOTOS(albumId),
-              PhotoCacheKeys.ALBUM_STATS(albumId)
-            );
-          }
-          
-          if (userId) {
-            cacheKeysToInvalidate.push(
-              PhotoCacheKeys.USER_ALBUMS(userId),
-              PhotoCacheKeys.USER_PHOTO_STATS(userId)
-            );
-          }
-          
-          await CacheService.deleteMany(cacheKeysToInvalidate);
-          console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} album cache keys`);
-        } catch (error) {
-          console.error('Album cache invalidation error:', error);
+
+  res.json = async function(data) {
+    // Invalidate caches BEFORE sending response for successful operations (200 or 201 status codes)
+    if (data.success !== false && (res.statusCode === 200 || res.statusCode === 201)) {
+      try {
+        const { albumId } = req.params;
+        const userId = req.user?.id;
+
+        const cacheKeysToInvalidate = [
+          PhotoCacheKeys.ALBUMS_LIST,
+          PhotoCacheKeys.ADMIN_ALBUMS_LIST,
+          PhotoCacheKeys.PHOTOS_STATS,
+          PhotoCacheKeys.RECENT_PHOTOS
+        ];
+
+        if (albumId) {
+          cacheKeysToInvalidate.push(
+            PhotoCacheKeys.ALBUM_DETAILS(albumId),
+            PhotoCacheKeys.ALBUM_PHOTOS(albumId),
+            PhotoCacheKeys.ALBUM_STATS(albumId)
+          );
         }
-      });
+
+        if (userId) {
+          cacheKeysToInvalidate.push(
+            PhotoCacheKeys.USER_ALBUMS(userId),
+            PhotoCacheKeys.USER_PHOTO_STATS(userId)
+          );
+        }
+
+        // Delete each cache key individually
+        for (const key of cacheKeysToInvalidate) {
+          await CacheService.del(key);
+        }
+        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} album cache keys`);
+      } catch (error) {
+        console.error('Album cache invalidation error:', error);
+      }
     }
-    
+
     return originalJson.call(this, data);
   };
-  
+
   next();
 };
 
@@ -252,54 +259,55 @@ const autoInvalidateAlbumCaches = async (req, res, next) => {
 const autoInvalidatePhotoCaches = async (req, res, next) => {
   // Store original res.json
   const originalJson = res.json;
-  
-  res.json = function(data) {
-    // Invalidate caches after successful operations
-    if (data.success !== false && res.statusCode === 200) {
-      setImmediate(async () => {
-        try {
-          const { photoId, albumId } = req.params;
-          const userId = req.user?.id;
-          
-          const cacheKeysToInvalidate = [
-            PhotoCacheKeys.RECENT_PHOTOS,
-            PhotoCacheKeys.PHOTOS_STATS,
-            PhotoCacheKeys.ADMIN_PHOTOS_LIST
-          ];
-          
-          if (photoId) {
-            cacheKeysToInvalidate.push(PhotoCacheKeys.PHOTO_DETAILS(photoId));
-          }
-          
-          if (albumId) {
-            cacheKeysToInvalidate.push(
-              PhotoCacheKeys.ALBUM_PHOTOS(albumId),
-              PhotoCacheKeys.ALBUM_STATS(albumId),
-              PhotoCacheKeys.ALBUM_DETAILS(albumId)
-            );
-          }
-          
-          if (userId) {
-            cacheKeysToInvalidate.push(
-              PhotoCacheKeys.USER_ALBUMS(userId),
-              PhotoCacheKeys.USER_PHOTO_STATS(userId)
-            );
-          }
-          
-          // Invalidate search results (pattern-based)
-          await CacheService.deletePattern('photos:search:*');
-          
-          await CacheService.deleteMany(cacheKeysToInvalidate);
-          console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} photo cache keys`);
-        } catch (error) {
-          console.error('Photo cache invalidation error:', error);
+
+  res.json = async function(data) {
+    // Invalidate caches BEFORE sending response for successful operations (200 or 201 status codes)
+    if (data.success !== false && (res.statusCode === 200 || res.statusCode === 201)) {
+      try {
+        const { photoId, albumId } = req.params;
+        const userId = req.user?.id;
+
+        const cacheKeysToInvalidate = [
+          PhotoCacheKeys.RECENT_PHOTOS,
+          PhotoCacheKeys.PHOTOS_STATS,
+          PhotoCacheKeys.ADMIN_PHOTOS_LIST
+        ];
+
+        if (photoId) {
+          cacheKeysToInvalidate.push(PhotoCacheKeys.PHOTO_DETAILS(photoId));
         }
-      });
+
+        if (albumId) {
+          cacheKeysToInvalidate.push(
+            PhotoCacheKeys.ALBUM_PHOTOS(albumId),
+            PhotoCacheKeys.ALBUM_STATS(albumId),
+            PhotoCacheKeys.ALBUM_DETAILS(albumId)
+          );
+        }
+
+        if (userId) {
+          cacheKeysToInvalidate.push(
+            PhotoCacheKeys.USER_ALBUMS(userId),
+            PhotoCacheKeys.USER_PHOTO_STATS(userId)
+          );
+        }
+
+        // Invalidate search results (pattern-based)
+        await CacheService.delPattern('photos:search:*');
+
+        // Delete each cache key individually
+        for (const key of cacheKeysToInvalidate) {
+          await CacheService.del(key);
+        }
+        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} photo cache keys`);
+      } catch (error) {
+        console.error('Photo cache invalidation error:', error);
+      }
     }
-    
+
     return originalJson.call(this, data);
   };
-  
+
   next();
 };
 

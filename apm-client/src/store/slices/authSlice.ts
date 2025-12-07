@@ -17,7 +17,7 @@ export interface User {
   pendingVerification: boolean
   isRejected?: boolean
   rejectionReason?: string
-  profilePictureUrl?: string
+  profileImage?: string
   whatsappNumber?: string
   personalEmail?: string
   currentLocation?: string

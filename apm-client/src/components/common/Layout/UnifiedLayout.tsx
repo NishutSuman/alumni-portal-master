@@ -28,6 +28,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useDevice } from '@/hooks/useDevice';
+import { useSelector } from 'react-redux';
+import { selectIsDark } from '@/store/slices/themeSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
 import NotificationPanel from '@/components/common/UI/NotificationPanel';
 import UserProfileDropdown from '@/components/common/UI/UserProfileDropdown';
@@ -183,6 +185,7 @@ const getMobileNavItems = (role: string) => {
 const UnifiedLayout = () => {
   const { user, logout } = useAuth();
   const { isMobile } = useDevice();
+  const isDark = useSelector(selectIsDark);
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -235,14 +238,12 @@ const UnifiedLayout = () => {
           <div className="px-4 sm:px-6">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center">
-                <BuildingOffice2Icon className="h-8 w-8 text-blue-600" />
-                <div className="ml-3">
-                  <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Alumni Portal
-                  </h1>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {getRoleDisplayName()}
-                  </p>
+                <div className="h-10">
+                  <img
+                    src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                    alt="GUILD"
+                    className="h-full w-auto object-contain"
+                  />
                 </div>
               </div>
               
@@ -303,14 +304,12 @@ const UnifiedLayout = () => {
             <div className="flex items-center space-x-8">
               {/* Logo */}
               <div className="flex items-center">
-                <BuildingOffice2Icon className="h-8 w-8 text-blue-600" />
-                <div className="ml-3">
-                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Alumni Portal
-                  </h1>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {getRoleDisplayName()}
-                  </p>
+                <div className="h-12">
+                  <img
+                    src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                    alt="GUILD"
+                    className="h-full w-auto object-contain"
+                  />
                 </div>
               </div>
 

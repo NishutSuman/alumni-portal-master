@@ -25,13 +25,23 @@ import {
   PencilSquareIcon,
   ChartPieIcon,
   UserGroupIcon,
+  PhotoIcon,
+  BanknotesIcon,
+  LifebuoyIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useDevice } from '@/hooks/useDevice';
+import { useSelector } from 'react-redux';
+import { selectIsDark } from '@/store/slices/themeSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
 import NotificationPanel from '@/components/common/UI/NotificationPanel';
 import UserProfileDropdown from '@/components/common/UI/UserProfileDropdown';
 import OrganizationLogo from '@/components/common/UI/OrganizationLogo';
+import BrandLogo from '@/components/common/UI/BrandLogo';
+import { useGetPublicOrganizationQuery } from '@/store/api/apiSlice';
+import MobileHeader from '@/components/common/Layout/MobileHeader';
+import MobileBottomNav from '@/components/common/Layout/MobileBottomNav';
+import MobileMoreSidebar from '@/components/common/Layout/MobileMoreSidebar';
 
 // Get navigation items based on user role
 const getNavigationItems = (userRole: string) => {
@@ -96,14 +106,28 @@ const getNavigationItems = (userRole: string) => {
         href: '/user/lifelink',
         icon: HeartIcon,
         current: false,
-        description: 'Connect with alumni'
+        description: 'Blood donation network and emergency requests'
       },
       {
-        name: 'Settings',
-        href: '/user/settings',
-        icon: CogIcon,
+        name: 'Gallery',
+        href: '/user/gallery',
+        icon: PhotoIcon,
         current: false,
-        description: 'Account preferences'
+        description: 'Photo albums and memories'
+      },
+      {
+        name: 'Treasury',
+        href: '/user/treasury',
+        icon: BanknotesIcon,
+        current: false,
+        description: 'View financial information'
+      },
+      {
+        name: 'Support',
+        href: '/user/support',
+        icon: LifebuoyIcon,
+        current: false,
+        description: 'Get help and support'
       }
     ];
   }
@@ -162,11 +186,32 @@ const getNavigationItems = (userRole: string) => {
         description: 'Browse and manage events'
       },
       {
-        name: 'Settings',
-        href: '/user/settings',
-        icon: CogIcon,
+        name: 'LifeLink',
+        href: '/user/lifelink',
+        icon: HeartIcon,
         current: false,
-        description: 'Account preferences'
+        description: 'Blood donation network and emergency requests'
+      },
+      {
+        name: 'Gallery',
+        href: '/user/gallery',
+        icon: PhotoIcon,
+        current: false,
+        description: 'Photo albums and memories'
+      },
+      {
+        name: 'Treasury',
+        href: '/user/treasury',
+        icon: BanknotesIcon,
+        current: false,
+        description: 'View financial information'
+      },
+      {
+        name: 'Support',
+        href: '/user/support',
+        icon: LifebuoyIcon,
+        current: false,
+        description: 'Get help and support'
       }
     ];
   }
@@ -238,46 +283,32 @@ const getNavigationItems = (userRole: string) => {
       description: 'Create, edit, and manage events'
     },
     {
-      name: 'Finance',
-      href: '/admin/finance',
-      icon: CreditCardIcon,
+      name: 'LifeLink',
+      href: '/user/lifelink',
+      icon: HeartIcon,
       current: false,
-      description: 'Financial reports'
+      description: 'Blood donation network and emergency requests'
     },
     {
-      name: 'Merchandise',
-      href: '/admin/merchandise',
-      icon: ShoppingBagIcon,
+      name: 'Gallery',
+      href: '/admin/gallery',
+      icon: PhotoIcon,
       current: false,
-      description: 'Merchandise store'
+      description: 'Manage photo albums and memories'
     },
     {
-      name: 'Communications',
-      href: '/admin/communications',
-      icon: ChatBubbleLeftRightIcon,
+      name: 'Treasury',
+      href: '/admin/treasury',
+      icon: BanknotesIcon,
       current: false,
-      description: 'Messages and notifications'
+      description: 'Financial management and treasury'
     },
     {
       name: 'Support',
       href: '/admin/support',
-      icon: TicketIcon,
+      icon: LifebuoyIcon,
       current: false,
-      description: 'Support tickets'
-    },
-    {
-      name: 'Reports',
-      href: '/admin/reports',
-      icon: DocumentTextIcon,
-      current: false,
-      description: 'Generate reports'
-    },
-    {
-      name: 'Settings',
-      href: '/admin/settings',
-      icon: CogIcon,
-      current: false,
-      description: 'System settings'
+      description: 'Support ticket management'
     }
   ];
 };
@@ -404,7 +435,14 @@ const AdminLayout = () => {
   const { isMobile } = useDevice();
   const location = useLocation();
   const navigate = useNavigate();
+  const isDark = useSelector(selectIsDark);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [moreSidebarOpen, setMoreSidebarOpen] = useState(false);
+
+  // Fetch organization data from public endpoint
+  const { data: organization } = useGetPublicOrganizationQuery();
+  const organizationName = organization?.name || 'Organization';
 
   // Get navigation items based on user role
   const navigationItems = getNavigationItems(user?.role || 'USER');
@@ -448,68 +486,32 @@ const AdminLayout = () => {
   };
 
   if (isMobile) {
-    // Mobile Layout with Bottom Navigation
+    // Mobile Layout with New Header and Bottom Navigation
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-16">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Mobile Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-40">
-          <div className="px-4 sm:px-6">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center">
-                <OrganizationLogo size="lg" className="flex-shrink-0" />
-                <div className="ml-3">
-                  <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {user?.role === 'USER' ? 'Alumni Portal' : 'Admin Portal'}
-                  </h1>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3">
-                {/* Notifications */}
-                <NotificationPanel />
+        <MobileHeader unreadNotifications={0} />
 
-                {/* Profile Dropdown */}
-                <UserProfileDropdown />
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 pb-20">
+        {/* Main Content - Add padding for fixed header and bottom nav */}
+        <main className="pb-20 pt-2">
           <Outlet />
         </main>
 
         {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-50">
-          <div className="grid grid-cols-5 h-16">
-            {mobileNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname.startsWith(item.href);
-              
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-                    isActive
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-xs font-medium">{item.name}</span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="mobileActiveTab"
-                      className="absolute top-0 left-0 right-0 h-0.5 bg-blue-600"
-                    />
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+        <MobileBottomNav
+          userRole={user?.role || 'USER'}
+          onMoreClick={() => setMoreSidebarOpen(true)}
+        />
+
+        {/* More Sidebar */}
+        <MobileMoreSidebar
+          isOpen={moreSidebarOpen}
+          onClose={() => setMoreSidebarOpen(false)}
+          userRole={user?.role || 'USER'}
+          userName={user?.name || user?.fullName || 'User'}
+          userEmail={user?.email || ''}
+          onLogout={handleLogout}
+        />
       </div>
     );
   }
@@ -539,25 +541,20 @@ const AdminLayout = () => {
         className="fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-gray-800 shadow-lg lg:sticky lg:top-0 lg:h-screen lg:z-0 flex flex-col"
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center">
-            <OrganizationLogo size="lg" className="flex-shrink-0" />
-            <div className="ml-3">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                {user?.role === 'USER' ? 'Alumni Portal' : 'Admin Portal'}
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : 
-                 user?.role === 'BATCH_ADMIN' ? 'Batch Admin' : 
-                 `Batch ${user?.batch}`}
-              </p>
-            </div>
+        <div className="flex items-center justify-center px-8 h-[80px] border-b border-gray-200 dark:border-gray-700 relative">
+          {/* GUILD Brand Logo - Full width */}
+          <div className="w-full h-14">
+            <img
+              src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+              alt="GUILD"
+              className="w-full h-full object-contain"
+            />
           </div>
-          
-          {/* Close button (mobile only) */}
+
+          {/* Close button (mobile only) - positioned absolutely */}
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="absolute right-6 lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <XMarkIcon className="h-6 w-6" />
           </button>
@@ -603,11 +600,12 @@ const AdminLayout = () => {
             <div className="flex items-center space-x-3">
               {/* Profile Avatar */}
               <div className="flex-shrink-0">
-                {user?.profilePhoto ? (
+                {!imageError && user?.id ? (
                   <img
-                    src={user.profilePhoto}
+                    src={`/api/users/profile-picture/${user.id}`}
                     alt={user.fullName}
                     className="h-10 w-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                    onError={() => setImageError(true)}
                   />
                 ) : (
                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -656,8 +654,8 @@ const AdminLayout = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Navbar */}
         <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
+          <div className="px-6 h-[80px] flex items-center">
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
                 {/* Menu button for mobile */}
                 <button
@@ -667,14 +665,19 @@ const AdminLayout = () => {
                   <Bars3Icon className="h-6 w-6" />
                 </button>
                 
-                {/* Breadcrumb or Page Title */}
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {navItemsWithCurrent.find(item => item.current)?.name || 'Dashboard'}
-                  </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {navItemsWithCurrent.find(item => item.current)?.description || 'Admin portal overview'}
-                  </p>
+                {/* Organization Logo and Name */}
+                <div className="flex items-center space-x-3">
+                  <OrganizationLogo size="lg" className="flex-shrink-0" />
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      {organizationName}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {user?.role === 'SUPER_ADMIN' ? 'Super Admin Portal' :
+                       user?.role === 'BATCH_ADMIN' ? 'Batch Admin Portal' :
+                       'Alumni Portal'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -699,7 +702,7 @@ const AdminLayout = () => {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto pb-20">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>

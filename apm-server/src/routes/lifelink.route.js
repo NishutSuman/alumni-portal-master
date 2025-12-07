@@ -256,13 +256,12 @@ router.put('/requisitions/:requisitionId/reuse',
 /**
  * Discover available requisitions for donors
  * GET /api/lifelink/discover-requisitions
- * Access: Authenticated blood donors
+ * Access: Authenticated users (all users can see emergency requests)
  */
 router.get('/discover-requisitions',
   [
     authenticateToken,
     requireAlumniVerification,
-    validateBloodDonor,
     validateDashboardQuery, // Reuse for pagination params
     cacheDiscoverRequisitions
   ],

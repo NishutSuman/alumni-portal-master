@@ -1,0 +1,68 @@
+import React from 'react';
+import ComingSoon from '@/components/common/UI/ComingSoon';
+import { LifebuoyIcon } from '@heroicons/react/24/outline';
+
+const AdminSupport: React.FC = () => {
+  const features = [
+    {
+      title: 'Admin Dashboard',
+      description: 'Comprehensive dashboard with ticket overview, statistics, pending tickets, and performance metrics.',
+    },
+    {
+      title: 'Ticket Assignment',
+      description: 'Assign tickets to specific admins, reassign tickets, and track who is handling which tickets.',
+    },
+    {
+      title: 'Status & Priority Management',
+      description: 'Update ticket status (Open, In Progress, Waiting, Resolved, Closed) and adjust priority levels.',
+    },
+    {
+      title: 'Bulk Operations',
+      description: 'Perform bulk actions: assign multiple tickets, update status, change priority, close tickets, or update categories.',
+    },
+    {
+      title: 'Response Templates',
+      description: 'Create, manage, and use response templates for common issues. Support variables for personalization.',
+    },
+    {
+      title: 'Advanced Search',
+      description: 'Powerful search with filters for status, priority, category, date range, assigned admin, and keywords.',
+    },
+    {
+      title: 'Saved Filters',
+      description: 'Save frequently used search filters and filter combinations for quick access.',
+    },
+    {
+      title: 'Analytics & Reports',
+      description: 'Detailed analytics: overview metrics, category analysis, weekly trends, and admin performance tracking.',
+    },
+    {
+      title: 'Ticket Export',
+      description: 'Export tickets to CSV, Excel, and PDF formats with customizable fields and date ranges.',
+    },
+    {
+      title: 'Performance Monitoring',
+      description: 'Monitor system performance, database metrics, cleanup operations, and get performance recommendations.',
+    },
+    {
+      title: 'Audit Trail',
+      description: 'Complete audit log of all ticket operations with who did what and when for compliance.',
+    },
+    {
+      title: 'Category Management',
+      description: 'Create and manage ticket categories to organize support requests effectively.',
+    },
+  ];
+
+  return (
+    <ComingSoon
+      title="Support Management"
+      description="Enterprise-level support ticket management system with 70+ API endpoints including bulk operations, templates, advanced search, analytics, and exports. Full backend ready!"
+      features={features}
+      estimatedLaunch="Delivering Soon"
+      icon={LifebuoyIcon}
+    />
+  );
+};
+
+export default AdminSupport;

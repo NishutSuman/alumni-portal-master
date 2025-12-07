@@ -13,23 +13,31 @@ const prisma = new PrismaClient();
 // ============================================
 
 const formatDonorCard = (donor) => {
-  const eligibility = BloodCompatibilityService.checkDonorEligibility(donor.lastDonationDate);
+  const eligibility = BloodCompatibilityService.checkDonorEligibility(donor.lastBloodDonationDate);
+  
+  // Split fullName into first and last for consistency
+  const nameParts = donor.fullName ? donor.fullName.split(' ') : ['Unknown'];
+  const firstName = nameParts[0] || 'Unknown';
+  const lastName = nameParts.slice(1).join(' ') || '';
   
   return {
     id: donor.id,
-    name: `${donor.firstName} ${donor.lastName}`,
-    profilePhoto: donor.profilePhoto,
+    firstName,
+    lastName,
+    fullName: donor.fullName,
+    email: donor.email,
+    profileImage: donor.profileImage,
     bloodGroup: donor.bloodGroup,
-    totalDonations: donor.totalDonations,
-    lastDonationDate: donor.lastDonationDate,
+    totalBloodDonations: donor.totalBloodDonations,
+    lastBloodDonationDate: donor.lastBloodDonationDate,
     eligibility: {
       isEligible: eligibility.isEligible,
       message: eligibility.message,
       nextEligibleDate: eligibility.nextEligibleDate,
       daysRemaining: eligibility.daysRemaining
     },
-    location: donor.addresses[0] ? `${donor.addresses[0].city}, ${donor.addresses[0].state}` : null,
-    contactAvailable: donor.showPhone
+    addresses: donor.addresses,
+    showPhone: donor.showPhone
   };
 };
 
@@ -56,12 +64,11 @@ const updateBloodProfile = async (req, res) => {
       },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
+        fullName: true,
         bloodGroup: true,
         isBloodDonor: true,
-        lastDonationDate: true,
-        totalDonations: true
+        lastBloodDonationDate: true,
+        totalBloodDonations: true
       }
     });
 
@@ -84,7 +91,7 @@ const updateBloodProfile = async (req, res) => {
     await CacheService.delPattern(`user:${userId}:profile*`);
     await CacheService.delPattern('lifelink:dashboard*');
 
-    const eligibility = BloodCompatibilityService.checkDonorEligibility(updatedUser.lastDonationDate);
+    const eligibility = BloodCompatibilityService.checkDonorEligibility(updatedUser.lastBloodDonationDate);
 
     const responseData = {
       ...updatedUser,
@@ -111,23 +118,13 @@ const getBloodProfile = async (req, res) => {
       where: { id: userId },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
+        fullName: true,
+        email: true,
         bloodGroup: true,
         isBloodDonor: true,
-        lastDonationDate: true,
-        totalDonations: true,
-        donationHistory: {
-          select: {
-            id: true,
-            donationDate: true,
-            location: true,
-            units: true,
-            notes: true
-          },
-          orderBy: { donationDate: 'desc' },
-          take: 5 // Recent 5 donations
-        }
+        lastBloodDonationDate: true,
+        totalBloodDonations: true,
+        totalUnitsDonated: true
       }
     });
 
@@ -135,7 +132,7 @@ const getBloodProfile = async (req, res) => {
       return errorResponse(res, 'User not found', 404);
     }
 
-    const eligibility = BloodCompatibilityService.checkDonorEligibility(user.lastDonationDate);
+    const eligibility = BloodCompatibilityService.checkDonorEligibility(user.lastBloodDonationDate);
 
     const responseData = {
       ...user,
@@ -160,7 +157,7 @@ const getBloodProfile = async (req, res) => {
  */
 const getLifeLinkDashboard = async (req, res) => {
   try {
-    const { bloodGroup, eligibleOnly = 'false', limit = 20, page = 1 } = req.query;
+    const { bloodGroup, eligibleOnly = 'false', limit = 20, page = 1, city } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Build where clause
@@ -174,17 +171,30 @@ const getLifeLinkDashboard = async (req, res) => {
       where.bloodGroup = bloodGroup;
     }
 
+    // Add city filter if provided
+    if (city) {
+      console.log(`🔍 City filter applied: ${city}`);
+      where.addresses = {
+        some: {
+          city: {
+            contains: city,
+            mode: 'insensitive'
+          }
+        }
+      };
+    }
+
     // Get donors
     const donors = await prisma.user.findMany({
       where,
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
-        profilePhoto: true,
+        fullName: true,
+        email: true,
+        profileImage: true,
         bloodGroup: true,
-        lastDonationDate: true,
-        totalDonations: true,
+        lastBloodDonationDate: true,
+        totalBloodDonations: true,
         showPhone: true,
         addresses: {
           select: {
@@ -196,8 +206,8 @@ const getLifeLinkDashboard = async (req, res) => {
         }
       },
       orderBy: [
-        { lastDonationDate: 'desc' },
-        { totalDonations: 'desc' },
+        { lastBloodDonationDate: 'desc' },
+        { totalBloodDonations: 'desc' },
         { createdAt: 'desc' }
       ],
       skip,
@@ -217,12 +227,6 @@ const getLifeLinkDashboard = async (req, res) => {
     // Get blood group statistics
     const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats();
 
-    // Get total donors by eligibility
-    const eligibilityStats = {
-      total: donorCards.length,
-      eligible: donorCards.filter(d => d.eligibility.isEligible).length,
-      waiting: donorCards.filter(d => !d.eligibility.isEligible).length
-    };
 
     const responseData = {
       donors: donorCards,
@@ -234,9 +238,10 @@ const getLifeLinkDashboard = async (req, res) => {
         hasNext: skip + donorCards.length < totalCount,
         hasPrev: parseInt(page) > 1
       },
-      statistics: {
-        bloodGroupDistribution: bloodGroupStats,
-        eligibility: eligibilityStats
+      stats: {
+        totalDonors: totalCount,
+        eligibleDonors: donorCards.filter(d => d.eligibility.isEligible).length,
+        bloodGroupDistribution: bloodGroupStats
       },
       filters: {
         bloodGroup: bloodGroup || null,
@@ -253,6 +258,33 @@ const getLifeLinkDashboard = async (req, res) => {
   } catch (error) {
     console.error('LifeLink dashboard error:', error);
     return errorResponse(res, 'Failed to load dashboard', 500);
+  }
+};
+
+/**
+ * Get blood group statistics
+ * GET /api/lifelink/stats/bloodgroups
+ * Access: Public
+ */
+const getBloodGroupStats = async (req, res) => {
+  try {
+    // Get blood group statistics from the service
+    const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats();
+
+    const responseData = {
+      stats: bloodGroupStats,
+      timestamp: new Date().toISOString()
+    };
+
+    // Cache the result
+    if (req.cacheKey && req.cacheTTL) {
+      await CacheService.set(req.cacheKey, responseData, req.cacheTTL);
+    }
+
+    return successResponse(res, responseData, 'Blood group statistics retrieved successfully');
+  } catch (error) {
+    console.error('Blood group stats error:', error);
+    return errorResponse(res, 'Failed to retrieve blood group statistics', 500);
   }
 };
 
@@ -293,18 +325,20 @@ const getMyDonations = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        totalDonations: true,
-        lastDonationDate: true
+        totalBloodDonations: true,
+        totalUnitsDonated: true,
+        lastBloodDonationDate: true
       }
     });
 
-    const eligibility = BloodCompatibilityService.checkDonorEligibility(user?.lastDonationDate);
+    const eligibility = BloodCompatibilityService.checkDonorEligibility(user?.lastBloodDonationDate);
 
     const responseData = {
       donations,
       summary: {
-        totalDonations: user?.totalDonations || 0,
-        lastDonationDate: user?.lastDonationDate,
+        totalDonations: user?.totalBloodDonations || 0,  // Count of donation events
+        totalUnits: user?.totalUnitsDonated || 0,  // Total units donated
+        lastDonationDate: user?.lastBloodDonationDate,
         eligibility
       },
       pagination: {
@@ -337,7 +371,7 @@ const addDonation = async (req, res) => {
       where: { id: userId },
       select: {
         isBloodDonor: true,
-        lastDonationDate: true
+        lastBloodDonationDate: true
       }
     });
 
@@ -345,14 +379,9 @@ const addDonation = async (req, res) => {
       return errorResponse(res, 'Only registered blood donors can add donation records', 403);
     }
 
-    // Check eligibility (3-month rule)
-    const eligibility = BloodCompatibilityService.checkDonorEligibility(user.lastDonationDate);
-    
-    if (!eligibility.isEligible) {
-      return errorResponse(res, eligibility.message, 400, {
-        eligibility
-      });
-    }
+    // Note: We don't check eligibility here because users should be able to record
+    // past donations regardless of current eligibility status. The eligibility
+    // check is only for informational purposes to show when they can donate again.
 
     // Record the donation
     const donation = await BloodCompatibilityService.recordDonation(userId, {
@@ -402,8 +431,8 @@ const getDonationStatus = async (req, res) => {
       where: { id: userId },
       select: {
         isBloodDonor: true,
-        lastDonationDate: true,
-        totalDonations: true
+        lastBloodDonationDate: true,
+        totalBloodDonations: true
       }
     });
 
@@ -415,11 +444,11 @@ const getDonationStatus = async (req, res) => {
       return errorResponse(res, 'User is not registered as a blood donor', 400);
     }
 
-    const eligibility = BloodCompatibilityService.checkDonorEligibility(user.lastDonationDate);
+    const eligibility = BloodCompatibilityService.checkDonorEligibility(user.lastBloodDonationDate);
 
     const responseData = {
-      totalDonations: user.totalDonations,
-      lastDonationDate: user.lastDonationDate,
+      totalDonations: user.totalBloodDonations,
+      lastDonationDate: user.lastBloodDonationDate,
       eligibility
     };
 
@@ -546,7 +575,8 @@ const searchDonors = async (req, res) => {
     }
 
     return successResponse(res, {
-      availableDonors,
+      donors: availableDonors,
+      totalFound: availableDonors.length,
       searchCriteria: {
         requiredBloodGroup,
         location,
@@ -580,9 +610,8 @@ const notifySelectedDonors = async (req, res) => {
       include: {
         requester: {
           select: {
-            firstName: true,
-            lastName: true,
-            phone: true
+            fullName: true,
+            whatsappNumber: true
           }
         }
       }
@@ -609,10 +638,9 @@ const notifySelectedDonors = async (req, res) => {
       },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
+        fullName: true,
         bloodGroup: true,
-        lastDonationDate: true
+        lastBloodDonationDate: true
       }
     });
 
@@ -621,7 +649,7 @@ const notifySelectedDonors = async (req, res) => {
     }
 
     // Send emergency notifications using NotificationService
-    const { NotificationService } = require('../services/notification.service');
+    const { NotificationService } = require('../../services/notification.service');
     
     const notificationResult = await NotificationService.sendLifeLinkEmergencyNotification(
       requisition,
@@ -650,7 +678,7 @@ const notifySelectedDonors = async (req, res) => {
       notificationResult,
       donorsNotified: donorUsers.map(d => ({
         id: d.id,
-        name: `${d.firstName} ${d.lastName}`,
+        name: d.fullName || 'Unknown',
         bloodGroup: d.bloodGroup
       }))
     }, `Emergency notification sent to ${notificationResult.notificationsSent} donors`);
@@ -702,7 +730,7 @@ const notifyAllDonors = async (req, res) => {
     const donorIds = availableDonors.map(donor => donor.id);
 
     // Send broadcast notification
-    const { NotificationService } = require('../services/notification.service');
+    const { NotificationService } = require('../../services/notification.service');
     
     const notificationResult = await NotificationService.sendLifeLinkEmergencyNotification(
       requisition,
@@ -755,7 +783,7 @@ const discoverRequisitions = async (req, res) => {
     const { urgencyLevel, maxDistance, limit = 20, page = 1 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Get donor's blood group and location
+    // Get user's blood group and location (optional - for compatibility info)
     const donor = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -771,18 +799,15 @@ const discoverRequisitions = async (req, res) => {
       }
     });
 
-    if (!donor?.bloodGroup) {
-      return errorResponse(res, 'Please update your blood group to discover requisitions', 400);
-    }
+    // Get compatible recipient blood groups if user has blood group set
+    const compatibleRecipients = donor?.bloodGroup
+      ? BloodCompatibilityService.getCompatibleRecipients(donor.bloodGroup)
+      : [];
 
-    // Get compatible recipient blood groups for donor
-    const compatibleRecipients = BloodCompatibilityService.getCompatibleRecipients(donor.bloodGroup);
-
-    // Build where clause for requisition search
+    // Build where clause - show ALL active requisitions to ALL users
     const where = {
       status: 'ACTIVE',
-      expiresAt: { gte: new Date() },
-      requiredBloodGroup: { in: compatibleRecipients }
+      expiresAt: { gte: new Date() }
     };
 
     if (urgencyLevel) where.urgencyLevel = urgencyLevel;
@@ -794,10 +819,9 @@ const discoverRequisitions = async (req, res) => {
         requester: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            profilePhoto: true,
+            fullName: true,
+            whatsappNumber: true,
+            profileImage: true,
             addresses: {
               select: {
                 city: true,
@@ -832,12 +856,14 @@ const discoverRequisitions = async (req, res) => {
 
     const totalCount = await prisma.bloodRequisition.count({ where });
 
+    // Get donor location once (outside map)
+    const donorLocation = donor.addresses[0];
+
     // Format requisitions with seeker details and compatibility info
     const formattedRequisitions = requisitions.map(req => {
       const hasResponded = req.responses.length > 0;
-      const donorLocation = donor.addresses[0];
       const seekerLocation = req.requester.addresses[0];
-      
+
       return {
         id: req.id,
         patientName: req.patientName,
@@ -851,41 +877,46 @@ const discoverRequisitions = async (req, res) => {
         requiredByDate: req.requiredByDate,
         expiresAt: req.expiresAt,
         createdAt: req.createdAt,
-        
-        // Compatibility info
-        compatibility: {
-          isCompatible: true, // Already filtered
+
+        // Compatibility info - check if user can donate to this requisition
+        compatibility: donor?.bloodGroup ? {
+          isCompatible: compatibleRecipients.includes(req.requiredBloodGroup),
           donorBloodGroup: donor.bloodGroup,
-          canDonate: true
+          canDonate: compatibleRecipients.includes(req.requiredBloodGroup)
+        } : {
+          isCompatible: false,
+          donorBloodGroup: null,
+          canDonate: false,
+          message: 'Please update your blood group to see if you can help'
         },
-        
+
         // Distance calculation (simplified - you might want to use a proper distance API)
-        distance: donorLocation && seekerLocation ? 
-          `${donorLocation.city}, ${donorLocation.state}` === `${seekerLocation.city}, ${seekerLocation.state}` ? 'Same city' : 'Different city' 
+        distance: donorLocation && seekerLocation ?
+          `${donorLocation.city}, ${donorLocation.state}` === `${seekerLocation.city}, ${seekerLocation.state}` ? 'Same city' : 'Different city'
           : 'Location not specified',
-        
+
         // Response status
         responseStatus: hasResponded ? {
           hasResponded: true,
           response: req.responses[0].response,
           respondedAt: req.responses[0].respondedAt
         } : { hasResponded: false },
-        
+
         // Seeker (requester) information
         seeker: {
           id: req.requester.id,
-          name: `${req.requester.firstName} ${req.requester.lastName}`,
-          phone: req.requester.phone, // Full contact details visible to compatible donors
-          profilePhoto: req.requester.profilePhoto,
+          name: req.requester.fullName || 'Unknown',
+          phone: req.requester.whatsappNumber, // Full contact details visible to compatible donors
+          profilePhoto: req.requester.profileImage,
           location: seekerLocation ? `${seekerLocation.city}, ${seekerLocation.state}` : 'Location not specified'
         },
-        
+
         // Statistics
         statistics: {
           totalResponses: req._count.responses,
           totalNotificationsSent: req._count.notifications
         },
-        
+
         // Time urgency
         timeRemaining: {
           hoursLeft: Math.max(0, Math.floor((new Date(req.requiredByDate) - new Date()) / (1000 * 60 * 60))),
@@ -912,7 +943,7 @@ const discoverRequisitions = async (req, res) => {
     return successResponse(res, {
       requisitions: formattedRequisitions,
       donorInfo: {
-        bloodGroup: donor.bloodGroup,
+        bloodGroup: donor?.bloodGroup || null,
         canDonateTo: compatibleRecipients,
         location: donorLocation ? `${donorLocation.city}, ${donorLocation.state}` : 'Not specified'
       },
@@ -924,7 +955,9 @@ const discoverRequisitions = async (req, res) => {
         hasNext: skip + requisitions.length < totalCount,
         hasPrev: parseInt(page) > 1
       }
-    }, `Found ${formattedRequisitions.length} emergency requests you can help with`);
+    }, donor?.bloodGroup
+      ? `Found ${formattedRequisitions.length} emergency blood requests`
+      : `Found ${formattedRequisitions.length} emergency blood requests. Update your blood group to see if you can help.`);
 
   } catch (error) {
     console.error('Discover requisitions error:', error);
@@ -953,7 +986,7 @@ const notifySeekerOfResponse = async (seekerId, donorData, requisitionData, resp
       priority = PRIORITY_LEVELS.HIGH;
       
       if (contactRevealed) {
-        message += `. Contact: ${donorData.phone}`;
+        message += `. Contact: ${donorData.whatsappNumber}`;
       }
     } else if (response === 'NOT_AVAILABLE') {
       title = '📱 Response Received';
@@ -977,7 +1010,7 @@ const notifySeekerOfResponse = async (seekerId, donorData, requisitionData, resp
         donorBloodGroup: donorData.bloodGroup,
         response,
         contactRevealed,
-        donorPhone: contactRevealed ? donorData.phone : null
+        donorPhone: contactRevealed ? donorData.whatsappNumber : null
       },
       priority,
       channels: ['PUSH', 'IN_APP']
@@ -1225,9 +1258,8 @@ const getRequisition = async (req, res) => {
         requester: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            phone: true
+            fullName: true,
+            whatsappNumber: true
           }
         },
         responses: {
@@ -1238,7 +1270,7 @@ const getRequisition = async (req, res) => {
                 firstName: true,
                 lastName: true,
                 bloodGroup: true,
-                totalDonations: true
+                totalBloodDonations: true
               }
             }
           },
@@ -1267,7 +1299,7 @@ const getRequisition = async (req, res) => {
       contactPhone: response.isContactRevealed ? response.contactPhone : null,
       donor: {
         ...response.donor,
-        name: `${response.donor.firstName} ${response.donor.lastName}`
+        name: response.donor.fullName || 'Unknown'
       }
     }));
 
@@ -1291,8 +1323,8 @@ const getRequisition = async (req, res) => {
       updatedAt: requisition.updatedAt,
       isExpired: requisition.expiresAt ? new Date() > new Date(requisition.expiresAt) : false,
       requester: {
-        name: `${requisition.requester.firstName} ${requisition.requester.lastName}`,
-        phone: requisition.requester.phone
+        name: requisition.requester.fullName || 'Unknown',
+        phone: requisition.requester.whatsappNumber
       },
       responses: formattedResponses,
       statistics: {
@@ -1388,11 +1420,10 @@ const getWillingDonors = async (req, res) => {
         donor: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
+            fullName: true,
             bloodGroup: true,
-            totalDonations: true,
-            lastDonationDate: true,
+            totalBloodDonations: true,
+            lastBloodDonationDate: true,
             addresses: {
               select: {
                 city: true,
@@ -1408,7 +1439,7 @@ const getWillingDonors = async (req, res) => {
     });
 
     const formattedDonors = willingDonors.map(response => {
-      const eligibility = BloodCompatibilityService.checkDonorEligibility(response.donor.lastDonationDate);
+      const eligibility = BloodCompatibilityService.checkDonorEligibility(response.donor.lastBloodDonationDate);
       
       return {
         responseId: response.id,
@@ -1418,9 +1449,9 @@ const getWillingDonors = async (req, res) => {
         contactPhone: response.isContactRevealed ? response.contactPhone : null,
         donor: {
           id: response.donor.id,
-          name: `${response.donor.firstName} ${response.donor.lastName}`,
+          name: response.donor.fullName || 'Unknown',
           bloodGroup: response.donor.bloodGroup,
-          totalDonations: response.donor.totalDonations,
+          totalDonations: response.donor.totalBloodDonations,
           eligibility,
           location: response.donor.addresses[0] ? 
             `${response.donor.addresses[0].city}, ${response.donor.addresses[0].state}` : null
@@ -1470,7 +1501,7 @@ const respondToNotification = async (req, res) => {
                 id: true,
                 firstName: true,
                 lastName: true,
-                phone: true
+                whatsappNumber: true
               }
             }
           }
@@ -1502,10 +1533,9 @@ const respondToNotification = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        phone: true,
+        whatsappNumber: true,
         showPhone: true,
-        firstName: true,
-        lastName: true,
+        fullName: true,
         bloodGroup: true
       }
     });
@@ -1527,7 +1557,7 @@ const respondToNotification = async (req, res) => {
         response,
         message,
         respondedAt: new Date(),
-        contactPhone: shouldRevealContact ? user.phone : null,
+        contactPhone: shouldRevealContact ? user.whatsappNumber : null,
         isContactRevealed: shouldRevealContact
       },
       create: {
@@ -1536,7 +1566,7 @@ const respondToNotification = async (req, res) => {
         response,
         message,
         respondedAt: new Date(),
-        contactPhone: shouldRevealContact ? user.phone : null,
+        contactPhone: shouldRevealContact ? user.whatsappNumber : null,
         isContactRevealed: shouldRevealContact
       }
     });
@@ -1552,9 +1582,9 @@ const respondToNotification = async (req, res) => {
       notification.requisition.requesterId,
       {
         id: user.id,
-        name: `${user.firstName} ${user.lastName}`,
+        name: user.fullName || 'Unknown',
         bloodGroup: user.bloodGroup,
-        phone: user.phone
+        phone: user.whatsappNumber
       },
       {
         id: notification.requisition.id,
@@ -1594,11 +1624,11 @@ const respondToNotification = async (req, res) => {
         hospitalName: notification.requisition.hospitalName
       },
       seeker: {
-        name: `${notification.requisition.requester.firstName} ${notification.requisition.requester.lastName}`,
-        phone: notification.requisition.requester.phone
+        name: notification.requisition.requester.fullName || 'Unknown',
+        phone: notification.requisition.requester.whatsappNumber
       },
       donor: {
-        name: `${user.firstName} ${user.lastName}`,
+        name: user.fullName || 'Unknown',
         bloodGroup: user.bloodGroup
       }
     };
@@ -1635,9 +1665,8 @@ const respondToRequisition = async (req, res) => {
         requester: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            phone: true
+            fullName: true,
+            whatsappNumber: true
           }
         }
       }
@@ -1678,10 +1707,9 @@ const respondToRequisition = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        phone: true,
+        whatsappNumber: true,
         showPhone: true,
-        firstName: true,
-        lastName: true,
+        fullName: true,
         bloodGroup: true
       }
     });
@@ -1699,7 +1727,7 @@ const respondToRequisition = async (req, res) => {
         response,
         message,
         respondedAt: new Date(),
-        contactPhone: shouldRevealContact ? user.phone : null,
+        contactPhone: shouldRevealContact ? user.whatsappNumber : null,
         isContactRevealed: shouldRevealContact
       }
     });
@@ -1709,9 +1737,9 @@ const respondToRequisition = async (req, res) => {
       requisition.requesterId,
       {
         id: user.id,
-        name: `${user.firstName} ${user.lastName}`,
+        name: user.fullName || 'Unknown',
         bloodGroup: user.bloodGroup,
-        phone: user.phone
+        phone: user.whatsappNumber
       },
       {
         id: requisition.id,
@@ -1751,11 +1779,11 @@ const respondToRequisition = async (req, res) => {
         hospitalName: requisition.hospitalName
       },
       seeker: {
-        name: `${requisition.requester.firstName} ${requisition.requester.lastName}`,
-        phone: requisition.requester.phone
+        name: requisition.requester.fullName || 'Unknown',
+        phone: requisition.requester.whatsappNumber
       },
       donor: {
-        name: `${user.firstName} ${user.lastName}`,
+        name: user.fullName || 'Unknown',
         bloodGroup: user.bloodGroup
       }
     };
@@ -1785,6 +1813,7 @@ module.exports = {
   
   // Dashboard
   getLifeLinkDashboard,
+  getBloodGroupStats,
   
   // Donation management
   getMyDonations,

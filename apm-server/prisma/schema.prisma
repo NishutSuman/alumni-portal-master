@@ -10,267 +10,264 @@ datasource db {
 }
 
 model Organization {
-  id                    String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Basic Information
-  name                  String    @unique
-  shortName             String    @unique @db.VarChar(10) // For Serial ID generation
-  foundationYear        Int
-  
+  name           String @unique
+  shortName      String @unique @db.VarChar(10) // For Serial ID generation
+  foundationYear Int
+
   // Contact Information  
-  officialEmail         String    @unique
+  officialEmail         String  @unique
   officialContactNumber String?
-  officeAddress         String?   @db.Text
-  
+  officeAddress         String? @db.Text
+
   // Digital Assets
-  logoUrl               String?   // Organization logo
-  
+  logoUrl String? // Organization logo
+
   // Legal Documents (PDF/Image URLs)
-  bylawDocumentUrl      String?   // Organization bylaws PDF
-  registrationCertUrl   String?   // Registration certificate
-  
+  bylawDocumentUrl    String? // Organization bylaws PDF
+  registrationCertUrl String? // Registration certificate
+
   // Social Media Links
-  websiteUrl            String?
-  instagramUrl          String?
-  facebookUrl           String?
-  youtubeUrl            String?
-  twitterUrl            String?
-  linkedinUrl           String?
-  
+  websiteUrl   String?
+  instagramUrl String?
+  facebookUrl  String?
+  youtubeUrl   String?
+  twitterUrl   String?
+  linkedinUrl  String?
+
   // Founding Members (JSON array)
-  foundingMembers       Json?     // [{"name": "John Doe", "role": "Founder", "year": 1985}]
-  
+  foundingMembers Json? // [{"name": "John Doe", "role": "Founder", "year": 1985}]
+
   // System Configuration
-  isActive              Boolean   @default(true)
-  lastUpdatedBy         String?   // Admin who last updated
-  lastUpdatedAdmin      User?     @relation("OrgUpdates", fields: [lastUpdatedBy], references: [id])
-  
+  isActive         Boolean @default(true)
+  lastUpdatedBy    String? // Admin who last updated
+  lastUpdatedAdmin User?   @relation("OrgUpdates", fields: [lastUpdatedBy], references: [id])
+
   // Serial ID Configuration
-  serialCounter         Int       @default(0) // Auto-increment for serial ID generation
-  
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
+  serialCounter Int @default(0) // Auto-increment for serial ID generation
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("organization")
 }
 
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  passwordHash      String
-  isEmailVerified   Boolean  @default(false)
-  emailVerifyToken  String?
-  passwordResetToken String?
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  passwordHash         String
+  isEmailVerified      Boolean   @default(false)
+  emailVerifyToken     String?
+  passwordResetToken   String?
   passwordResetExpires DateTime?
-  isActive          Boolean  @default(true)
-  deactivatedAt     DateTime?
-  
+  isActive             Boolean   @default(true)
+  deactivatedAt        DateTime?
+
   // Basic Profile Information
-  fullName          String
-  dateOfBirth       DateTime?
-  batch             Int
+  fullName      String
+  dateOfBirth   DateTime?
+  batch         Int
   // NEW: Detailed batch information
-  admissionYear         Int?      // Year of admission (e.g., 2009 for 2009-16 batch)
-  passoutYear           Int?      // Year of passout (e.g., 2016 for 2009-16 batch) - should match 'batch'
+  admissionYear Int? // Year of admission (e.g., 2009 for 2009-16 batch)
+  passoutYear   Int? // Year of passout (e.g., 2016 for 2009-16 batch) - should match 'batch'
 
   // ==========================================
   // ALUMNI VERIFICATION FIELDS (NEW)
   // ==========================================
-  
+
   // Verification Status
-  isAlumniVerified      Boolean   @default(false)
-  pendingVerification   Boolean   @default(true)   // New registrations await approval
-  
+  isAlumniVerified    Boolean @default(false)
+  pendingVerification Boolean @default(true) // New registrations await approval
+
   // Verification Process  
-  alumniVerifiedBy      String?   // Admin who verified
-  verifiedAdmin         User?     @relation("AlumniVerifications", fields: [alumniVerifiedBy], references: [id])
-  alumniVerifiedAt      DateTime? // Verification timestamp
-  verificationNotes     String?   @db.Text // Admin notes during verification
-  
+  alumniVerifiedBy  String? // Admin who verified
+  verifiedAdmin     User?     @relation("AlumniVerifications", fields: [alumniVerifiedBy], references: [id])
+  alumniVerifiedAt  DateTime? // Verification timestamp
+  verificationNotes String?   @db.Text // Admin notes during verification
+
   // Rejection Handling
-  isRejected            Boolean   @default(false)
-  rejectionReason       String?   @db.Text
-  rejectedBy            String?   // Admin who rejected
-  rejectedAdmin         User?     @relation("AlumniRejections", fields: [rejectedBy], references: [id])
-  rejectedAt            DateTime?
+  isRejected      Boolean   @default(false)
+  rejectionReason String?   @db.Text
+  rejectedBy      String? // Admin who rejected
+  rejectedAdmin   User?     @relation("AlumniRejections", fields: [rejectedBy], references: [id])
+  rejectedAt      DateTime?
 
   // ==========================================
   // UNIQUE SERIAL ID SYSTEM (NEW)
   // ==========================================
-  
+
   // Auto-generated unique ID: ORG + COUNTER + NAME_CHARS + ADMISSION_YEAR + PASSOUT_YEAR
   // Example: JNV1234JMD0916 (JNV + 1234 + J.M.D + 09 + 16)
-  serialId              String?   @unique @db.VarChar(20)
-  serialCounter         Int?      // Registration sequence number
+  serialId      String? @unique @db.VarChar(20)
+  serialCounter Int? // Registration sequence number
 
-  bio               String?
-  profileImage      String?
-  employmentStatus  EmploymentStatus @default(OPEN_TO_WORK)
-  
+  bio              String?
+  profileImage     String?
+  employmentStatus EmploymentStatus @default(OPEN_TO_WORK)
+
   // Contact Information
-  whatsappNumber    String?
-  alternateNumber   String?
-  
+  whatsappNumber  String?
+  alternateNumber String?
+
   // Social Links
-  linkedinUrl       String?
-  instagramUrl      String?
-  facebookUrl       String?
-  twitterUrl        String?
-  youtubeUrl        String?
-  portfolioUrl      String?
-  
+  linkedinUrl  String?
+  instagramUrl String?
+  facebookUrl  String?
+  twitterUrl   String?
+  youtubeUrl   String?
+  portfolioUrl String?
+
   // Privacy Settings
-  isProfilePublic   Boolean  @default(true)
-  showEmail         Boolean  @default(false)
-  showPhone         Boolean  @default(false)
-  
+  isProfilePublic Boolean @default(true)
+  showEmail       Boolean @default(false)
+  showPhone       Boolean @default(false)
+
   // Role and Permissions
-  role              UserRole @default(USER)
+  role UserRole @default(USER)
 
   // NEW MEMBERSHIP FIELDS (Add these to existing User model)
-  membershipStatus        MembershipStatus @default(ACTIVE) // ACTIVE, EXPIRED, PENDING, INACTIVE
-  currentMembershipYear   Int?      
-  membershipPaidAt        DateTime?
-  membershipExpiresAt     DateTime?
-  membershipAmountPaid    Decimal?  @db.Decimal(10, 2)
+  membershipStatus      MembershipStatus @default(ACTIVE) // ACTIVE, EXPIRED, PENDING, INACTIVE
+  currentMembershipYear Int?
+  membershipPaidAt      DateTime?
+  membershipExpiresAt   DateTime?
+  membershipAmountPaid  Decimal?         @db.Decimal(10, 2)
 
-   // LifeLink Fields (NEW)
-  bloodGroup              BloodGroup?
-  isBloodDonor            Boolean     @default(false)
-  lastBloodDonationDate   DateTime?
-  totalBloodDonations     Int         @default(0)
+  // LifeLink Fields (NEW)
+  bloodGroup            BloodGroup?
+  isBloodDonor          Boolean     @default(false)
+  lastBloodDonationDate DateTime?
+  totalBloodDonations   Int         @default(0) // Count of donation events
+  totalUnitsDonated     Int         @default(0) // Total units donated
 
-  
   // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  lastLoginAt       DateTime?
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
   // Relations
-  posts             Post[]
-  comments          Comment[]
-  likes             Like[]
-  commentLikes      CommentLike[]
-  transactions      Transaction[]
-  notifications     Notification[]
-  activityLogs      ActivityLog[]
-  auditLogs         AuditLog[] @relation("AuditActor")
-  batchAdminOf      Batch[] @relation("BatchAdmin")
-  photoUploads      Photo[]
-  albumsCreated     Album[] @relation("AlbumCreator")
-  educationHistory  UserEducation[]
-  workHistory       UserWorkExperience[]
-  batch_            Batch   @relation("BatchMembers", fields: [batch], references: [year])
-  addresses         UserAddress[]
+  posts            Post[]
+  comments         Comment[]
+  likes            Like[]
+  commentLikes     CommentLike[]
+  transactions     Transaction[]
+  notifications    Notification[]
+  activityLogs     ActivityLog[]
+  auditLogs        AuditLog[]           @relation("AuditActor")
+  batchAdminOf     Batch[]              @relation("BatchAdmin")
+  photoUploads     Photo[]
+  albumsCreated    Album[]              @relation("AlbumCreator")
+  educationHistory UserEducation[]
+  workHistory      UserWorkExperience[]
+  batch_           Batch                @relation("BatchMembers", fields: [batch], references: [year])
+  addresses        UserAddress[]
 
   // Batch Collection Relation
-  batchCollectionsCreated BatchEventCollection[] @relation("BatchCollectionCreator")
+  batchCollectionsCreated  BatchEventCollection[] @relation("BatchCollectionCreator")
   batchCollectionsApproved BatchEventCollection[] @relation("BatchCollectionApprover")
-  batchAdminPayments      BatchAdminPayment[] @relation("BatchPaymentAdmin")
-
+  batchAdminPayments       BatchAdminPayment[]    @relation("BatchPaymentAdmin")
 
   // NEW MEMBERSHIP RELATIONS (Add these to existing User model relations)
-  batchMembershipSettings BatchMembershipSettings[] @relation("BatchMembershipCreator")
+  batchMembershipSettings  BatchMembershipSettings[]  @relation("BatchMembershipCreator")
   globalMembershipSettings GlobalMembershipSettings[] @relation("GlobalMembershipCreator")
-  batchAdminAssignments   BatchAdminAssignment[]    @relation("BatchAdminAssignments")
-  assignedBatchAdmins     BatchAdminAssignment[]    @relation("BatchAdminAssigner")
-  
+  batchAdminAssignments    BatchAdminAssignment[]     @relation("BatchAdminAssignments")
+  assignedBatchAdmins      BatchAdminAssignment[]     @relation("BatchAdminAssigner")
+
   // Event Relations
-  eventRegistrations    EventRegistration[]
-  eventsCreated         Event[] @relation("EventCreator") 
-  feedbackResponses     EventFeedbackResponse[]
-  feedbackReminders     EventFeedbackReminder[] @relation("FeedbackReminders")
+  eventRegistrations EventRegistration[]
+  eventsCreated      Event[]                 @relation("EventCreator")
+  feedbackResponses  EventFeedbackResponse[]
+  feedbackReminders  EventFeedbackReminder[] @relation("FeedbackReminders")
 
   // Approval relations (reverse side)
-  approvedPosts     Post[]  @relation("PostApprover")
+  approvedPosts        Post[]        @relation("PostApprover")
   approvedTransactions Transaction[] @relation("TransactionApprover")
 
   // Payment relation
-  paymentTransactions      PaymentTransaction[]
+  paymentTransactions PaymentTransaction[]
 
   // CheckIn And Delivery Relations
-  checkInsProcessed   EventCheckIn[]      @relation("CheckInStaff")
+  checkInsProcessed   EventCheckIn[]        @relation("CheckInStaff")
   deliveriesProcessed MerchandiseDelivery[] @relation("DeliveryStaff")
 
-   // Treasury Relations 
-  yearlyBalancesCreated    YearlyBalance[]     @relation("YearlyBalanceCreator")
-  expensesCreated          Expense[]           @relation("ExpenseCreator") 
-  expensesApproved         Expense[]           @relation("ExpenseApprover")
-  collectionsCreated       ManualCollection[]  @relation("CollectionCreator")
-  collectionsVerified      ManualCollection[]  @relation("CollectionVerifier")
-  accountBalancesUpdated   AccountBalance[]    @relation("BalanceUpdater")
+  // Treasury Relations 
+  yearlyBalancesCreated  YearlyBalance[]    @relation("YearlyBalanceCreator")
+  expensesCreated        Expense[]          @relation("ExpenseCreator")
+  expensesApproved       Expense[]          @relation("ExpenseApprover")
+  collectionsCreated     ManualCollection[] @relation("CollectionCreator")
+  collectionsVerified    ManualCollection[] @relation("CollectionVerifier")
+  accountBalancesUpdated AccountBalance[]   @relation("BalanceUpdater")
 
   // Poll relations
-  createdPolls    Poll[]       @relation("PollCreator")
-  pollVotes       PollVote[]
+  createdPolls Poll[]     @relation("PollCreator")
+  pollVotes    PollVote[]
 
   // LifeLink Relations (NEW)
   donationHistory    BloodDonation[]     @relation("DonorHistory")
-  bloodRequisitions  BloodRequisition[]  @relation("RequesterHistory") 
+  bloodRequisitions  BloodRequisition[]  @relation("RequesterHistory")
   donorNotifications DonorNotification[]
   donorResponses     DonorResponse[]
 
-  createdTemplates    TicketTemplate[]      @relation("CreatedTemplates")
-  savedFilters        TicketSavedFilter[]   @relation("SavedTicketFilters")
-  bulkOperations      TicketBulkOperation[] @relation("PerformedBulkOps")
-  searchHistory       TicketSearchHistory[] @relation("SearchHistory")
-  quickActions        TicketQuickAction[]   @relation("QuickActions")
+  createdTemplates TicketTemplate[]      @relation("CreatedTemplates")
+  savedFilters     TicketSavedFilter[]   @relation("SavedTicketFilters")
+  bulkOperations   TicketBulkOperation[] @relation("PerformedBulkOps")
+  searchHistory    TicketSearchHistory[] @relation("SearchHistory")
+  quickActions     TicketQuickAction[]   @relation("QuickActions")
 
   // Separate Merchandise Relation
-  merchandiseCreated     Merchandise[] @relation("MerchandiseCreator")
-  merchandiseOrders      MerchandiseOrder[] @relation("MerchandiseOrders")  
-  merchandiseCart        MerchandiseCartItem[] @relation("MerchandiseCart")
+  merchandiseCreated Merchandise[]         @relation("MerchandiseCreator")
+  merchandiseOrders  MerchandiseOrder[]    @relation("MerchandiseOrders")
+  merchandiseCart    MerchandiseCartItem[] @relation("MerchandiseCart")
 
-  
   createdGroups     OrganizationGroup[] @relation("GroupCreator")
   groupMemberships  GroupMember[]
   addedGroupMembers GroupMember[]       @relation("GroupMemberAdder")
 
-
-  createdSponsors  Sponsor[]  @relation("SponsorCreator")
+  createdSponsors Sponsor[] @relation("SponsorCreator")
 
   // NEW TICKET RELATIONS (ADD THESE TO EXISTING USER MODEL)
-  
+
   // User's own tickets
-  tickets              Ticket[]               @relation("UserTickets")
-  
+  tickets Ticket[] @relation("UserTickets")
+
   // Tickets assigned to this admin
-  assignedTickets      Ticket[]               @relation("AssignedTickets")
-  
+  assignedTickets Ticket[] @relation("AssignedTickets")
+
   // Tickets resolved by this admin (might be different from assigned)
-  resolvedTickets      Ticket[]               @relation("ResolvedTickets") 
-  
+  resolvedTickets Ticket[] @relation("ResolvedTickets")
+
   // Messages sent by this user (in any tickets)
-  ticketMessages       TicketMessage[]        @relation("TicketMessages")
-  
+  ticketMessages TicketMessage[] @relation("TicketMessages")
+
   // Files uploaded by this user
-  ticketAttachments    TicketAttachment[]     @relation("TicketAttachments")
+  ticketAttachments TicketAttachment[] @relation("TicketAttachments")
 
   // Alumni verification relations
-  verificationsGiven    User[]    @relation("AlumniVerifications")
-  rejectionsGiven       User[]    @relation("AlumniRejections")
-  
-  // Organization updates
-  organizationUpdates   Organization[] @relation("OrgUpdates")
-  
-  // Blacklist management
-  blacklistedEmails        BlacklistedEmail[]  @relation("EmailBlacklist")
-  emailBlacklistRemovals   BlacklistedEmail[]  @relation("EmailBlacklistRemovals")
-  
-  // Enhanced notification relations
-  relatedNotifications     Notification[]      @relation("NotificationRelatedUser")
+  verificationsGiven User[] @relation("AlumniVerifications")
+  rejectionsGiven    User[] @relation("AlumniRejections")
 
-   messageReactions    TicketMessageReaction[]  @relation("MessageReactions")
-  messageEdits        TicketMessageEdit[]      @relation("MessageEdits")
-  messageDrafts       TicketMessageDraft[]     @relation("MessageDrafts")
-  auditLogsPerformed  TicketAuditLog[]         @relation("PerformedAudits")
-  
+  // Organization updates
+  organizationUpdates Organization[] @relation("OrgUpdates")
+
+  // Blacklist management
+  blacklistedEmails      BlacklistedEmail[] @relation("EmailBlacklist")
+  emailBlacklistRemovals BlacklistedEmail[] @relation("EmailBlacklistRemovals")
+
+  // Enhanced notification relations
+  relatedNotifications Notification[] @relation("NotificationRelatedUser")
+
+  messageReactions   TicketMessageReaction[] @relation("MessageReactions")
+  messageEdits       TicketMessageEdit[]     @relation("MessageEdits")
+  messageDrafts      TicketMessageDraft[]    @relation("MessageDrafts")
+  auditLogsPerformed TicketAuditLog[]        @relation("PerformedAudits")
+
   @@index([batch])
   @@index([fullName])
   @@index([employmentStatus])
   @@index([isActive, isProfilePublic])
   @@index([admissionYear])
-  @@index([passoutYear]) 
+  @@index([passoutYear])
   @@index([isAlumniVerified])
   @@index([pendingVerification])
   @@index([serialId])
@@ -283,22 +280,22 @@ model User {
 // ==========================================
 
 model BlacklistedEmail {
-  id              String    @id @default(cuid())
-  email           String    @unique @db.VarChar(255)
-  reason          String?   @db.Text
-  
+  id     String  @id @default(cuid())
+  email  String  @unique @db.VarChar(255)
+  reason String? @db.Text
+
   // Blacklist Information
-  blacklistedBy   String    // Admin who blacklisted
+  blacklistedBy    String // Admin who blacklisted
   blacklistedAdmin User     @relation("EmailBlacklist", fields: [blacklistedBy], references: [id])
-  blacklistedAt   DateTime  @default(now())
-  
+  blacklistedAt    DateTime @default(now())
+
   // For potential removal
-  isActive        Boolean   @default(true)
-  removedBy       String?   // Admin who removed from blacklist
-  removedAdmin    User?     @relation("EmailBlacklistRemovals", fields: [removedBy], references: [id])
-  removedAt       DateTime?
-  removedReason   String?   @db.Text
-  
+  isActive      Boolean   @default(true)
+  removedBy     String? // Admin who removed from blacklist
+  removedAdmin  User?     @relation("EmailBlacklistRemovals", fields: [removedBy], references: [id])
+  removedAt     DateTime?
+  removedReason String?   @db.Text
+
   @@index([email])
   @@index([isActive])
   @@index([blacklistedAt])
@@ -306,44 +303,44 @@ model BlacklistedEmail {
 }
 
 model UserAddress {
-  id            String      @id @default(cuid())
-  addressLine1  String
-  addressLine2  String?
-  city          String
-  district      String?
-  state         String
-  postalCode    String
-  country       String      @default("India")
-  addressType   AddressType
-  
+  id           String      @id @default(cuid())
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  district     String?
+  state        String
+  postalCode   String
+  country      String      @default("India")
+  addressType  AddressType
+
   // Relations
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, addressType])
   @@map("user_addresses")
 }
 
 model UserEducation {
-  id            String   @id @default(cuid())
-  course        String   // e.g., "XII", "B.Tech", "MBA"
-  stream        String?  // e.g., "PCMB", "Computer Science", "Finance"
-  institution   String   // School/College/University name
-  fromYear      Int
-  toYear        Int?     // null for ongoing
-  isOngoing     Boolean  @default(false)
-  description   String?  // Additional details
-  
+  id          String  @id @default(cuid())
+  course      String // e.g., "XII", "B.Tech", "MBA"
+  stream      String? // e.g., "PCMB", "Computer Science", "Finance"
+  institution String // School/College/University name
+  fromYear    Int
+  toYear      Int? // null for ongoing
+  isOngoing   Boolean @default(false)
+  description String? // Additional details
+
   // Relations
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([institution])
   @@index([fromYear, toYear])
@@ -351,23 +348,23 @@ model UserEducation {
 }
 
 model UserWorkExperience {
-  id            String      @id @default(cuid())
-  companyName   String
-  jobRole       String
-  companyType   CompanyType?
-  workAddress   String?
-  fromYear      Int
-  toYear        Int?        // null for current job
-  isCurrentJob  Boolean     @default(false)
-  description   String?     // Job responsibilities, achievements
-  
+  id           String       @id @default(cuid())
+  companyName  String
+  jobRole      String
+  companyType  CompanyType?
+  workAddress  String?
+  fromYear     Int
+  toYear       Int? // null for current job
+  isCurrentJob Boolean      @default(false)
+  description  String? // Job responsibilities, achievements
+
   // Relations
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([companyName])
   @@index([fromYear, toYear])
@@ -375,38 +372,38 @@ model UserWorkExperience {
 }
 
 model Batch {
-  id          String @id @default(cuid())
-  year        Int    @unique
+  id          String  @id @default(cuid())
+  year        Int     @unique
   name        String // e.g., "Class of 2020"
   description String?
-  
+
   // Batch Statistics
-  totalMembers Int   @default(0)
-  
+  totalMembers Int @default(0)
+
   // Batch Admins (2 per batch: 1 boy + 1 girl)
-  admins      User[] @relation("BatchAdmin")
-  
+  admins User[] @relation("BatchAdmin")
+
   // All members of this batch
-  members     User[] @relation("BatchMembers")
+  members User[] @relation("BatchMembers")
 
-  membershipSettings      BatchMembershipSettings[]
-  adminAssignments        BatchAdminAssignment[]   @relation("BatchAdminAssignments")
+  membershipSettings BatchMembershipSettings[]
+  adminAssignments   BatchAdminAssignment[]    @relation("BatchAdminAssignments")
 
-  batchCollections        BatchEventCollection[] @relation("BatchCollections")
+  batchCollections BatchEventCollection[] @relation("BatchCollections")
 
   // Year ranges for 7-year batch system
-  admissionYear    Int?      // Start year (e.g., 2009 for 2009-16)
-  passoutYear      Int?      // End year (e.g., 2016 for 2009-16) - should match 'year'
-  
+  admissionYear Int? // Start year (e.g., 2009 for 2009-16)
+  passoutYear   Int? // End year (e.g., 2016 for 2009-16) - should match 'year'
+
   // Enhanced batch information
-  batchDisplayName String?   // "2009-16 Batch" or "Class of 2009-16" 
-  
+  batchDisplayName String? // "2009-16 Batch" or "Class of 2009-16" 
+
   // Serial ID generation tracking
-  lastSerialCounter Int     @default(0) // Last used counter for this batch
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  lastSerialCounter Int @default(0) // Last used counter for this batch
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([year])
   @@index([admissionYear])
   @@index([passoutYear])
@@ -414,21 +411,21 @@ model Batch {
 }
 
 model BatchMembershipSettings {
-  id              String   @id @default(cuid())
-  batchYear       Int      
-  batch           Batch    @relation(fields: [batchYear], references: [year], onDelete: Cascade)
-  membershipFee   Decimal  @db.Decimal(10, 2)
-  membershipYear  Int      
-  isActive        Boolean  @default(true)
-  description     String?
-  
+  id             String  @id @default(cuid())
+  batchYear      Int
+  batch          Batch   @relation(fields: [batchYear], references: [year], onDelete: Cascade)
+  membershipFee  Decimal @db.Decimal(10, 2)
+  membershipYear Int
+  isActive       Boolean @default(true)
+  description    String?
+
   // Admin tracking
-  createdBy       String
-  creator         User     @relation("BatchMembershipCreator", fields: [createdBy], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  createdBy String
+  creator   User   @relation("BatchMembershipCreator", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([batchYear, membershipYear])
   @@index([batchYear])
   @@index([membershipYear])
@@ -437,20 +434,20 @@ model BatchMembershipSettings {
 }
 
 model GlobalMembershipSettings {
-  id              String   @id @default(cuid())
-  membershipFee   Decimal  @db.Decimal(10, 2)
-  membershipYear  Int      
-  isActive        Boolean  @default(false)
-  applyToAll      Boolean  @default(false)
-  description     String?
-  
+  id             String  @id @default(cuid())
+  membershipFee  Decimal @db.Decimal(10, 2)
+  membershipYear Int
+  isActive       Boolean @default(false)
+  applyToAll     Boolean @default(false)
+  description    String?
+
   // Admin tracking
-  createdBy       String
-  creator         User     @relation("GlobalMembershipCreator", fields: [createdBy], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  createdBy String
+  creator   User   @relation("GlobalMembershipCreator", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([membershipYear])
   @@index([membershipYear])
   @@index([isActive, applyToAll])
@@ -458,21 +455,21 @@ model GlobalMembershipSettings {
 }
 
 model BatchAdminAssignment {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation("BatchAdminAssignments", fields: [userId], references: [id], onDelete: Cascade)
-  batchYear   Int
-  batch       Batch    @relation("BatchAdminAssignments", fields: [batchYear], references: [year], onDelete: Cascade)
-  
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation("BatchAdminAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  batchYear Int
+  batch     Batch  @relation("BatchAdminAssignments", fields: [batchYear], references: [year], onDelete: Cascade)
+
   // Assignment tracking
-  assignedBy  String
-  assigner    User     @relation("BatchAdminAssigner", fields: [assignedBy], references: [id])
-  assignedAt  DateTime @default(now())
-  isActive    Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  assignedBy String
+  assigner   User     @relation("BatchAdminAssigner", fields: [assignedBy], references: [id])
+  assignedAt DateTime @default(now())
+  isActive   Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, batchYear])
   @@index([userId])
   @@index([batchYear])
@@ -480,20 +477,19 @@ model BatchAdminAssignment {
   @@map("batch_admin_assignments")
 }
 
-
 model Post {
-  id          String      @id @default(cuid())
-  title       String
-  body        String      // Rich text content
-  category    PostCategory
-  heroImage   String?
-  images      String[]    // Array of image URLs
-  tags        String[]    // Array of user IDs mentioned
-  allowComments Boolean @default(true)
-  allowLikes    Boolean @default(true)
-  isArchived  Boolean     @default(false)
-  isPublished Boolean     @default(true)
-  
+  id            String       @id @default(cuid())
+  title         String
+  body          String // Rich text content
+  category      PostCategory
+  heroImage     String?
+  images        String[] // Array of image URLs
+  tags          String[] // Array of user IDs mentioned
+  allowComments Boolean      @default(true)
+  allowLikes    Boolean      @default(true)
+  isArchived    Boolean      @default(false)
+  isPublished   Boolean      @default(true)
+
   // Reaction counts for instant access
   likeCount      Int @default(0)
   loveCount      Int @default(0)
@@ -504,21 +500,21 @@ model Post {
   angryCount     Int @default(0)
   sadCount       Int @default(0)
   totalReactions Int @default(0)
-  
+
   // Relations
-  createdBy   String
-  author      User        @relation(fields: [createdBy], references: [id])
-  approvedBy  String?
-  approver    User?       @relation("PostApprover", fields: [approvedBy], references: [id])
+  createdBy     String
+  author        User    @relation(fields: [createdBy], references: [id])
+  approvedBy    String?
+  approver      User?   @relation("PostApprover", fields: [approvedBy], references: [id])
   linkedEventId String?
-  linkedEvent Event?      @relation(fields: [linkedEventId], references: [id])
-  
-  comments    Comment[]
-  likes       Like[]
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
+  linkedEvent   Event?  @relation(fields: [linkedEventId], references: [id])
+
+  comments Comment[]
+  likes    Like[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([createdBy])
   @@index([category])
   @@index([isPublished, isArchived])
@@ -527,57 +523,57 @@ model Post {
 }
 
 model Comment {
-  id            String    @id @default(cuid())
-  content       String
-  isEdited      Boolean   @default(false)
-  
+  id       String  @id @default(cuid())
+  content  String
+  isEdited Boolean @default(false)
+
   // Relations
-  postId        String
-  post          Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  createdBy     String
-  author        User      @relation(fields: [createdBy], references: [id])
-  
+  postId    String
+  post      Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdBy String
+  author    User   @relation(fields: [createdBy], references: [id])
+
   // Nested replies
-  parentId      String?
-  parent        Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies       Comment[] @relation("CommentReplies")
-  
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
   // Reaction counts (for performance optimization)
-  likeCount     Int       @default(0)
-  loveCount     Int       @default(0)
-  celebrateCount Int      @default(0)
-  supportCount  Int       @default(0)
-  funnyCount    Int       @default(0)
-  wowCount      Int       @default(0)
-  angryCount    Int       @default(0)
-  sadCount      Int       @default(0)
-  totalReactions Int      @default(0)
-  
+  likeCount      Int @default(0)
+  loveCount      Int @default(0)
+  celebrateCount Int @default(0)
+  supportCount   Int @default(0)
+  funnyCount     Int @default(0)
+  wowCount       Int @default(0)
+  angryCount     Int @default(0)
+  sadCount       Int @default(0)
+  totalReactions Int @default(0)
+
   // Comment reactions
-  likes         CommentLike[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  likes CommentLike[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([postId])
   @@index([createdBy])
   @@map("comments")
 }
 
 model Like {
-  id        String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Relations
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
   // Reaction type (default to LIKE for backward compatibility)
   reactionType PostReactionType @default(LIKE)
-  
+
   createdAt DateTime @default(now())
-  
+
   @@unique([postId, userId, reactionType]) // One reaction type per user per post
   @@index([postId])
   @@index([userId])
@@ -585,19 +581,19 @@ model Like {
 }
 
 model CommentLike {
-  id        String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Relations
   commentId String
-  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  
+  user      User    @relation(fields: [userId], references: [id])
+
   // Reaction type (same types as posts)
   reactionType PostReactionType @default(LIKE)
-  
+
   createdAt DateTime @default(now())
-  
+
   @@unique([commentId, userId]) // Only one reaction per user per comment
   @@index([commentId])
   @@index([userId])
@@ -605,64 +601,64 @@ model CommentLike {
 }
 
 model Album {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
   description String?
   coverImage  String?
-  isArchived  Boolean  @default(false)
-  
+  isArchived  Boolean @default(false)
+
   // Relations
-  createdBy   String
-  creator     User     @relation("AlbumCreator", fields: [createdBy], references: [id])
-  photos      Photo[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  createdBy String
+  creator   User    @relation("AlbumCreator", fields: [createdBy], references: [id])
+  photos    Photo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([createdBy])
   @@map("albums")
 }
 
 model Photo {
-  id          String   @id @default(cuid())
-  url         String
-  caption     String?
-  tags        String[] // Array of user IDs
-  metadata    Json?    // Store EXIF data, file size, etc.
-  
+  id       String   @id @default(cuid())
+  url      String
+  caption  String?
+  tags     String[] // Array of user IDs
+  metadata Json? // Store EXIF data, file size, etc.
+
   // Relations
-  albumId     String?
-  album       Album?   @relation(fields: [albumId], references: [id])
-  uploadedBy  String
-  uploader    User     @relation(fields: [uploadedBy], references: [id])
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  albumId    String?
+  album      Album?  @relation(fields: [albumId], references: [id])
+  uploadedBy String
+  uploader   User    @relation(fields: [uploadedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([uploadedBy])
   @@index([albumId])
   @@map("photos")
 }
 
 model Transaction {
-  id            String           @id @default(cuid())
-  type          TransactionType
-  category      String           // e.g., "donation", "event_fee", "merchandise"
-  amount        Decimal          @db.Decimal(10, 2)
-  description   String
-  referenceId   String?          // External payment reference
-  receiptUrl    String?          // Upload receipt/invoice
-  status        TransactionStatus @default(PENDING)
-  
+  id          String            @id @default(cuid())
+  type        TransactionType
+  category    String // e.g., "donation", "event_fee", "merchandise"
+  amount      Decimal           @db.Decimal(10, 2)
+  description String
+  referenceId String? // External payment reference
+  receiptUrl  String? // Upload receipt/invoice
+  status      TransactionStatus @default(PENDING)
+
   // Relations
-  userId        String?
-  user          User?            @relation(fields: [userId], references: [id])
-  approvedBy    String?
-  approver      User?            @relation("TransactionApprover", fields: [approvedBy], references: [id])
-  
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  
+  userId     String?
+  user       User?   @relation(fields: [userId], references: [id])
+  approvedBy String?
+  approver   User?   @relation("TransactionApprover", fields: [approvedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([type, status])
   @@index([createdAt])
@@ -670,27 +666,27 @@ model Transaction {
 }
 
 model Notification {
-  id          String            @id @default(cuid())
-  type        NotificationType
-  title       String
-  message     String
-  payload     Json?             // Additional data for the notification
-  isRead      Boolean           @default(false)
-  
+  id      String           @id @default(cuid())
+  type    NotificationType
+  title   String
+  message String
+  payload Json? // Additional data for the notification
+  isRead  Boolean          @default(false)
+
   // Relations
-  userId      String
-  user        User              @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   // Enhanced for verification notifications
-  relatedUserId    String?   // User being verified/rejected
-  relatedUser      User?     @relation("NotificationRelatedUser", fields: [relatedUserId], references: [id])
-  
+  relatedUserId String? // User being verified/rejected
+  relatedUser   User?   @relation("NotificationRelatedUser", fields: [relatedUserId], references: [id])
+
   // Additional context for verification notifications
-  batchContext     Int?      // Batch year context for batch admin notifications
-  actionContext    String?   // Additional context (verification/rejection reason)
-  
-  createdAt   DateTime          @default(now())
-  
+  batchContext  Int? // Batch year context for batch admin notifications
+  actionContext String? // Additional context (verification/rejection reason)
+
+  createdAt DateTime @default(now())
+
   @@index([userId, isRead])
   @@index([createdAt])
   @@index([relatedUserId])
@@ -699,18 +695,18 @@ model Notification {
 }
 
 model ActivityLog {
-  id          String   @id @default(cuid())
-  action      String   // e.g., "login", "profile_update", "post_create"
-  details     Json?    // Additional context
-  ipAddress   String?
-  userAgent   String?
-  
+  id        String  @id @default(cuid())
+  action    String // e.g., "login", "profile_update", "post_create"
+  details   Json? // Additional context
+  ipAddress String?
+  userAgent String?
+
   // Relations
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  
-  createdAt   DateTime @default(now())
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([userId])
   @@index([action])
   @@index([createdAt])
@@ -718,20 +714,20 @@ model ActivityLog {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  action      String   // e.g., "user_deactivate", "transaction_approve"
-  entityType  String   // e.g., "User", "Transaction"
-  entityId    String
-  oldValues   Json?
-  newValues   Json?
-  reason      String?
-  
+  id         String  @id @default(cuid())
+  action     String // e.g., "user_deactivate", "transaction_approve"
+  entityType String // e.g., "User", "Transaction"
+  entityId   String
+  oldValues  Json?
+  newValues  Json?
+  reason     String?
+
   // Relations
-  actorId     String
-  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
-  
-  createdAt   DateTime @default(now())
-  
+  actorId String
+  actor   User   @relation("AuditActor", fields: [actorId], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
@@ -741,104 +737,104 @@ model AuditLog {
 // Event Schemas Below
 
 model EventCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique // "MEETINGS", "SOCIAL", "CULTURAL", "WORKSHOP"
+  id          String  @id @default(cuid())
+  name        String  @unique // "MEETINGS", "SOCIAL", "CULTURAL", "WORKSHOP"
   description String?
-  isActive    Boolean  @default(true)
-  
+  isActive    Boolean @default(true)
+
   // Relations
-  events      Event[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  events Event[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([name])
   @@index([isActive])
   @@map("event_categories")
 }
 
 model Event {
-  id                String      @id @default(cuid())
-  title             String
-  description       String      @db.Text
-  slug              String?     @unique // For SEO-friendly URLs
-  
+  id          String  @id @default(cuid())
+  title       String
+  description String  @db.Text
+  slug        String? @unique // For SEO-friendly URLs
+
   // Category and dates
-  categoryId        String
-  category          EventCategory @relation(fields: [categoryId], references: [id])
-  eventDate         DateTime
-  startTime         String?     // Store as "HH:MM" format
-  endTime           String?     // Store as "HH:MM" format
+  categoryId            String
+  category              EventCategory @relation(fields: [categoryId], references: [id])
+  eventDate             DateTime
+  startTime             String? // Store as "HH:MM" format
+  endTime               String? // Store as "HH:MM" format
   registrationStartDate DateTime?
   registrationEndDate   DateTime?
 
   defaultRegistrationMode RegistrationMode @default(INDIVIDUAL)
-  
+
   // Location and mode
-  venue             String?
-  meetingLink       String?
-  maxCapacity       Int?
-  eventMode         EventMode   @default(PHYSICAL)
-  
+  venue       String?
+  meetingLink String?
+  maxCapacity Int?
+  eventMode   EventMode @default(PHYSICAL)
+
   // Status
-  status            EventStatus @default(DRAFT)
-  
+  status EventStatus @default(DRAFT)
+
   // Feature flags
-  hasRegistration   Boolean     @default(true)
-  hasExternalLink   Boolean     @default(false)
+  hasRegistration          Boolean @default(true)
+  hasExternalLink          Boolean @default(false)
   externalRegistrationLink String?
-  hasCustomForm     Boolean     @default(false)
-  hasMeals          Boolean     @default(false)
-  hasGuests         Boolean     @default(false)
-  hasDonations      Boolean     @default(false)
-  hasMerchandise    Boolean     @default(false)
-  hasPrizes         Boolean     @default(false)
-  hasSponsors       Boolean     @default(false)
-  hasOrganizers     Boolean     @default(false)
-  
+  hasCustomForm            Boolean @default(false)
+  hasMeals                 Boolean @default(false)
+  hasGuests                Boolean @default(false)
+  hasDonations             Boolean @default(false)
+  hasMerchandise           Boolean @default(false)
+  hasPrizes                Boolean @default(false)
+  hasSponsors              Boolean @default(false)
+  hasOrganizers            Boolean @default(false)
+
   // Modification settings
-  allowFormModification Boolean  @default(true)
-  formModificationDeadlineHours Int @default(24)
-  
+  allowFormModification         Boolean @default(true)
+  formModificationDeadlineHours Int     @default(24)
+
   // Fee structure
-  registrationFee   Decimal     @default(0) @db.Decimal(10, 2)
-  guestFee          Decimal     @default(0) @db.Decimal(10, 2)
-  
+  registrationFee Decimal @default(0) @db.Decimal(10, 2)
+  guestFee        Decimal @default(0) @db.Decimal(10, 2)
+
   // Images and attachments
-  heroImage         String?
-  images            String[]    // Array of image URLs
-  
+  heroImage String?
+  images    String[] // Array of image URLs
+
   // Additional details
-  prizeDetails      String?     @db.Text
-  organizerDetails  String?     @db.Text
-  
+  prizeDetails     String? @db.Text
+  organizerDetails String? @db.Text
+
   // Relations
   createdBy         String
-  creator           User        @relation("EventCreator", fields: [createdBy], references: [id])
+  creator           User                    @relation("EventCreator", fields: [createdBy], references: [id])
   feedbackForm      EventFeedbackForm?
   feedbackAnalytics EventFeedbackAnalytics? @relation("FeedbackAnalytics")
   feedbackReminders EventFeedbackReminder[] @relation("FeedbackReminders")
-  analytics             EventAnalytics?
+  analytics         EventAnalytics?
 
   // Batch Collection Relation
-  batchCollections        BatchEventCollection[] @relation("EventBatchCollections")
+  batchCollections BatchEventCollection[] @relation("EventBatchCollections")
 
   // Treasury Relations (add to Event model)
-  expenses         Expense[]          @relation("ExpenseEvent")
+  expenses          Expense[]          @relation("ExpenseEvent")
   manualCollections ManualCollection[] @relation("CollectionEvent")
 
   // Dashboard Privacy
-  privacySettings       EventPrivacySettings?
-  
-  sections          EventSection[]
-  form              EventForm?
-  merchandise       EventMerchandise[]
-  registrations     EventRegistration[]
-  linkedPosts       Post[]      // Posts can be linked to events
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  
+  privacySettings EventPrivacySettings?
+
+  sections      EventSection[]
+  form          EventForm?
+  merchandise   EventMerchandise[]
+  registrations EventRegistration[]
+  linkedPosts   Post[] // Posts can be linked to events
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([categoryId])
   @@index([eventDate])
   @@index([status])
@@ -848,144 +844,143 @@ model Event {
 }
 
 model EventSection {
-  id          String            @id @default(cuid())
-  eventId     String
-  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   sectionType EventSectionType
   title       String
-  content     String            @db.Text
-  orderIndex  Int               @default(0)
-  isVisible   Boolean           @default(true)
-  
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  
+  content     String           @db.Text
+  orderIndex  Int              @default(0)
+  isVisible   Boolean          @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([eventId, orderIndex])
   @@index([sectionType])
   @@map("event_sections")
 }
 
 model EventForm {
-  id          String            @id @default(cuid())
-  eventId     String            @unique
-  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  title       String            @default("Registration Form")
-  description String?           @db.Text
-  isActive    Boolean           @default(true)
-  
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  title       String  @default("Registration Form")
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
   // Relations
-  fields      EventFormField[]
+  fields EventFormField[]
   // responses   EventFormResponse[]
-  
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("event_forms")
 }
 
 model EventFormField {
-  id          String            @id @default(cuid())
-  formId      String
-  form        EventForm         @relation(fields: [formId], references: [id], onDelete: Cascade)
-  
-  fieldName   String            // Unique within form
-  fieldLabel  String
-  fieldType   EventFormFieldType
-  options     Json?             // For SELECT, RADIO, CHECKBOX
-  isRequired  Boolean           @default(false)
-  orderIndex  Int               @default(0)
-  validation  Json?             // Custom validation rules
-  
+  id     String    @id @default(cuid())
+  formId String
+  form   EventForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  fieldName  String // Unique within form
+  fieldLabel String
+  fieldType  EventFormFieldType
+  options    Json? // For SELECT, RADIO, CHECKBOX
+  isRequired Boolean            @default(false)
+  orderIndex Int                @default(0)
+  validation Json? // Custom validation rules
+
   // Relations
-  responses   EventFormResponse[]
+  responses      EventFormResponse[]
   guestResponses EventGuestFormResponse[]
 
-  
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([formId, fieldName])
   @@index([formId, orderIndex])
   @@map("event_form_fields")
 }
 
 model EventMerchandise {
-  id              String                    @id @default(cuid())
-  eventId         String
-  event           Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  name            String
-  description     String?                   @db.Text
-  price           Decimal                   @db.Decimal(10, 2)
-  images          String[]                  // Array of image URLs
-  availableSizes  String[]                  // ["S", "M", "L", "XL", "XXL"]
-  stockQuantity   Int?
-  isActive        Boolean                   @default(true)
-  orderIndex      Int                       @default(0)
-  
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  name           String
+  description    String?  @db.Text
+  price          Decimal  @db.Decimal(10, 2)
+  images         String[] // Array of image URLs
+  availableSizes String[] // ["S", "M", "L", "XL", "XXL"]
+  stockQuantity  Int?
+  isActive       Boolean  @default(true)
+  orderIndex     Int      @default(0)
+
   // Relations
-  orders          EventMerchandiseOrder[]
-  
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  
+  orders EventMerchandiseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([eventId])
   @@index([isActive])
   @@map("event_merchandise")
 }
 
 model EventRegistration {
-  id                      String                    @id @default(cuid())
-  eventId                 String
-  event                   Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId                  String
-  user                    User                      @relation(fields: [userId], references: [id])
-  
-  registrationDate        DateTime                  @default(now())
-  status                  EventRegistrationStatus   @default(CONFIRMED)
-  
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+
+  registrationDate DateTime                @default(now())
+  status           EventRegistrationStatus @default(CONFIRMED)
+
   // Payment information
-  totalAmount             Decimal                   @default(0) @db.Decimal(10, 2)
-  registrationFeePaid     Decimal                   @default(0) @db.Decimal(10, 2)
-  guestFeesPaid           Decimal                   @default(0) @db.Decimal(10, 2)
-  merchandiseTotal        Decimal                   @default(0) @db.Decimal(10, 2)
-  donationAmount          Decimal                   @default(0) @db.Decimal(10, 2)
-  cancelledTodonation     Decimal                   @default(0) @db.Decimal(10, 2)
-  paymentReference        String?
-  
+  totalAmount         Decimal @default(0) @db.Decimal(10, 2)
+  registrationFeePaid Decimal @default(0) @db.Decimal(10, 2)
+  guestFeesPaid       Decimal @default(0) @db.Decimal(10, 2)
+  merchandiseTotal    Decimal @default(0) @db.Decimal(10, 2)
+  donationAmount      Decimal @default(0) @db.Decimal(10, 2)
+  cancelledTodonation Decimal @default(0) @db.Decimal(10, 2)
+  paymentReference    String?
+
   // Meal preferences
-  mealPreference          MealPreference?
-  
+  mealPreference MealPreference?
+
   // Guest information
-  totalGuests             Int                       @default(0)
-  activeGuests            Int                       @default(0)
-  
+  totalGuests  Int @default(0)
+  activeGuests Int @default(0)
+
   // Modification tracking
-  lastModifiedAt          DateTime?
-  modificationCount       Int                       @default(0)
+  lastModifiedAt    DateTime?
+  modificationCount Int       @default(0)
 
-   // Payment Information (Enhanced)
-  paymentStatus       PaymentStatus       @default(PENDING)
-  paymentTransactionId String?            
-  paymentTransaction  PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
-  
+  // Payment Information (Enhanced)
+  paymentStatus        PaymentStatus       @default(PENDING)
+  paymentTransactionId String?
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+
   // Payment Amounts (For quick reference)
-  totalAmountPaid     Decimal             @default(0) @db.Decimal(10, 2)
-  lastPaymentAt       DateTime?
-  
-  // Relations
-  guests                  EventGuest[]
-  formResponses           EventFormResponse[]
-  merchandiseOrders       EventMerchandiseOrder[]
+  totalAmountPaid Decimal   @default(0) @db.Decimal(10, 2)
+  lastPaymentAt   DateTime?
 
-  qr              RegistrationQR?
-  checkIns        EventCheckIn[]
-  
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  
+  // Relations
+  guests            EventGuest[]
+  formResponses     EventFormResponse[]
+  merchandiseOrders EventMerchandiseOrder[]
+
+  qr       RegistrationQR?
+  checkIns EventCheckIn[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
@@ -995,168 +990,168 @@ model EventRegistration {
 }
 
 model EventGuest {
-  id              String                    @id @default(cuid())
-  registrationId  String
-  registration    EventRegistration         @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  
-  name            String
-  email           String?
-  phone           String?
-  mealPreference  MealPreference?
-  feesPaid        Decimal                   @default(0) @db.Decimal(10, 2)
-  status          GuestStatus               @default(ACTIVE)
-  
+  id             String            @id @default(cuid())
+  registrationId String
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  name           String
+  email          String?
+  phone          String?
+  mealPreference MealPreference?
+  feesPaid       Decimal         @default(0) @db.Decimal(10, 2)
+  status         GuestStatus     @default(ACTIVE)
+
   // Relations
-  formResponses   EventGuestFormResponse[]
-  
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  
+  formResponses EventGuestFormResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([registrationId])
   @@index([status])
   @@map("event_guests")
 }
 
 model EventFormResponse {
-  id              String            @id @default(cuid())
-  registrationId  String
-  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  fieldId         String
-  field           EventFormField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  
-  response        String            @db.Text
-  version         Int               @default(1) // For modification tracking
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
+  id             String            @id @default(cuid())
+  registrationId String
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  fieldId        String
+  field          EventFormField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  response String @db.Text
+  version  Int    @default(1) // For modification tracking
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([registrationId, fieldId])
   @@index([registrationId])
   @@map("event_form_responses")
 }
 
 model EventMerchandiseOrder {
-  id              String                @id @default(cuid())
-  registrationId  String
-  registration    EventRegistration     @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  merchandiseId   String
-  merchandise     EventMerchandise      @relation(fields: [merchandiseId], references: [id], onDelete: Cascade)
-  
-  quantity        Int
-  selectedSize    String?
-  unitPrice       Decimal               @db.Decimal(10, 2)
-  totalPrice      Decimal               @db.Decimal(10, 2)
+  id             String            @id @default(cuid())
+  registrationId String
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  merchandiseId  String
+  merchandise    EventMerchandise  @relation(fields: [merchandiseId], references: [id], onDelete: Cascade)
+
+  quantity     Int
+  selectedSize String?
+  unitPrice    Decimal @db.Decimal(10, 2)
+  totalPrice   Decimal @db.Decimal(10, 2)
 
   // Payment Information
-  paymentStatus       PaymentStatus       @default(PENDING)
-  paymentTransactionId String?           
-  paymentTransaction  PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+  paymentStatus        PaymentStatus       @default(PENDING)
+  paymentTransactionId String?
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
 
-  delivery        MerchandiseDelivery?
-  
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  
+  delivery MerchandiseDelivery?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([registrationId])
   @@index([merchandiseId])
   @@map("event_merchandise_orders")
 }
 
 model EventGuestFormResponse {
-  id          String          @id @default(cuid())
-  guestId     String
-  guest       EventGuest      @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  fieldId     String
-  field       EventFormField  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  
-  response    String          @db.Text
-  
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  
+  id      String         @id @default(cuid())
+  guestId String
+  guest   EventGuest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  fieldId String
+  field   EventFormField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  response String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([guestId, fieldId])
   @@map("event_guest_form_responses")
 }
 
 model EventFeedbackForm {
-  id          String                    @id @default(cuid())
-  eventId     String                    @unique
-  event       Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  title       String                    @default("Event Feedback")
-  description String?                   @db.Text
-  isActive    Boolean                   @default(true)
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  allowAnonymous        Boolean          @default(true)
-  showAfterEvent        Boolean          @default(true)
-  autoSendReminders     Boolean          @default(false)
-  reminderDelayHours    Int             @default(24)
-  closeAfterHours       Int             @default(168) // 7 days
-  completionMessage     String          @default("Thank you for your feedback!")
-  
+  title       String  @default("Event Feedback")
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
+  allowAnonymous     Boolean @default(true)
+  showAfterEvent     Boolean @default(true)
+  autoSendReminders  Boolean @default(false)
+  reminderDelayHours Int     @default(24)
+  closeAfterHours    Int     @default(168) // 7 days
+  completionMessage  String  @default("Thank you for your feedback!")
+
   // Relations
-  fields      EventFeedbackField[]
-  responses   EventFeedbackResponse[]
-  analytics   EventFeedbackAnalytics? // 🆕 New relation
-  reminders   EventFeedbackReminder[] // 🆕 New relation
-  
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-  
+  fields    EventFeedbackField[]
+  responses EventFeedbackResponse[]
+  analytics EventFeedbackAnalytics? // 🆕 New relation
+  reminders EventFeedbackReminder[] // 🆕 New relation
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("event_feedback_forms")
 }
 
 model EventFeedbackField {
-  id                String                    @id @default(cuid())
-  feedbackFormId    String
-  feedbackForm      EventFeedbackForm         @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
-  
-  fieldName         String
-  fieldLabel        String
-  fieldType         EventFormFieldType
-  options           Json?
-  isRequired        Boolean                   @default(false)
-  orderIndex        Int                       @default(0)
+  id             String            @id @default(cuid())
+  feedbackFormId String
+  feedbackForm   EventFeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
 
-  minValue          Int?
-  maxValue          Int?
-  stepValue         Int?                      @default(1)
-  ratingStyle       String?                   @default("stars") // stars, numbers, emoji
-  placeholder       String?
-  helpText          String?
-  
+  fieldName  String
+  fieldLabel String
+  fieldType  EventFormFieldType
+  options    Json?
+  isRequired Boolean            @default(false)
+  orderIndex Int                @default(0)
+
+  minValue    Int?
+  maxValue    Int?
+  stepValue   Int?    @default(1)
+  ratingStyle String? @default("stars") // stars, numbers, emoji
+  placeholder String?
+  helpText    String?
+
   // Relations
-  responses         EventFeedbackResponse[]
-  
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
-  
+  responses EventFeedbackResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([feedbackFormId, fieldName])
   @@index([feedbackFormId, orderIndex])
   @@map("event_feedback_fields")
 }
 
 model EventFeedbackResponse {
-  id                String                @id @default(cuid())
-  feedbackFormId    String
-  feedbackForm      EventFeedbackForm     @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
-  userId            String?
-  user              User?                  @relation(fields: [userId], references: [id])
-  fieldId           String
-  field             EventFeedbackField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)  // Make sure this line exists
-  
-  response          String                @db.Text
+  id             String             @id @default(cuid())
+  feedbackFormId String
+  feedbackForm   EventFeedbackForm  @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?              @relation(fields: [userId], references: [id])
+  fieldId        String
+  field          EventFeedbackField @relation(fields: [fieldId], references: [id], onDelete: Cascade) // Make sure this line exists
 
-  status            FeedbackResponseStatus @default(SUBMITTED)
-  isAnonymous       Boolean               @default(false)
-  sentimentScore    SentimentScore?
-  ipAddress         String?
-  userAgent         String?
-  submittedAt       DateTime?
-  
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  
+  response String @db.Text
+
+  status         FeedbackResponseStatus @default(SUBMITTED)
+  isAnonymous    Boolean                @default(false)
+  sentimentScore SentimentScore?
+  ipAddress      String?
+  userAgent      String?
+  submittedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // 🆕 Updated unique constraint to handle anonymous responses
   @@unique([feedbackFormId, userId, fieldId], name: "unique_identified_response")
   @@index([feedbackFormId])
@@ -1167,45 +1162,45 @@ model EventFeedbackResponse {
 }
 
 model EventFeedbackAnalytics {
-  id              String            @id @default(cuid())
-  feedbackFormId  String            @unique
-  feedbackForm    EventFeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
-  eventId         String             @unique
-  event           Event             @relation("FeedbackAnalytics", fields: [eventId], references: [id], onDelete: Cascade)
-  
+  id             String            @id @default(cuid())
+  feedbackFormId String            @unique
+  feedbackForm   EventFeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  eventId        String            @unique
+  event          Event             @relation("FeedbackAnalytics", fields: [eventId], references: [id], onDelete: Cascade)
+
   // Response Statistics
-  totalResponses      Int             @default(0)
-  anonymousResponses  Int             @default(0)
-  identifiedResponses Int             @default(0)
-  completionRate      Decimal         @default(0) @db.Decimal(5,2)
-  
+  totalResponses      Int     @default(0)
+  anonymousResponses  Int     @default(0)
+  identifiedResponses Int     @default(0)
+  completionRate      Decimal @default(0) @db.Decimal(5, 2)
+
   // Sentiment Analytics
-  avgSentimentScore     Decimal?        @db.Decimal(3,2)
-  sentimentDistribution Json            @default("{}")
-  
+  avgSentimentScore     Decimal? @db.Decimal(3, 2)
+  sentimentDistribution Json     @default("{}")
+
   // Rating Analytics
-  avgRating             Decimal?        @db.Decimal(3,2)
-  ratingDistribution    Json            @default("{}")
-  
+  avgRating          Decimal? @db.Decimal(3, 2)
+  ratingDistribution Json     @default("{}")
+
   // Response Time Analytics
-  avgResponseTime       Int?
-  fastestResponse       Int?
-  slowestResponse       Int?
-  
+  avgResponseTime Int?
+  fastestResponse Int?
+  slowestResponse Int?
+
   // Engagement Analytics
-  responsesByHour       Json            @default("{}")
-  responsesByDay        Json            @default("{}")
-  
+  responsesByHour Json @default("{}")
+  responsesByDay  Json @default("{}")
+
   // Field Analytics
-  fieldAnalytics        Json            @default("{}")
-  
+  fieldAnalytics Json @default("{}")
+
   // Cache Management
-  lastCalculatedAt      DateTime        @default(now())
-  isStale               Boolean         @default(false)
-  
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  
+  lastCalculatedAt DateTime @default(now())
+  isStale          Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([eventId])
   @@index([lastCalculatedAt])
   @@index([isStale])
@@ -1213,26 +1208,26 @@ model EventFeedbackAnalytics {
 }
 
 model EventFeedbackReminder {
-  id              String                @id @default(cuid())
-  feedbackFormId  String
-  feedbackForm    EventFeedbackForm     @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User                  @relation("FeedbackReminders", fields: [userId], references: [id], onDelete: Cascade)
-  eventId         String
-  event           Event                 @relation("FeedbackReminders", fields: [eventId], references: [id], onDelete: Cascade)
-  
-  reminderType    String                @default("initial") // initial, followup
-  scheduledAt     DateTime
-  sentAt          DateTime?
-  isCompleted     Boolean               @default(false)
-  attempts        Int                   @default(0)
-  
-  emailSent       Boolean               @default(false)
-  pushSent        Boolean               @default(false)
-  
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  
+  id             String            @id @default(cuid())
+  feedbackFormId String
+  feedbackForm   EventFeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User              @relation("FeedbackReminders", fields: [userId], references: [id], onDelete: Cascade)
+  eventId        String
+  event          Event             @relation("FeedbackReminders", fields: [eventId], references: [id], onDelete: Cascade)
+
+  reminderType String    @default("initial") // initial, followup
+  scheduledAt  DateTime
+  sentAt       DateTime?
+  isCompleted  Boolean   @default(false)
+  attempts     Int       @default(0)
+
+  emailSent Boolean @default(false)
+  pushSent  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([feedbackFormId, userId, reminderType], name: "unique_user_reminder")
   @@index([feedbackFormId])
   @@index([userId])
@@ -1240,33 +1235,34 @@ model EventFeedbackReminder {
   @@index([isCompleted])
   @@map("event_feedback_reminders")
 }
+
 // ===============================================
 // BATCH MODE COLLECTION
 // ===============================================
 
 model BatchEventCollection {
-  id                String   @id @default(cuid())
+  id               String    @id @default(cuid())
   eventId          String
   batchYear        Int
-  targetAmount     Decimal  @db.Decimal(10, 2)
-  collectedAmount  Decimal  @default(0) @db.Decimal(10, 2)
-  isTargetMet      Boolean  @default(false)
-  isApproved       Boolean  @default(false)
+  targetAmount     Decimal   @db.Decimal(10, 2)
+  collectedAmount  Decimal   @default(0) @db.Decimal(10, 2)
+  isTargetMet      Boolean   @default(false)
+  isApproved       Boolean   @default(false)
   approvedBy       String?
   approvedAt       DateTime?
-  registrationMode String   @default("BATCH_COLLECTION")
-  status           String   @default("ACTIVE")
+  registrationMode String    @default("BATCH_COLLECTION")
+  status           String    @default("ACTIVE")
   description      String?
   createdBy        String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Relations
-  event            Event     @relation("EventBatchCollections", fields: [eventId], references: [id], onDelete: Cascade)
-  batch            Batch     @relation("BatchCollections", fields: [batchYear], references: [year])
-  creator          User      @relation("BatchCollectionCreator", fields: [createdBy], references: [id])
-  approver         User?     @relation("BatchCollectionApprover", fields: [approvedBy], references: [id])
-  payments         BatchAdminPayment[]
+  event    Event               @relation("EventBatchCollections", fields: [eventId], references: [id], onDelete: Cascade)
+  batch    Batch               @relation("BatchCollections", fields: [batchYear], references: [year])
+  creator  User                @relation("BatchCollectionCreator", fields: [createdBy], references: [id])
+  approver User?               @relation("BatchCollectionApprover", fields: [approvedBy], references: [id])
+  payments BatchAdminPayment[]
 
   @@unique([eventId, batchYear])
   @@index([eventId])
@@ -1276,8 +1272,8 @@ model BatchEventCollection {
 }
 
 model BatchAdminPayment {
-  id                    String    @id @default(cuid())
-  batchCollectionId     String
+  id                   String    @id @default(cuid())
+  batchCollectionId    String
   paidByAdmin          String
   amount               Decimal   @db.Decimal(10, 2)
   paymentTransactionId String?
@@ -1288,9 +1284,9 @@ model BatchAdminPayment {
   updatedAt            DateTime  @updatedAt
 
   // Relations
-  batchCollection      BatchEventCollection @relation(fields: [batchCollectionId], references: [id], onDelete: Cascade)
-  admin                User                 @relation("BatchPaymentAdmin", fields: [paidByAdmin], references: [id])
-  paymentTransaction   PaymentTransaction?  @relation("BatchAdminPayments", fields: [paymentTransactionId], references: [id])
+  batchCollection    BatchEventCollection @relation(fields: [batchCollectionId], references: [id], onDelete: Cascade)
+  admin              User                 @relation("BatchPaymentAdmin", fields: [paidByAdmin], references: [id])
+  paymentTransaction PaymentTransaction?  @relation("BatchAdminPayments", fields: [paymentTransactionId], references: [id])
 
   @@index([batchCollectionId])
   @@index([paidByAdmin])
@@ -1301,58 +1297,58 @@ model BatchAdminPayment {
 // Payment Models
 
 model PaymentTransaction {
-  id                  String              @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Payment Identification
-  transactionNumber   String              @unique
-  razorpayOrderId     String?             @unique
-  razorpayPaymentId   String?             @unique
-  
+  transactionNumber String  @unique
+  razorpayOrderId   String? @unique
+  razorpayPaymentId String? @unique
+
   // Transaction Details
-  amount              Decimal             @db.Decimal(12, 2)
-  currency            String              @default("INR")
-  description         String
-  
+  amount      Decimal @db.Decimal(12, 2)
+  currency    String  @default("INR")
+  description String
+
   // Reference Information
-  referenceType       PaymentReferenceType
-  referenceId         String
-  
+  referenceType PaymentReferenceType
+  referenceId   String
+
   // Payment Breakdown
-  breakdown           Json
-  
+  breakdown Json
+
   // Payment Provider Information
-  provider            PaymentProvider      @default(RAZORPAY)
+  provider            PaymentProvider @default(RAZORPAY)
   providerOrderData   Json?
   providerPaymentData Json?
-  
+
   // Status and Timestamps
-  status              PaymentStatus        @default(PENDING)
-  initiatedAt         DateTime             @default(now())
-  completedAt         DateTime?
-  expiresAt           DateTime?
-  
+  status      PaymentStatus @default(PENDING)
+  initiatedAt DateTime      @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime?
+
   // User Information
-  userId              String
-  user                User                 @relation(fields: [userId], references: [id])
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
   // Metadata
-  metadata            Json?
-  notes               String?
-  
+  metadata Json?
+  notes    String?
+
   // Relations
-  webhooks            PaymentWebhook[]
-  invoices            PaymentInvoice[]
-  eventRegistrations  EventRegistration[]
-  merchandiseOrders   EventMerchandiseOrder[]
+  webhooks           PaymentWebhook[]
+  invoices           PaymentInvoice[]
+  eventRegistrations EventRegistration[]
+  merchandiseOrders  EventMerchandiseOrder[]
 
-  batchAdminPayments      BatchAdminPayment[] @relation("BatchAdminPayments")
+  batchAdminPayments BatchAdminPayment[] @relation("BatchAdminPayments")
 
-  merchandisePayments    MerchandiseOrder[] @relation("MerchandisePayments")
-  
+  merchandisePayments MerchandiseOrder[] @relation("MerchandisePayments")
+
   // Timestamps
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([status])
   @@index([referenceType, referenceId])
@@ -1363,38 +1359,38 @@ model PaymentTransaction {
 }
 
 model PaymentWebhook {
-  id                  String              @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Webhook Identification
-  provider            PaymentProvider
-  eventType           String
-  eventId             String?
-  
+  provider  PaymentProvider
+  eventType String
+  eventId   String?
+
   // Transaction Reference
-  transactionId       String?
-  transaction         PaymentTransaction? @relation(fields: [transactionId], references: [id])
-  
+  transactionId String?
+  transaction   PaymentTransaction? @relation(fields: [transactionId], references: [id])
+
   // Webhook Data
-  rawPayload          Json
-  signature           String
-  isSignatureValid    Boolean             @default(false)
-  
+  rawPayload       Json
+  signature        String
+  isSignatureValid Boolean @default(false)
+
   // Processing Status
-  status              WebhookStatus       @default(RECEIVED)
-  processedAt         DateTime?
-  errorMessage        String?
-  retryCount          Int                 @default(0)
-  
+  status       WebhookStatus @default(RECEIVED)
+  processedAt  DateTime?
+  errorMessage String?
+  retryCount   Int           @default(0)
+
   // Request Information
-  headers             Json?
-  ipAddress           String?
-  userAgent           String?
-  
+  headers   Json?
+  ipAddress String?
+  userAgent String?
+
   // Timestamps
-  receivedAt          DateTime            @default(now())
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   @@index([provider, eventType])
   @@index([transactionId])
   @@index([status])
@@ -1403,34 +1399,34 @@ model PaymentWebhook {
 }
 
 model PaymentInvoice {
-  id                  String              @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Invoice Identification
-  invoiceNumber       String              @unique
-  
+  invoiceNumber String @unique
+
   // Transaction Reference
-  transactionId       String              @unique
-  transaction         PaymentTransaction  @relation(fields: [transactionId], references: [id])
-  
+  transactionId String             @unique
+  transaction   PaymentTransaction @relation(fields: [transactionId], references: [id])
+
   // Invoice Data
-  invoiceData         Json
-  
+  invoiceData Json
+
   // PDF Management
-  pdfUrl              String?
-  pdfGeneratedAt      DateTime?
-  
+  pdfUrl         String?
+  pdfGeneratedAt DateTime?
+
   // Email Management
-  emailSentTo         String?
-  emailSentAt         DateTime?
-  emailResendCount    Int                 @default(0)
-  
+  emailSentTo      String?
+  emailSentAt      DateTime?
+  emailResendCount Int       @default(0)
+
   // Status
-  status              InvoiceStatus       @default(PENDING)
-  
+  status InvoiceStatus @default(PENDING)
+
   // Timestamps
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([invoiceNumber])
   @@index([transactionId])
   @@index([status])
@@ -1439,58 +1435,58 @@ model PaymentInvoice {
 }
 
 model EventAnalytics {
-  id                    String   @id @default(cuid())
-  eventId               String   @unique
-  event                 Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   // Revenue Analytics
-  totalRevenue          Decimal  @default(0) @db.Decimal(10, 2)
-  registrationRevenue   Decimal  @default(0) @db.Decimal(10, 2)
-  merchandiseRevenue    Decimal  @default(0) @db.Decimal(10, 2)
-  donationRevenue       Decimal  @default(0) @db.Decimal(10, 2)
-  
+  totalRevenue        Decimal @default(0) @db.Decimal(10, 2)
+  registrationRevenue Decimal @default(0) @db.Decimal(10, 2)
+  merchandiseRevenue  Decimal @default(0) @db.Decimal(10, 2)
+  donationRevenue     Decimal @default(0) @db.Decimal(10, 2)
+
   // Participation Analytics
-  totalRegistrations    Int      @default(0)
-  confirmedRegistrations Int     @default(0)
-  cancelledRegistrations Int     @default(0)
-  totalGuests           Int      @default(0)
-  
+  totalRegistrations     Int @default(0)
+  confirmedRegistrations Int @default(0)
+  cancelledRegistrations Int @default(0)
+  totalGuests            Int @default(0)
+
   // Performance Metrics
-  conversionRate        Decimal? @db.Decimal(5, 2) // Registration rate
-  averageOrderValue     Decimal? @db.Decimal(10, 2)
-  feedbackScore         Decimal? @db.Decimal(3, 2) // Average feedback rating
-  
+  conversionRate    Decimal? @db.Decimal(5, 2) // Registration rate
+  averageOrderValue Decimal? @db.Decimal(10, 2)
+  feedbackScore     Decimal? @db.Decimal(3, 2) // Average feedback rating
+
   // Timestamps
-  calculatedAt          DateTime @default(now())
-  lastUpdated          DateTime @updatedAt
-  
+  calculatedAt DateTime @default(now())
+  lastUpdated  DateTime @updatedAt
+
   @@index([eventId])
   @@index([calculatedAt])
   @@map("event_analytics")
 }
 
 model SystemMetrics {
-  id                    String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // System-wide totals
-  totalEvents           Int      @default(0)
-  totalUsers            Int      @default(0)
-  totalRevenue          Decimal  @default(0) @db.Decimal(12, 2)
-  totalRegistrations    Int      @default(0)
-  
+  totalEvents        Int     @default(0)
+  totalUsers         Int     @default(0)
+  totalRevenue       Decimal @default(0) @db.Decimal(12, 2)
+  totalRegistrations Int     @default(0)
+
   // Monthly growth rates  
-  monthlyEventGrowth    Decimal? @db.Decimal(5, 2)
-  monthlyUserGrowth     Decimal? @db.Decimal(5, 2)
-  monthlyRevenueGrowth  Decimal? @db.Decimal(5, 2)
-  
+  monthlyEventGrowth   Decimal? @db.Decimal(5, 2)
+  monthlyUserGrowth    Decimal? @db.Decimal(5, 2)
+  monthlyRevenueGrowth Decimal? @db.Decimal(5, 2)
+
   // Batch participation data
-  batchWiseStats        Json?    // { "2020": { users: 50, participation: 85% }, ... }
-  
+  batchWiseStats Json? // { "2020": { users: 50, participation: 85% }, ... }
+
   // Calculated date range
-  periodStart           DateTime
-  periodEnd             DateTime
-  metricsDate           DateTime @default(now())
-  
+  periodStart DateTime
+  periodEnd   DateTime
+  metricsDate DateTime @default(now())
+
   @@index([metricsDate])
   @@map("system_metrics")
 }
@@ -1500,28 +1496,28 @@ model SystemMetrics {
 // ==========================================
 
 model RegistrationQR {
-  id              String            @id @default(cuid())
-  registrationId  String            @unique
-  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  
+  id             String            @id @default(cuid())
+  registrationId String            @unique
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
   // QR Code Data
-  qrCode          String            @unique // Generated QR code hash
-  qrData          Json              // Complete registration data (user + guests + merchandise)
-  qrImageUrl      String?           // URL to QR code image (if stored)
-  
+  qrCode     String  @unique // Generated QR code hash
+  qrData     Json // Complete registration data (user + guests + merchandise)
+  qrImageUrl String? // URL to QR code image (if stored)
+
   // Metadata
-  generatedAt     DateTime          @default(now())
-  lastScannedAt   DateTime?
-  scanCount       Int               @default(0)
-  isActive        Boolean           @default(true)
-  expiresAt       DateTime?         // Optional expiration
-  
+  generatedAt   DateTime  @default(now())
+  lastScannedAt DateTime?
+  scanCount     Int       @default(0)
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime? // Optional expiration
+
   // Relations
-  checkIns        EventCheckIn[]
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
+  checkIns EventCheckIn[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([qrCode])
   @@index([registrationId])
   @@index([isActive])
@@ -1529,34 +1525,34 @@ model RegistrationQR {
 }
 
 model EventCheckIn {
-  id              String            @id @default(cuid())
-  registrationId  String
-  registration    EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  qrId            String?
-  qr              RegistrationQR?   @relation(fields: [qrId], references: [id])
-  
+  id             String            @id @default(cuid())
+  registrationId String
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  qrId           String?
+  qr             RegistrationQR?   @relation(fields: [qrId], references: [id])
+
   // Check-in Details
-  checkedInAt     DateTime          @default(now())
-  checkedInBy     String?           // Admin/Staff user ID who processed check-in
-  checkedInStaff  User?             @relation("CheckInStaff", fields: [checkedInBy], references: [id])
-  
+  checkedInAt    DateTime @default(now())
+  checkedInBy    String? // Admin/Staff user ID who processed check-in
+  checkedInStaff User?    @relation("CheckInStaff", fields: [checkedInBy], references: [id])
+
   // Guest Check-in Info
-  guestsCheckedIn Int               @default(0)
-  totalGuests     Int               @default(0)
-  guestDetails    Json?             // Which specific guests were checked in
-  
+  guestsCheckedIn Int   @default(0)
+  totalGuests     Int   @default(0)
+  guestDetails    Json? // Which specific guests were checked in
+
   // Additional Info
-  checkInLocation String?           // Venue/Gate location
-  notes           String?           @db.Text
-  checkInMethod   CheckInMethod     @default(QR_CODE)
-  
+  checkInLocation String? // Venue/Gate location
+  notes           String?       @db.Text
+  checkInMethod   CheckInMethod @default(QR_CODE)
+
   // Verification
-  isVerified      Boolean           @default(true)
+  isVerified        Boolean @default(true)
   verificationNotes String?
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([registrationId])
   @@index([checkedInAt])
   @@index([checkedInBy])
@@ -1564,27 +1560,27 @@ model EventCheckIn {
 }
 
 model MerchandiseDelivery {
-  id                String                @id @default(cuid())
-  orderId           String                @unique
-  order             EventMerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
+  id      String                @id @default(cuid())
+  orderId String                @unique
+  order   EventMerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   // Delivery Details
-  deliveredAt       DateTime              @default(now())
-  deliveredBy       String                // Staff/Admin user ID
-  deliveryStaff     User                  @relation("DeliveryStaff", fields: [deliveredBy], references: [id])
-  
+  deliveredAt   DateTime @default(now())
+  deliveredBy   String // Staff/Admin user ID
+  deliveryStaff User     @relation("DeliveryStaff", fields: [deliveredBy], references: [id])
+
   // Delivery Information
-  deliveryNotes     String?               @db.Text
-  confirmationPhoto String?               // Photo URL as confirmation
-  recipientName     String                // Who received the item
-  deliveryLocation  String?               // Where it was delivered
-  
+  deliveryNotes     String? @db.Text
+  confirmationPhoto String? // Photo URL as confirmation
+  recipientName     String // Who received the item
+  deliveryLocation  String? // Where it was delivered
+
   // Status tracking
-  status            DeliveryStatus        @default(DELIVERED)
-  
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  
+  status DeliveryStatus @default(DELIVERED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([orderId])
   @@index([deliveredBy])
   @@index([deliveredAt])
@@ -1596,36 +1592,35 @@ model MerchandiseDelivery {
 // ==========================================
 
 model EventPrivacySettings {
-  id                    String  @id @default(cuid())
-  eventId               String  @unique
-  event                 Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   // Public Visibility Controls
-  showPaymentAmounts    Boolean @default(false)  // Admin toggle: show payment amounts to public
-  showDonationAmounts   Boolean @default(false)  // Admin toggle: show donations to public
-  showUserEmails        Boolean @default(false)  // Admin toggle: show emails to public
-  showUserPhones        Boolean @default(false)  // Admin toggle: show phone numbers to public
-  showGuestDetails      Boolean @default(true)   // Admin toggle: show guest names to public
-  showBatchInfo         Boolean @default(true)   // Admin toggle: show batch year to public
-  showRegistrationDate  Boolean @default(true)   // Admin toggle: show registration dates to public
-  
+  showPaymentAmounts   Boolean @default(false) // Admin toggle: show payment amounts to public
+  showDonationAmounts  Boolean @default(false) // Admin toggle: show donations to public
+  showUserEmails       Boolean @default(false) // Admin toggle: show emails to public
+  showUserPhones       Boolean @default(false) // Admin toggle: show phone numbers to public
+  showGuestDetails     Boolean @default(true) // Admin toggle: show guest names to public
+  showBatchInfo        Boolean @default(true) // Admin toggle: show batch year to public
+  showRegistrationDate Boolean @default(true) // Admin toggle: show registration dates to public
+
   // Dashboard Configuration
-  enablePublicDashboard Boolean @default(true)   // Admin toggle: enable/disable public dashboard
+  enablePublicDashboard Boolean @default(true) // Admin toggle: enable/disable public dashboard
   dashboardTitle        String? @default("Event Registrations")
   dashboardMessage      String? // Custom message for public dashboard
-  
+
   // Statistics Visibility
-  showTotalCount        Boolean @default(true)   // Show total registration count
-  showBatchStats        Boolean @default(true)   // Show batch-wise breakdown
-  showPaymentStats      Boolean @default(false)  // Show payment completion stats
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
+  showTotalCount   Boolean @default(true) // Show total registration count
+  showBatchStats   Boolean @default(true) // Show batch-wise breakdown
+  showPaymentStats Boolean @default(false) // Show payment completion stats
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([eventId])
   @@map("event_privacy_settings")
 }
-
 
 // ============================================
 // TREASURY MANAGEMENT MODELS
@@ -1634,36 +1629,36 @@ model EventPrivacySettings {
 model YearlyBalance {
   id             String   @id @default(cuid())
   year           Int      @unique
-  openingBalance Decimal  @db.Decimal(15, 2) @default(0)
+  openingBalance Decimal  @default(0) @db.Decimal(15, 2)
   closingBalance Decimal? @db.Decimal(15, 2)
   notes          String?  @db.Text
-  
+
   // Relations
-  createdBy      String
-  creator        User     @relation("YearlyBalanceCreator", fields: [createdBy], references: [id])
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
+  createdBy String
+  creator   User   @relation("YearlyBalanceCreator", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([year])
   @@index([createdBy])
   @@map("yearly_balances")
 }
 
 model ExpenseCategory {
-  id           String               @id @default(cuid())
-  name         String               @unique
-  description  String?              @db.Text
-  isActive     Boolean              @default(true)
-  displayOrder Int                  @default(0)
-  
+  id           String  @id @default(cuid())
+  name         String  @unique
+  description  String? @db.Text
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
   // Relations
   subcategories ExpenseSubcategory[]
   expenses      Expense[]
-  
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([name])
   @@index([isActive])
   @@index([displayOrder])
@@ -1671,20 +1666,20 @@ model ExpenseCategory {
 }
 
 model ExpenseSubcategory {
-  id           String          @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
-  description  String?         @db.Text
-  isActive     Boolean         @default(true)
-  displayOrder Int             @default(0)
-  
+  description  String? @db.Text
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
   // Relations
-  categoryId   String
-  category     ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  expenses     Expense[]
-  
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  
+  categoryId String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  expenses   Expense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([categoryId, name])
   @@index([categoryId])
   @@index([displayOrder])
@@ -1692,36 +1687,36 @@ model ExpenseSubcategory {
 }
 
 model Expense {
-  id            String              @id @default(cuid())
-  amount        Decimal             @db.Decimal(12, 2)
-  description   String              @db.Text
+  id            String   @id @default(cuid())
+  amount        Decimal  @db.Decimal(12, 2)
+  description   String   @db.Text
   expenseDate   DateTime
   receiptUrl    String?
   vendorName    String?
   vendorContact String?
-  
+
   // Category Relations
   categoryId    String
   category      ExpenseCategory     @relation(fields: [categoryId], references: [id])
   subcategoryId String?
   subcategory   ExpenseSubcategory? @relation(fields: [subcategoryId], references: [id])
-  
+
   // Event Relation (Optional)
   linkedEventId String?
-  linkedEvent   Event?              @relation("ExpenseEvent", fields: [linkedEventId], references: [id])
-  
+  linkedEvent   Event?  @relation("ExpenseEvent", fields: [linkedEventId], references: [id])
+
   // Admin Relations
-  createdBy     String
-  creator       User                @relation("ExpenseCreator", fields: [createdBy], references: [id])
-  approvedBy    String?
-  approver      User?               @relation("ExpenseApprover", fields: [approvedBy], references: [id])
-  
-  isApproved    Boolean             @default(false)
-  approvedAt    DateTime?
-  
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  
+  createdBy  String
+  creator    User    @relation("ExpenseCreator", fields: [createdBy], references: [id])
+  approvedBy String?
+  approver   User?   @relation("ExpenseApprover", fields: [approvedBy], references: [id])
+
+  isApproved Boolean   @default(false)
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([expenseDate])
   @@index([categoryId])
   @@index([subcategoryId])
@@ -1732,34 +1727,34 @@ model Expense {
 }
 
 model ManualCollection {
-  id             String                @id @default(cuid())
-  amount         Decimal               @db.Decimal(12, 2)
-  description    String                @db.Text
+  id             String               @id @default(cuid())
+  amount         Decimal              @db.Decimal(12, 2)
+  description    String               @db.Text
   collectionDate DateTime
-  collectionMode ManualCollectionMode  @default(CASH)
+  collectionMode ManualCollectionMode @default(CASH)
   receiptUrl     String?
   donorName      String?
   donorContact   String?
-  
+
   // Category (Optional)
-  category       String?
-  
+  category String?
+
   // Event Relation (Optional)
-  linkedEventId  String?
-  linkedEvent    Event?                @relation("CollectionEvent", fields: [linkedEventId], references: [id])
-  
+  linkedEventId String?
+  linkedEvent   Event?  @relation("CollectionEvent", fields: [linkedEventId], references: [id])
+
   // Admin Relations
-  createdBy      String
-  creator        User                  @relation("CollectionCreator", fields: [createdBy], references: [id])
-  verifiedBy     String?
-  verifier       User?                 @relation("CollectionVerifier", fields: [verifiedBy], references: [id])
-  
-  isVerified     Boolean               @default(true)
-  verifiedAt     DateTime?
-  
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  
+  createdBy  String
+  creator    User    @relation("CollectionCreator", fields: [createdBy], references: [id])
+  verifiedBy String?
+  verifier   User?   @relation("CollectionVerifier", fields: [verifiedBy], references: [id])
+
+  isVerified Boolean   @default(true)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([collectionDate])
   @@index([collectionMode])
   @@index([linkedEventId])
@@ -1774,13 +1769,13 @@ model AccountBalance {
   balanceDate      DateTime
   notes            String?  @db.Text
   bankStatementUrl String?
-  
+
   // Admin tracking
-  updatedBy        String
-  updater          User     @relation("BalanceUpdater", fields: [updatedBy], references: [id])
-  
-  createdAt        DateTime @default(now())
-  
+  updatedBy String
+  updater   User   @relation("BalanceUpdater", fields: [updatedBy], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([balanceDate])
   @@index([updatedBy])
   @@map("account_balances")
@@ -1789,21 +1784,21 @@ model AccountBalance {
 // Cell/Committee/OfficeBearers model
 
 model OrganizationGroup {
-  id          String      @id @default(cuid())
-  name        String      @unique
-  type        GroupType   
-  description String?     @db.Text
-  isActive    Boolean     @default(true)
-  displayOrder Int        @default(0)
-  
+  id           String    @id @default(cuid())
+  name         String    @unique
+  type         GroupType
+  description  String?   @db.Text
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)
+
   // Relations
-  members     GroupMember[]
-  createdBy   String
-  creator     User        @relation("GroupCreator", fields: [createdBy], references: [id])
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
+  members   GroupMember[]
+  createdBy String
+  creator   User          @relation("GroupCreator", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([type])
   @@index([isActive])
   @@index([createdBy])
@@ -1811,21 +1806,21 @@ model OrganizationGroup {
 }
 
 model GroupMember {
-  id       String              @id @default(cuid())
+  id       String            @id @default(cuid())
   groupId  String
-  group    OrganizationGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  userId   String  
-  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group    OrganizationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     GroupMemberRole
-  isActive Boolean             @default(true)
-  
+  isActive Boolean           @default(true)
+
   // Admin tracking
-  addedBy  String
-  adder    User                @relation("GroupMemberAdder", fields: [addedBy], references: [id])
-  
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  
+  addedBy String
+  adder   User   @relation("GroupMemberAdder", fields: [addedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([groupId, userId])
   @@index([groupId])
   @@index([userId])
@@ -1834,26 +1829,26 @@ model GroupMember {
 }
 
 model Sponsor {
-  id            String          @id @default(cuid())
-  name          String          @unique
-  category      SponsorCategory
-  description   String?         @db.Text
-  logoUrl       String?         // Sponsor company logo
-  headPhotoUrl  String?         // Photo of head of sponsor organization
-  isActive      Boolean         @default(true)
-  displayOrder  Int             @default(0)
-  
+  id           String          @id @default(cuid())
+  name         String          @unique
+  category     SponsorCategory
+  description  String?         @db.Text
+  logoUrl      String? // Sponsor company logo
+  headPhotoUrl String? // Photo of head of sponsor organization
+  isActive     Boolean         @default(true)
+  displayOrder Int             @default(0)
+
   // Website and contact info
-  website       String?
-  contactEmail  String?
-  
+  website      String?
+  contactEmail String?
+
   // Admin tracking
-  createdBy     String
-  creator       User            @relation("SponsorCreator", fields: [createdBy], references: [id])
-  
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
+  createdBy String
+  creator   User   @relation("SponsorCreator", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([category])
   @@index([isActive])
   @@index([displayOrder])
@@ -1868,23 +1863,23 @@ model Sponsor {
 // Add these new models to your schema.prisma file
 
 model Poll {
-  id              String      @id @default(cuid())
-  title           String
-  description     String?     @db.Text
-  isActive        Boolean     @default(true)
-  allowMultiple   Boolean     @default(false)  // Allow multiple option selection
-  expiresAt       DateTime?   // Optional poll expiry
-  isAnonymous     Boolean     @default(false)  // Hide voter names in results
-  
+  id            String    @id @default(cuid())
+  title         String
+  description   String?   @db.Text
+  isActive      Boolean   @default(true)
+  allowMultiple Boolean   @default(false) // Allow multiple option selection
+  expiresAt     DateTime? // Optional poll expiry
+  isAnonymous   Boolean   @default(false) // Hide voter names in results
+
   // Relations
-  createdBy       String
-  creator         User        @relation("PollCreator", fields: [createdBy], references: [id])
-  options         PollOption[]
-  votes           PollVote[]
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
+  createdBy String
+  creator   User         @relation("PollCreator", fields: [createdBy], references: [id])
+  options   PollOption[]
+  votes     PollVote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([createdBy])
   @@index([isActive])
   @@index([expiresAt])
@@ -1893,35 +1888,35 @@ model Poll {
 }
 
 model PollOption {
-  id        String      @id @default(cuid())
-  text      String      @db.Text
-  displayOrder Int      @default(0)
-  
+  id           String @id @default(cuid())
+  text         String @db.Text
+  displayOrder Int    @default(0)
+
   // Relations
-  pollId    String
-  poll      Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  votes     PollVote[]
-  
-  createdAt DateTime    @default(now())
-  
+  pollId String
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes  PollVote[]
+
+  createdAt DateTime @default(now())
+
   @@index([pollId])
   @@index([displayOrder])
   @@map("poll_options")
 }
 
 model PollVote {
-  id        String      @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Relations
-  pollId    String
-  poll      Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  optionId  String
-  option    PollOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User        @relation(fields: [userId], references: [id])
-  
-  createdAt DateTime    @default(now())
-  
+  pollId   String
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId String
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
   // Prevent duplicate votes for same poll/option combination
   @@unique([pollId, userId, optionId])
   @@index([pollId])
@@ -1930,60 +1925,59 @@ model PollVote {
   @@map("poll_votes")
 }
 
-
 // ============================================
 // NEW LIFELINK MODELS
 // ============================================
 
 model BloodDonation {
-  id            String   @id @default(cuid())
-  donationDate  DateTime
-  location      String?  // Hospital/blood bank name
-  units         Int      @default(1)
-  notes         String?  @db.Text
-  
+  id           String   @id @default(cuid())
+  donationDate DateTime
+  location     String? // Hospital/blood bank name
+  units        Int      @default(1)
+  notes        String?  @db.Text
+
   // Relations
-  donorId       String
-  donor         User     @relation("DonorHistory", fields: [donorId], references: [id])
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  donorId String
+  donor   User   @relation("DonorHistory", fields: [donorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([donorId])
   @@index([donationDate])
   @@map("blood_donations")
 }
 
 model BloodRequisition {
-  id                    String            @id @default(cuid())
-  patientName           String
-  hospitalName          String
-  contactNumber         String
-  alternateNumber       String?
-  requiredBloodGroup    BloodGroup
-  unitsNeeded           Int               @default(1)
-  urgencyLevel          String            @default("HIGH") // HIGH, MEDIUM, LOW
-  medicalCondition      String?           @db.Text
-  location              String            // Area/city
-  additionalNotes       String?           @db.Text
-  
+  id                 String     @id @default(cuid())
+  patientName        String
+  hospitalName       String
+  contactNumber      String
+  alternateNumber    String?
+  requiredBloodGroup BloodGroup
+  unitsNeeded        Int        @default(1)
+  urgencyLevel       String     @default("HIGH") // HIGH, MEDIUM, LOW
+  medicalCondition   String?    @db.Text
+  location           String // Area/city
+  additionalNotes    String?    @db.Text
+
   // Status and timing
-  status                RequisitionStatus @default(ACTIVE)
-  requiredByDate        DateTime
-  expiresAt             DateTime?
-  
+  status         RequisitionStatus @default(ACTIVE)
+  requiredByDate DateTime
+  expiresAt      DateTime?
+
   // Contact revelation settings
-  allowContactReveal    Boolean           @default(true)
-  
+  allowContactReveal Boolean @default(true)
+
   // Relations
-  requesterId           String
-  requester             User              @relation("RequesterHistory", fields: [requesterId], references: [id])
-  notifications         DonorNotification[]
-  responses             DonorResponse[]
-  
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  
+  requesterId   String
+  requester     User                @relation("RequesterHistory", fields: [requesterId], references: [id])
+  notifications DonorNotification[]
+  responses     DonorResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([requesterId])
   @@index([requiredBloodGroup])
   @@index([status])
@@ -1993,30 +1987,30 @@ model BloodRequisition {
 }
 
 model DonorNotification {
-  id                String             @id @default(cuid())
-  title             String
-  message           String             @db.Text
-  notificationType  String             @default("EMERGENCY") // EMERGENCY, REMINDER, INFO
-  
+  id               String @id @default(cuid())
+  title            String
+  message          String @db.Text
+  notificationType String @default("EMERGENCY") // EMERGENCY, REMINDER, INFO
+
   // Notification delivery
-  status            NotificationStatus @default(PENDING)
-  sentAt            DateTime?
-  deliveredAt       DateTime?
-  readAt            DateTime?
-  
+  status      NotificationStatus @default(PENDING)
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+
   // Push notification data
   pushNotificationId String?
-  deviceToken       String?
-  
+  deviceToken        String?
+
   // Relations
-  donorId           String
-  donor             User               @relation(fields: [donorId], references: [id])
-  requisitionId     String?
-  requisition       BloodRequisition?  @relation(fields: [requisitionId], references: [id])
-  
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  
+  donorId       String
+  donor         User              @relation(fields: [donorId], references: [id])
+  requisitionId String?
+  requisition   BloodRequisition? @relation(fields: [requisitionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([donorId])
   @@index([status])
   @@index([notificationType])
@@ -2025,26 +2019,26 @@ model DonorNotification {
 }
 
 model DonorResponse {
-  id            String              @id @default(cuid())
-  response      DonorResponseStatus @default(NO_RESPONSE)
-  message       String?             @db.Text
-  
+  id       String              @id @default(cuid())
+  response DonorResponseStatus @default(NO_RESPONSE)
+  message  String?             @db.Text
+
   // Contact information (revealed based on privacy settings)
-  contactPhone  String?
-  isContactRevealed Boolean         @default(false)
-  
+  contactPhone      String?
+  isContactRevealed Boolean @default(false)
+
   // Response timing
-  respondedAt   DateTime?
-  
+  respondedAt DateTime?
+
   // Relations
   donorId       String
-  donor         User                @relation(fields: [donorId], references: [id])
+  donor         User             @relation(fields: [donorId], references: [id])
   requisitionId String
-  requisition   BloodRequisition    @relation(fields: [requisitionId], references: [id])
-  
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  
+  requisition   BloodRequisition @relation(fields: [requisitionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([donorId, requisitionId]) // One response per donor per requisition
   @@index([donorId])
   @@index([requisitionId])
@@ -2052,176 +2046,171 @@ model DonorResponse {
   @@map("donor_responses")
 }
 
-
 // Ticket Categories (for organization)
 model TicketCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique // "TECHNICAL", "ACCOUNT", "EVENT", "GENERAL", "BILLING", "LIFELINK"
+  id          String  @id @default(cuid())
+  name        String  @unique // "TECHNICAL", "ACCOUNT", "EVENT", "GENERAL", "BILLING", "LIFELINK"
   description String?
-  icon        String?  // For UI display
-  isActive    Boolean  @default(true)
-  priority    Int      @default(0) // For sorting in UI
-  
+  icon        String? // For UI display
+  isActive    Boolean @default(true)
+  priority    Int     @default(0) // For sorting in UI
+
   // Relations
-  tickets     Ticket[]
-   templates   TicketTemplate[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  tickets   Ticket[]
+  templates TicketTemplate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("ticket_categories")
 }
 
 // Main Ticket Model
 model Ticket {
-  id           String        @id @default(cuid())
-  ticketNumber String        @unique // Auto-generated: TKT-2025-000001
-  
+  id           String @id @default(cuid())
+  ticketNumber String @unique // Auto-generated: TKT-2025-000001
+
   // User Information
-  userId       String
-  user         User          @relation("UserTickets", fields: [userId], references: [id])
-  
+  userId String
+  user   User   @relation("UserTickets", fields: [userId], references: [id])
+
   // Admin Assignment (NEW FEATURE)
-  assignedToId String?       // Admin ID selected by user
-  assignedTo   User?         @relation("AssignedTickets", fields: [assignedToId], references: [id])
-  assignedAt   DateTime?     // When ticket was assigned
-  
+  assignedToId String? // Admin ID selected by user
+  assignedTo   User?     @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedAt   DateTime? // When ticket was assigned
+
   // Ticket Details
-  categoryId   String
-  category     TicketCategory @relation(fields: [categoryId], references: [id])
-  subject      String        // 5-200 characters
-  description  String        @db.Text // 10-5000 characters
-  priority     TicketPriority @default(MEDIUM)
-  status       TicketStatus   @default(OPEN)
-  tags        String[] 
+  categoryId  String
+  category    TicketCategory @relation(fields: [categoryId], references: [id])
+  subject     String // 5-200 characters
+  description String         @db.Text // 10-5000 characters
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+  tags        String[]
 
   // Template tracking
   createdFromTemplate Boolean @default(false)
   templateId          String?
-  
+
   // Resolution Information
-  resolvedAt   DateTime?
-  resolvedBy   String?       // Admin who actually resolved (might be different from assigned)
-  resolver     User?         @relation("ResolvedTickets", fields: [resolvedBy], references: [id])
-  resolutionNote String?     @db.Text // Admin's final resolution note
-  
+  resolvedAt     DateTime?
+  resolvedBy     String? // Admin who actually resolved (might be different from assigned)
+  resolver       User?     @relation("ResolvedTickets", fields: [resolvedBy], references: [id])
+  resolutionNote String?   @db.Text // Admin's final resolution note
+
   // User Feedback
-  satisfaction TicketSatisfaction?
-  satisfactionNote String?   // User's satisfaction feedback
-  ratedAt      DateTime?
-  
+  satisfaction     TicketSatisfaction?
+  satisfactionNote String? // User's satisfaction feedback
+  ratedAt          DateTime?
+
   // Tracking
-  lastActivity DateTime      @default(now()) // Updated on any new message/status change
-  reopenCount  Int           @default(0)
+  lastActivity DateTime @default(now()) // Updated on any new message/status change
+  reopenCount  Int      @default(0)
 
   auditLogs     TicketAuditLog[]
   messageDrafts TicketMessageDraft[]
-  
+
   // Relations
-  messages     TicketMessage[]
-  attachments  TicketAttachment[]
-  
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  
+  messages    TicketMessage[]
+  attachments TicketAttachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Optimized indexes for performance
-  @@index([userId, status])           // User's tickets by status
-  @@index([assignedToId, status])     // Admin's assigned tickets
-  @@index([status, createdAt])        // All tickets by status and date
-  @@index([categoryId, status])       // Tickets by category
-  @@index([ticketNumber])             // Quick lookup by ticket number
-  @@index([lastActivity])             // Recently active tickets
-  @@index([priority, status])         // Priority-based filtering
-  
+  @@index([userId, status]) // User's tickets by status
+  @@index([assignedToId, status]) // Admin's assigned tickets
+  @@index([status, createdAt]) // All tickets by status and date
+  @@index([categoryId, status]) // Tickets by category
+  @@index([ticketNumber]) // Quick lookup by ticket number
+  @@index([lastActivity]) // Recently active tickets
+  @@index([priority, status]) // Priority-based filtering
   @@map("tickets")
 }
 
 // Ticket Messages (conversation thread)
 model TicketMessage {
-  id         String      @id @default(cuid())
-  ticketId   String
-  ticket     Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   // Message Details
-  senderId   String
-  sender     User        @relation("TicketMessages", fields: [senderId], references: [id])
-  message    String      @db.Text
-  isFromAdmin Boolean    @default(false) // Auto-set based on sender role
-  
+  senderId    String
+  sender      User    @relation("TicketMessages", fields: [senderId], references: [id])
+  message     String  @db.Text
+  isFromAdmin Boolean @default(false) // Auto-set based on sender role
+
   // Message Status (for read receipts)
-  isRead     Boolean     @default(false)
-  readAt     DateTime?
-  
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
   // Internal Admin Notes (visible only to admins)
   isInternalNote Boolean @default(false) // Admin-to-admin communication
 
   // NEW FIELDS FOR PHASE 2:
-  isEdited      Boolean   @default(false)
-  editedAt      DateTime?
-  
+  isEdited Boolean   @default(false)
+  editedAt DateTime?
+
   // Enhanced content support
-  contentType   MessageContentType @default(PLAIN_TEXT)
+  contentType      MessageContentType @default(PLAIN_TEXT)
   formattedContent Json? // Rich text formatting data
-  
+
   // Relations to new models
-  reactions     TicketMessageReaction[]
-  editHistory   TicketMessageEdit[]
-  
+  reactions   TicketMessageReaction[]
+  editHistory TicketMessageEdit[]
+
   // Relations
   attachments TicketMessageAttachment[]
-  
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  
-  @@index([ticketId, createdAt])  // Messages in chronological order
-  @@index([senderId])             // Messages by sender
-  @@index([isFromAdmin])          // Filter admin vs user messages
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, createdAt]) // Messages in chronological order
+  @@index([senderId]) // Messages by sender
+  @@index([isFromAdmin]) // Filter admin vs user messages
   @@map("ticket_messages")
 }
 
 // File Attachments for Initial Ticket
 model TicketAttachment {
-  id           String   @id @default(cuid())
-  ticketId     String
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   // File Information
-  filename     String   // Stored filename (with timestamp)
-  originalName String   // Original uploaded filename
-  fileSize     Int      // Size in bytes
-  mimeType     String   // File MIME type
-  filePath     String   // Relative path from uploads directory
-  
+  filename     String // Stored filename (with timestamp)
+  originalName String // Original uploaded filename
+  fileSize     Int // Size in bytes
+  mimeType     String // File MIME type
+  filePath     String // Relative path from uploads directory
+
   // Upload Information
-  uploadedBy   String
-  uploader     User     @relation("TicketAttachments", fields: [uploadedBy], references: [id])
-  
-  createdAt    DateTime @default(now())
-  
+  uploadedBy String
+  uploader   User   @relation("TicketAttachments", fields: [uploadedBy], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([ticketId])
   @@index([uploadedBy])
-  
   @@map("ticket_attachments")
 }
 
 // Message-specific Attachments
 model TicketMessageAttachment {
-  id           String        @id @default(cuid())
-  messageId    String
-  message      TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
+  id        String        @id @default(cuid())
+  messageId String
+  message   TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
   // File Information  
   filename     String
   originalName String
   fileSize     Int
   mimeType     String
   filePath     String
-  
-  createdAt    DateTime      @default(now())
-  
+
+  createdAt DateTime @default(now())
+
   @@index([messageId])
-  
   @@map("ticket_message_attachments")
 }
 
@@ -2230,14 +2219,14 @@ model TicketMessageReaction {
   id        String        @id @default(cuid())
   messageId String
   message   TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User          @relation("MessageReactions", fields: [userId], references: [id])
-  
-  reaction  MessageReactionType
-  
-  createdAt DateTime      @default(now())
-  
+
+  userId String
+  user   User   @relation("MessageReactions", fields: [userId], references: [id])
+
+  reaction MessageReactionType
+
+  createdAt DateTime @default(now())
+
   @@unique([messageId, userId, reaction]) // One reaction type per user per message
   @@index([messageId])
   @@index([userId])
@@ -2246,64 +2235,64 @@ model TicketMessageReaction {
 
 // Message Edit History (track message changes)
 model TicketMessageEdit {
-  id              String        @id @default(cuid())
-  messageId       String
-  message         TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
-  previousContent String        @db.Text
-  editReason      String?       // Optional reason for edit
+  id        String        @id @default(cuid())
+  messageId String
+  message   TicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  previousContent String  @db.Text
+  editReason      String? // Optional reason for edit
   editedBy        String
-  editor          User          @relation("MessageEdits", fields: [editedBy], references: [id])
-  
-  createdAt       DateTime      @default(now())
-  
+  editor          User    @relation("MessageEdits", fields: [editedBy], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([messageId, createdAt])
   @@map("ticket_message_edits")
 }
 
 // Message Drafts (auto-save while typing)
 model TicketMessageDraft {
-  id        String   @id @default(cuid())
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User     @relation("MessageDrafts", fields: [userId], references: [id])
-  
-  content   String   @db.Text
-  
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("MessageDrafts", fields: [userId], references: [id])
+
+  content String @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@unique([ticketId, userId]) // One draft per user per ticket
   @@map("ticket_message_drafts")
 }
 
 // Enhanced Audit Trail for detailed tracking
 model TicketAuditLog {
-  id          String          @id @default(cuid())
-  ticketId    String
-  ticket      Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   // Action Details
   actionType  AuditActionType
-  fieldName   String?         // Which field changed (status, priority, etc.)
-  oldValue    String?         // Previous value (JSON serialized)
-  newValue    String?         // New value (JSON serialized)  
-  description String          // Human readable description
-  
+  fieldName   String? // Which field changed (status, priority, etc.)
+  oldValue    String? // Previous value (JSON serialized)
+  newValue    String? // New value (JSON serialized)  
+  description String // Human readable description
+
   // Actor Information
   performedBy String?
-  performer   User?           @relation("PerformedAudits", fields: [performedBy], references: [id])
-  isSystem    Boolean         @default(false) // System-generated vs user action
-  
+  performer   User?   @relation("PerformedAudits", fields: [performedBy], references: [id])
+  isSystem    Boolean @default(false) // System-generated vs user action
+
   // Context
-  ipAddress   String?
-  userAgent   String?
-  metadata    Json?           // Additional context data
-  
-  createdAt   DateTime        @default(now())
-  
+  ipAddress String?
+  userAgent String?
+  metadata  Json? // Additional context data
+
+  createdAt DateTime @default(now())
+
   @@index([ticketId, createdAt])
   @@index([performedBy])
   @@index([actionType])
@@ -2312,63 +2301,63 @@ model TicketAuditLog {
 
 // Enhanced File Metadata (for better file management)
 model TicketFileMetadata {
-  id             String   @id @default(cuid())
-  attachmentId   String   @unique
+  id           String @id @default(cuid())
+  attachmentId String @unique
   // This can reference either TicketAttachment or TicketMessageAttachment
-  
+
   // File Analysis
-  isImage        Boolean  @default(false)
-  imageWidth     Int?
-  imageHeight    Int?
-  thumbnailPath  String?  // Generated thumbnail path
-  
+  isImage       Boolean @default(false)
+  imageWidth    Int?
+  imageHeight   Int?
+  thumbnailPath String? // Generated thumbnail path
+
   // File Properties
-  compressedSize Int?     // Size after compression
-  checksum       String?  // File integrity check
-  
+  compressedSize Int? // Size after compression
+  checksum       String? // File integrity check
+
   // Access Tracking
-  downloadCount  Int      @default(0)
-  lastAccessed   DateTime?
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
+  downloadCount Int       @default(0)
+  lastAccessed  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("ticket_file_metadata")
 }
 
 // Ticket Templates for common issues
 model TicketTemplate {
   id          String         @id @default(cuid())
-  name        String         // "Login Issues", "Event Registration Problem"
-  description String?        // Template description
+  name        String // "Login Issues", "Event Registration Problem"
+  description String? // Template description
   categoryId  String
   category    TicketCategory @relation(fields: [categoryId], references: [id])
-  
+
   // Template Content
-  subjectTemplate     String          // "Unable to login - {issue_type}"
-  descriptionTemplate String @db.Text // Pre-filled description with placeholders
-  priorityDefault     TicketPriority  @default(MEDIUM)
-  
+  subjectTemplate     String // "Unable to login - {issue_type}"
+  descriptionTemplate String         @db.Text // Pre-filled description with placeholders
+  priorityDefault     TicketPriority @default(MEDIUM)
+
   // Dynamic Fields Configuration
-  hasCustomFields     Boolean @default(false)
-  customFields        Json?   // Configuration for dynamic fields
-  
+  hasCustomFields Boolean @default(false)
+  customFields    Json? // Configuration for dynamic fields
+
   // Template Management
-  isActive     Boolean @default(true)
-  isPublic     Boolean @default(true)  // Public templates vs admin-only
-  sortOrder    Int     @default(0)
-  
+  isActive  Boolean @default(true)
+  isPublic  Boolean @default(true) // Public templates vs admin-only
+  sortOrder Int     @default(0)
+
   // Usage Statistics  
-  usageCount   Int      @default(0)
-  lastUsedAt   DateTime?
-  
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
   // Management
-  createdBy    String
-  creator      User     @relation("CreatedTemplates", fields: [createdBy], references: [id])
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+  createdBy String
+  creator   User   @relation("CreatedTemplates", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([categoryId, isActive, isPublic])
   @@index([isActive, sortOrder])
   @@map("ticket_templates")
@@ -2376,27 +2365,27 @@ model TicketTemplate {
 
 // Saved Search Filters for users and admins
 model TicketSavedFilter {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation("SavedTicketFilters", fields: [userId], references: [id])
-  
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("SavedTicketFilters", fields: [userId], references: [id])
+
   // Filter Details
-  name        String   // "My Urgent Tickets", "This Week's Tech Issues"
-  description String?
-  filterConfig Json    // Serialized filter criteria
-  
+  name         String // "My Urgent Tickets", "This Week's Tech Issues"
+  description  String?
+  filterConfig Json // Serialized filter criteria
+
   // Filter Settings
-  isDefault   Boolean  @default(false) // Default filter for user
-  isShared    Boolean  @default(false) // Admin can share filters with all users
-  shareWith   String[] // Array of user IDs to share with
-  
+  isDefault Boolean  @default(false) // Default filter for user
+  isShared  Boolean  @default(false) // Admin can share filters with all users
+  shareWith String[] // Array of user IDs to share with
+
   // Usage Stats
-  usageCount  Int      @default(0)
-  lastUsedAt  DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, name])
   @@index([userId, isDefault])
   @@index([isShared])
@@ -2405,38 +2394,38 @@ model TicketSavedFilter {
 
 // Bulk Operation Tracking
 model TicketBulkOperation {
-  id           String              @id @default(cuid())
-  operationId  String              @unique // For tracking async operations
-  
+  id          String @id @default(cuid())
+  operationId String @unique // For tracking async operations
+
   // Operation Details
   operationType BulkOperationType
-  description   String             // Human readable description
-  targetCount   Int                // Number of tickets targeted
-  successCount  Int      @default(0)
-  failureCount  Int      @default(0)
-  
+  description   String // Human readable description
+  targetCount   Int // Number of tickets targeted
+  successCount  Int               @default(0)
+  failureCount  Int               @default(0)
+
   // Operation Data
-  ticketIds     String[]           // Array of ticket IDs
-  operationData Json?              // Operation parameters
-  results       Json?              // Success/failure details
-  
+  ticketIds     String[] // Array of ticket IDs
+  operationData Json? // Operation parameters
+  results       Json? // Success/failure details
+
   // Status Tracking
   status        BulkOperationStatus @default(PENDING)
   startedAt     DateTime?
   completedAt   DateTime?
   failureReason String?
-  
+
   // Actor Information
-  performedBy   String
-  performer     User               @relation("PerformedBulkOps", fields: [performedBy], references: [id])
-  
+  performedBy String
+  performer   User   @relation("PerformedBulkOps", fields: [performedBy], references: [id])
+
   // Context
-  ipAddress     String?
-  userAgent     String?
-  
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([performedBy, createdAt])
   @@index([status, createdAt])
   @@index([operationType])
@@ -2445,22 +2434,22 @@ model TicketBulkOperation {
 
 // Advanced Search History (for suggestions and analytics)
 model TicketSearchHistory {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation("SearchHistory", fields: [userId], references: [id])
-  
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("SearchHistory", fields: [userId], references: [id])
+
   // Search Details
-  searchQuery String   // User's search terms
-  searchType  SearchType @default(BASIC)
-  filterConfig Json?   // Applied filters
-  resultsCount Int     // Number of results returned
-  
+  searchQuery  String // User's search terms
+  searchType   SearchType @default(BASIC)
+  filterConfig Json? // Applied filters
+  resultsCount Int // Number of results returned
+
   // Usage Analytics
-  clicked     Boolean  @default(false) // Did user click any results
+  clicked         Boolean @default(false) // Did user click any results
   clickedTicketId String? // Which ticket they opened from search
-  
-  createdAt   DateTime @default(now())
-  
+
+  createdAt DateTime @default(now())
+
   @@index([userId, createdAt])
   @@index([searchQuery])
   @@map("ticket_search_history")
@@ -2468,94 +2457,93 @@ model TicketSearchHistory {
 
 // Quick Actions (for frequently used operations)
 model TicketQuickAction {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation("QuickActions", fields: [userId], references: [id])
-  
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("QuickActions", fields: [userId], references: [id])
+
   // Action Details
-  actionType  String   // "close_with_template", "assign_to_me", "priority_high"
-  actionName  String   // Display name
-  actionData  Json     // Action parameters
-  
+  actionType String // "close_with_template", "assign_to_me", "priority_high"
+  actionName String // Display name
+  actionData Json // Action parameters
+
   // Settings
-  isEnabled   Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  
+  isEnabled Boolean @default(true)
+  sortOrder Int     @default(0)
+
   // Usage Stats
-  usageCount  Int      @default(0)
-  lastUsedAt  DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, actionType])
   @@index([userId, isEnabled, sortOrder])
   @@map("ticket_quick_actions")
 }
-
 
 //==============================
 // STANDALONE MERCHANDISE SYSTEM - Not Integrated with Event
 //==============================
 
 model Merchandise {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?  @db.Text
-  price           Decimal  @db.Decimal(10, 2)
-  images          String[] // Array of image URLs
-  availableSizes  String[] // ["S", "M", "L", "XL", "XXL"] 
-  stock           Int      @default(0)
-  category        String?  // "T-Shirts", "Mugs", "Accessories"
-  isActive        Boolean  @default(true)
-  
+  id             String   @id @default(cuid())
+  name           String
+  description    String?  @db.Text
+  price          Decimal  @db.Decimal(10, 2)
+  images         String[] // Array of image URLs
+  availableSizes String[] // ["S", "M", "L", "XL", "XXL"] 
+  stock          Int      @default(0)
+  category       String? // "T-Shirts", "Mugs", "Accessories"
+  isActive       Boolean  @default(true)
+
   // Admin tracking
-  createdBy       String
-  creator         User     @relation("MerchandiseCreator", fields: [createdBy], references: [id])
-  
+  createdBy String
+  creator   User   @relation("MerchandiseCreator", fields: [createdBy], references: [id])
+
   // Relations
-  orderItems      MerchandiseOrderItem[]
-  cartItems       MerchandiseCartItem[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  orderItems MerchandiseOrderItem[]
+  cartItems  MerchandiseCartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([category])
   @@index([isActive])
   @@map("merchandise")
 }
 
 model MerchandiseOrder {
-  id               String   @id @default(cuid())
-  orderNumber      String   @unique // "ORD-2025-001"
-  userId           String
-  user             User     @relation("MerchandiseOrders", fields: [userId], references: [id])
-  
+  id          String @id @default(cuid())
+  orderNumber String @unique // "ORD-2025-001"
+  userId      String
+  user        User   @relation("MerchandiseOrders", fields: [userId], references: [id])
+
   // Order details
-  totalAmount      Decimal  @db.Decimal(10, 2)
-  status           String   @default("PENDING") // PENDING, CONFIRMED, DELIVERED, CANCELLED
-  
+  totalAmount Decimal @db.Decimal(10, 2)
+  status      String  @default("PENDING") // PENDING, CONFIRMED, DELIVERED, CANCELLED
+
   // Payment information
   paymentTransactionId String?
   paymentTransaction   PaymentTransaction? @relation("MerchandisePayments", fields: [paymentTransactionId], references: [id])
-  paymentStatus        String   @default("PENDING") // PENDING, COMPLETED, FAILED
-  
+  paymentStatus        String              @default("PENDING") // PENDING, COMPLETED, FAILED
+
   // Delivery information  
-  deliveryStatus   String   @default("PENDING") // PENDING, SHIPPED, DELIVERED
-  deliveredBy      String?
-  deliveredAt      DateTime?
-  deliveryNotes    String?
-  
+  deliveryStatus String    @default("PENDING") // PENDING, SHIPPED, DELIVERED
+  deliveredBy    String?
+  deliveredAt    DateTime?
+  deliveryNotes  String?
+
   // QR Code for order tracking
-  qrCode           String?  @unique
-  qrData           Json?    // QR code data
-  
+  qrCode String? @unique
+  qrData Json? // QR code data
+
   // Relations
-  items            MerchandiseOrderItem[]
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  
+  items MerchandiseOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([orderNumber])
   @@index([status])
@@ -2564,37 +2552,37 @@ model MerchandiseOrder {
 }
 
 model MerchandiseOrderItem {
-  id               String   @id @default(cuid())
-  orderId          String
-  order            MerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  merchandiseId    String
-  merchandise      Merchandise @relation(fields: [merchandiseId], references: [id])
-  
-  quantity         Int
-  selectedSize     String?
-  unitPrice        Decimal  @db.Decimal(10, 2)
-  totalPrice       Decimal  @db.Decimal(10, 2)
-  
-  createdAt        DateTime @default(now())
-  
+  id            String           @id @default(cuid())
+  orderId       String
+  order         MerchandiseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  merchandiseId String
+  merchandise   Merchandise      @relation(fields: [merchandiseId], references: [id])
+
+  quantity     Int
+  selectedSize String?
+  unitPrice    Decimal @db.Decimal(10, 2)
+  totalPrice   Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
   @@index([orderId])
   @@index([merchandiseId])
   @@map("merchandise_order_items")
 }
 
 model MerchandiseCartItem {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation("MerchandiseCart", fields: [userId], references: [id])
-  merchandiseId    String
-  merchandise      Merchandise @relation(fields: [merchandiseId], references: [id])
-  
-  quantity         Int
-  selectedSize     String?
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation("MerchandiseCart", fields: [userId], references: [id])
+  merchandiseId String
+  merchandise   Merchandise @relation(fields: [merchandiseId], references: [id])
+
+  quantity     Int
+  selectedSize String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([userId, merchandiseId, selectedSize])
   @@index([userId])
   @@map("merchandise_cart_items")
@@ -2602,35 +2590,35 @@ model MerchandiseCartItem {
 
 // Single Festival table - stores all festival data
 model Festival {
-  id                String            @id @default(cuid())
-  name              String            @unique
-  description       String?
-  date              DateTime
-  
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  date        DateTime
+
   // Festival categorization
-  festivalType      FestivalType
-  religion          Religion?
-  region            String?
-  
+  festivalType FestivalType
+  religion     Religion?
+  region       String?
+
   // Visual styling (Keka.com style)
-  vectorImage       String?           // SVG/vector image URL
-  backgroundColor   String            @default("#f8f9fa")
-  textColor         String            @default("#333333")
-  greetingMessage   String?
-  
+  vectorImage     String? // SVG/vector image URL
+  backgroundColor String  @default("#f8f9fa")
+  textColor       String  @default("#333333")
+  greetingMessage String?
+
   // Configuration
-  priority          FestivalPriority  @default(MAJOR)
-  isActive          Boolean           @default(true)
-  enableNotifications Boolean         @default(true)
-  
+  priority            FestivalPriority @default(MAJOR)
+  isActive            Boolean          @default(true)
+  enableNotifications Boolean          @default(true)
+
   // API source tracking
-  externalId        String?           // External API festival ID
-  source            String            @default("INTERNAL") // INTERNAL, CALENDARIFIC, MANUAL
-  lastSyncedAt      DateTime?
-  
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  
+  externalId   String? // External API festival ID
+  source       String    @default("INTERNAL") // INTERNAL, CALENDARIFIC, MANUAL
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([date])
   @@index([festivalType])
   @@index([isActive])
@@ -2638,8 +2626,6 @@ model Festival {
   @@index([enableNotifications])
   @@map("festivals")
 }
-
-
 
 // Enums
 enum UserRole {
@@ -2649,10 +2635,10 @@ enum UserRole {
 }
 
 enum PostCategory {
-  MOM         // Minutes of Meeting
-  STORY       // Alumni Story
-  POST        // General Post
-  NOTICE     // Official Notice
+  MOM // Minutes of Meeting
+  STORY // Alumni Story
+  POST // General Post
+  NOTICE // Official Notice
   ANNOUNCEMENT // Event Announcement
 }
 
@@ -2663,8 +2649,8 @@ enum AttendeeStatus {
 }
 
 enum TransactionType {
-  COLLECTION  // Money coming in (donations, fees)
-  EXPENSE     // Money going out
+  COLLECTION // Money coming in (donations, fees)
+  EXPENSE // Money going out
 }
 
 enum TransactionStatus {
@@ -2683,13 +2669,16 @@ enum NotificationType {
   GENERAL
   BIRTHDAY_NOTIFICATION
   FESTIVAL_NOTIFICATION
-  NEW_REGISTRATION           // Admin gets notification on new registration
-  VERIFICATION_APPROVED      // User gets notification when approved  
-  VERIFICATION_REJECTED      // User gets notification when rejected
-  BATCH_USER_VERIFIED        // Batch admin gets notification when user from their batch verified
+  NEW_REGISTRATION // Admin gets notification on new registration
+  VERIFICATION_APPROVED // User gets notification when approved
+  VERIFICATION_REJECTED // User gets notification when rejected
+  BATCH_USER_VERIFIED // Batch admin gets notification when user from their batch verified
   ADMIN_VERIFICATION_REMINDER // Periodic reminder for pending verifications
-  ROLE_UPDATED              // User gets notification when their role is changed
-
+  ROLE_UPDATED // User gets notification when their role is changed
+  LIFELINK_EMERGENCY // Emergency blood requisition notification
+  LIFELINK_REMINDER // Blood donation eligibility reminder
+  EVENT_REGISTRATION // Event registration confirmation
+  POLL_CREATED // New poll notification
 }
 
 enum EmploymentStatus {
@@ -2776,7 +2765,6 @@ enum EventRegistrationStatus {
   WAITLIST
 }
 
-
 enum MealPreference {
   VEG
   NON_VEG
@@ -2795,42 +2783,42 @@ enum PaymentProvider {
 }
 
 enum PaymentReferenceType {
-  EVENT_REGISTRATION    // Full event registration payment
-  EVENT_PAYMENT        // Direct event payment (creates registration after payment)
-  MERCHANDISE          // Merchandise only payment
-  GUEST_FEES          // Guest fees only payment
-  ADDITIONAL_FEES     // Any additional fees
-  DONATION           // Donation payment
-  MEMBERSHIP              // NEW
+  EVENT_REGISTRATION // Full event registration payment
+  EVENT_PAYMENT // Direct event payment (creates registration after payment)
+  MERCHANDISE // Merchandise only payment
+  GUEST_FEES // Guest fees only payment
+  ADDITIONAL_FEES // Any additional fees
+  DONATION // Donation payment
+  MEMBERSHIP // NEW
   BATCH_ADMIN_PAYMENT
   MERCHANDISE_PAYMENT
   MERCHANDISE_ORDER
 }
 
 enum PaymentStatus {
-  PENDING            // Payment initiated but not completed
-  PROCESSING         // Payment in progress
-  COMPLETED          // Payment successful
-  FAILED             // Payment failed
-  CANCELLED          // Payment cancelled by user
-  REFUNDED           // Payment refunded
+  PENDING // Payment initiated but not completed
+  PROCESSING // Payment in progress
+  COMPLETED // Payment successful
+  FAILED // Payment failed
+  CANCELLED // Payment cancelled by user
+  REFUNDED // Payment refunded
   PARTIALLY_REFUNDED // Partial refund processed
-  EXPIRED            // Payment link expired
+  EXPIRED // Payment link expired
 }
 
 enum WebhookStatus {
-  RECEIVED           // Webhook received
-  VERIFIED           // Signature verified
-  PROCESSED          // Successfully processed
-  FAILED             // Processing failed
-  IGNORED            // Ignored (duplicate or irrelevant)
+  RECEIVED // Webhook received
+  VERIFIED // Signature verified
+  PROCESSED // Successfully processed
+  FAILED // Processing failed
+  IGNORED // Ignored (duplicate or irrelevant)
 }
 
 enum InvoiceStatus {
-  PENDING            // Invoice not yet generated
-  GENERATED          // Invoice generated
-  EMAILED            // Invoice sent via email
-  FAILED             // Invoice generation failed
+  PENDING // Invoice not yet generated
+  GENERATED // Invoice generated
+  EMAILED // Invoice sent via email
+  FAILED // Invoice generation failed
 }
 
 enum CheckInMethod {
@@ -2862,7 +2850,7 @@ enum ManualCollectionMode {
 
 enum GroupType {
   CELL
-  COMMITTEE  
+  COMMITTEE
   OFFICE_BEARERS
   ADVISORS
 }
@@ -2872,7 +2860,7 @@ enum GroupMemberRole {
   CONVENER
   CO_CONVENER
   STAKE_HOLDER
-  
+
   // Office Bearer Roles
   PRESIDENT
   VICE_PRESIDENT
@@ -2880,7 +2868,7 @@ enum GroupMemberRole {
   JOINT_SECRETARY
   TREASURER
   JOINT_TREASURER
-  
+
   // Advisor Roles
   CHIEF_ADVISOR
   JOINT_ADVISOR
@@ -2938,19 +2926,19 @@ enum DonorResponseStatus {
 // Ticket Enums
 
 enum TicketStatus {
-  OPEN           // Just created, waiting for admin response
-  IN_PROGRESS    // Admin is working on it
+  OPEN // Just created, waiting for admin response
+  IN_PROGRESS // Admin is working on it
   WAITING_FOR_USER // Admin responded, waiting for user reply
-  RESOLVED       // Admin marked as resolved
-  CLOSED         // Ticket is closed (by admin or auto-closed)
-  REOPENED       // User reopened a closed/resolved ticket
+  RESOLVED // Admin marked as resolved
+  CLOSED // Ticket is closed (by admin or auto-closed)
+  REOPENED // User reopened a closed/resolved ticket
 }
 
 enum TicketPriority {
-  LOW     // General questions, non-urgent
-  MEDIUM  // Default priority
-  HIGH    // Important issues affecting user experience
-  URGENT  // Critical issues requiring immediate attention
+  LOW // General questions, non-urgent
+  MEDIUM // Default priority
+  HIGH // Important issues affecting user experience
+  URGENT // Critical issues requiring immediate attention
 }
 
 enum TicketSatisfaction {
@@ -2963,21 +2951,21 @@ enum TicketSatisfaction {
 
 enum MessageReactionType {
   HELPFUL
-  SOLVED  
+  SOLVED
   NEEDS_CLARIFICATION
   THUMBS_UP
   THUMBS_DOWN
 }
 
 enum PostReactionType {
-  LIKE         // 👍
-  LOVE         // ❤️  
-  CELEBRATE    // 🎉
-  SUPPORT      // 🙌
-  FUNNY        // 😂
-  WOW          // 😮
-  ANGRY        // 😠
-  SAD          // 😢
+  LIKE // 👍
+  LOVE // ❤️  
+  CELEBRATE // 🎉
+  SUPPORT // 🙌
+  FUNNY // 😂
+  WOW // 😮
+  ANGRY // 😠
+  SAD // 😢
 }
 
 enum AuditActionType {
@@ -3023,24 +3011,24 @@ enum BulkOperationStatus {
 }
 
 enum SearchType {
-  BASIC       // Simple text search
-  ADVANCED    // Complex filters
+  BASIC // Simple text search
+  ADVANCED // Complex filters
   FILTER_PRESET // Using saved filter
 }
 
 enum MembershipStatus {
-  ACTIVE      // Paid and valid
-  EXPIRED     // Membership period ended
-  PENDING     // Payment initiated but not completed
-  SUSPENDED   // Admin suspended
-  INACTIVE    // Never paid or deactivated
+  ACTIVE // Paid and valid
+  EXPIRED // Membership period ended
+  PENDING // Payment initiated but not completed
+  SUSPENDED // Admin suspended
+  INACTIVE // Never paid or deactivated
 }
 
 enum RegistrationMode {
-  INDIVIDUAL           // Normal individual registration
-  BATCH_COLLECTION     // Batch collection system active
-  MIXED               // Both modes allowed (future feature)
-  DISABLED            // Registration disabled
+  INDIVIDUAL // Normal individual registration
+  BATCH_COLLECTION // Batch collection system active
+  MIXED // Both modes allowed (future feature)
+  DISABLED // Registration disabled
 }
 
 // ENUMS FOR CELEBRATION SYSTEM
@@ -3069,7 +3057,7 @@ enum Religion {
 }
 
 enum FestivalPriority {
-  MAJOR      // Major festivals like Diwali, Holi, Eid
-  REGIONAL   // Regional festivals
-  MINOR      // Minor festivals
+  MAJOR // Major festivals like Diwali, Holi, Eid
+  REGIONAL // Regional festivals
+  MINOR // Minor festivals
 }

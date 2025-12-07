@@ -86,17 +86,21 @@ app.use((req, res, next) => {
 	const isMultipartFormData = contentType.startsWith('multipart/form-data');
 	
 	// Skip JSON parsing for file upload routes or multipart data
-	const isFileUploadRoute = 
-		req.path.includes('/upload/') || 
+	const isFileUploadRoute =
+		req.path.includes('/upload/') ||
 		req.path.includes('/profile-picture') ||
 		isMultipartFormData ||
 		// Specific post routes that handle file uploads
-		((req.method === 'POST' || req.method === 'PUT') && 
-		 (req.path === '/api/posts' || req.path.startsWith('/api/posts/')) && 
+		((req.method === 'POST' || req.method === 'PUT') &&
+		 (req.path === '/api/posts' || req.path.startsWith('/api/posts/')) &&
 		 isMultipartFormData) ||
 		// Event routes that handle file uploads
-		((req.method === 'POST' || req.method === 'PUT') && 
-		 (req.path === '/api/events' || req.path.startsWith('/api/events/')) && 
+		((req.method === 'POST' || req.method === 'PUT') &&
+		 (req.path === '/api/events' || req.path.startsWith('/api/events/')) &&
+		 isMultipartFormData) ||
+		// Album routes that handle file uploads (covers and photos)
+		((req.method === 'POST' || req.method === 'PUT') &&
+		 (req.path === '/api/albums' || req.path.startsWith('/api/albums/')) &&
 		 isMultipartFormData);
 	
 	console.log('🔍 Middleware check:', {

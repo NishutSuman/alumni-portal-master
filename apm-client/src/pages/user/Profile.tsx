@@ -236,43 +236,43 @@ const SectionCard = memo<{
   const isEditing = editingSection === sectionKey
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-5 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
           {title}
         </h3>
         {canEdit ? (
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             {isEditing ? (
               <>
                 <button
                   onClick={() => onSaveSection(sectionKey)}
-                  className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs sm:text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
                 >
-                  <CheckBadgeIcon className="h-4 w-4 mr-1" />
+                  <CheckBadgeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
                   Save
                 </button>
                 <button
                   onClick={onCancelEdit}
-                  className="inline-flex items-center px-3 py-1.5 bg-gray-500 text-white text-sm font-medium rounded-md hover:bg-gray-600 transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 bg-gray-500 text-white text-xs sm:text-sm font-medium rounded-md hover:bg-gray-600 transition-colors"
                 >
-                  <XCircleIcon className="h-4 w-4 mr-1" />
+                  <XCircleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
                   Cancel
                 </button>
               </>
             ) : (
               <button
                 onClick={() => onEditSection(sectionKey)}
-                className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
               >
-                <PencilIcon className="h-4 w-4 mr-1" />
+                <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
                 Edit
               </button>
             )}
           </div>
         ) : (
-          <div className="inline-flex items-center px-3 py-1.5 text-gray-500 dark:text-gray-400 text-sm font-medium">
-            <LockClosedIcon className="h-4 w-4 mr-1" />
+          <div className="inline-flex items-center px-3 py-1.5 text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">
+            <LockClosedIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
             Locked
           </div>
         )}
@@ -1473,22 +1473,22 @@ const Profile: React.FC = () => {
   }, [])
 
 
-  // Close dropdown when clicking outside (temporarily disabled for debugging)
-  // useEffect(() => {
-  //   const handleClickOutside = (event: MouseEvent) => {
-  //     if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-  //       setShowProfilePictureMenu(false)
-  //     }
-  //   }
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowProfilePictureMenu(false)
+      }
+    }
 
-  //   if (showProfilePictureMenu) {
-  //     document.addEventListener('mousedown', handleClickOutside)
-  //   }
+    if (showProfilePictureMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
 
-  //   return () => {
-  //     document.removeEventListener('mousedown', handleClickOutside)
-  //   }
-  // }, [showProfilePictureMenu])
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showProfilePictureMenu])
 
   if (isLoading) {
     return (
@@ -1816,7 +1816,7 @@ const Profile: React.FC = () => {
     }
     if (profile.isAlumniVerified) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mx-auto sm:mx-0">
           <CheckBadgeIconSolid className="h-3 w-3 mr-1" />
           Verified Alumni
         </span>
@@ -1912,9 +1912,9 @@ const Profile: React.FC = () => {
     }
 
     return (
-      <div className="flex items-center space-x-6">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6">
         {/* Profile Visibility Toggle */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => handleToggle('isProfilePublic', !privacySettings.isProfilePublic)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -1929,14 +1929,14 @@ const Profile: React.FC = () => {
               }`}
             />
           </button>
-          <div className="flex items-center space-x-1">
-            <GlobeAltIcon className="h-4 w-4 text-gray-300" />
-            <span className="text-sm text-gray-300">Public Profile</span>
+          <div className="flex items-center gap-1.5">
+            <GlobeAltIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-300" />
+            <span className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Public Profile</span>
           </div>
         </div>
 
         {/* Show Email Toggle */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => handleToggle('showEmail', !privacySettings.showEmail)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -1951,14 +1951,14 @@ const Profile: React.FC = () => {
               }`}
             />
           </button>
-          <div className="flex items-center space-x-1">
-            <EnvelopeIcon className="h-4 w-4 text-gray-300" />
-            <span className="text-sm text-gray-300">Show Email</span>
+          <div className="flex items-center gap-1.5">
+            <EnvelopeIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-300" />
+            <span className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Show Email</span>
           </div>
         </div>
 
         {/* Show Phone Toggle */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => handleToggle('showPhone', !privacySettings.showPhone)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -1973,9 +1973,9 @@ const Profile: React.FC = () => {
               }`}
             />
           </button>
-          <div className="flex items-center space-x-1">
-            <PhoneIcon className="h-4 w-4 text-gray-300" />
-            <span className="text-sm text-gray-300">Show Phone</span>
+          <div className="flex items-center gap-1.5">
+            <PhoneIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-300" />
+            <span className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Show Phone</span>
           </div>
         </div>
       </div>
@@ -2028,7 +2028,7 @@ const Profile: React.FC = () => {
     }
 
     return (
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center justify-center sm:justify-start space-x-3">
         {socialLinks.map((link, index) => (
           <a
             key={index}
@@ -2055,14 +2055,14 @@ const Profile: React.FC = () => {
       {/* Header Section - Similar to Keka Design */}
       <div className="relative">
         {/* Background Banner */}
-        <div className="h-64 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 relative">
+        <div className="min-h-[400px] sm:min-h-0 sm:h-56 md:h-64 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 relative flex items-end justify-center sm:justify-start">
           <div className="absolute inset-0 bg-black bg-opacity-20"></div>
 
           {/* Profile Info Overlay */}
-          <div className="absolute bottom-6 left-8 flex items-end space-x-8">
+          <div className="relative w-full pb-6 px-4 sm:px-6 md:px-8 flex flex-col sm:flex-row items-center sm:items-end space-y-4 sm:space-y-0 sm:space-x-6 md:space-x-8 z-10">
             {/* Profile Picture with Upload/Delete Menu */}
-            <div className="relative">
-              <div className="w-36 h-36 rounded-full overflow-hidden bg-white shadow-xl border-4 border-white">
+            <div className="relative flex-shrink-0 self-center sm:self-auto">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full overflow-hidden bg-white shadow-xl border-4 border-white">
                 {profile.profileImage ? (
                   <img
                     src={`http://localhost:3000/api/users/profile-picture/${profile.id}?t=${imageTimestamp}`}
@@ -2087,17 +2087,17 @@ const Profile: React.FC = () => {
               {/* Profile Picture Menu Button */}
               <button
                 onClick={handleProfilePictureClick}
-                className="absolute bottom-1 right-1 w-11 h-11 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105 border-3 border-white dark:border-gray-800"
+                className="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105 border-2 border-white dark:border-gray-800"
                 title="Photo options"
               >
-                <EllipsisVerticalIcon className="h-5 w-5 text-white" />
+                <EllipsisVerticalIcon className="h-4 w-4 text-white" />
               </button>
 
               {/* Profile Picture Menu Dropdown */}
               {showProfilePictureMenu && (
                 <div
                   ref={dropdownRef}
-                  className="absolute bottom-14 right-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 z-50 animate-in slide-in-from-bottom-2 duration-200"
+                  className="absolute top-full mt-2 right-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 z-50 animate-in slide-in-from-top-2 duration-200"
                 >
                   <button
                     onClick={handleUploadClick}
@@ -2133,27 +2133,27 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Profile Details */}
-            <div className="text-white pb-2 flex-1">
-              <div className="flex items-center space-x-4 mb-3">
-                <h1 className="text-4xl font-bold">{profile.fullName}</h1>
+            <div className="text-white pb-2 flex-1 min-w-0 text-center sm:text-left w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-center sm:justify-start space-y-2 sm:space-y-0 sm:space-x-4 mb-3">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">{profile.fullName}</h1>
                 <StatusBadge />
               </div>
               
               {/* Serial ID Display */}
               {profile.serialId && (
-                <div className="flex items-center space-x-2 mb-2">
-                  <IdentificationIcon className="h-5 w-5 text-white/80" />
-                  <span className="text-lg font-medium text-white/90">
+                <div className="flex items-center justify-center sm:justify-start space-x-2 mb-2">
+                  <IdentificationIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white/80 flex-shrink-0" />
+                  <span className="text-sm sm:text-base md:text-lg font-medium text-white/90">
                     Serial ID: <span className="font-bold">{profile.serialId}</span>
                   </span>
                 </div>
               )}
 
               {/* Role and Membership Status */}
-              <div className="flex items-center space-x-4 mb-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3 md:gap-4 mb-3">
                 <div className="flex items-center space-x-2 bg-white/20 px-3 py-1 rounded-full">
-                  <UserIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">
+                  <UserIcon className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium whitespace-nowrap">
                     {profile.role.replace('_', ' ')}
                   </span>
                 </div>
@@ -2161,47 +2161,47 @@ const Profile: React.FC = () => {
               </div>
 
               {/* Contact Info Row - Always visible to profile owner with privacy indicators */}
-              <div className="flex items-center space-x-6 text-sm text-white/90 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-center sm:justify-start gap-2 sm:gap-4 md:gap-6 text-xs sm:text-sm text-white/90 mb-3">
                 {/* Profile Privacy Indicator */}
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center justify-center sm:justify-start space-x-1 flex-shrink-0">
                   {profile.isProfilePublic ? (
-                    <LockOpenIcon className="h-3.5 w-3.5 text-green-400" title="Profile is public" />
+                    <LockOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-400" title="Profile is public" />
                   ) : (
-                    <LockClosedIcon className="h-3.5 w-3.5 text-yellow-400" title="Profile is private" />
+                    <LockClosedIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-400" title="Profile is private" />
                   )}
-                  <span className="text-xs">Profile</span>
+                  <span className="text-xs whitespace-nowrap">Profile</span>
                 </div>
 
                 {/* Email with privacy indicator */}
-                <div className="flex items-center space-x-2">
-                  <EnvelopeIcon className="h-4 w-4" />
-                  <span>{profile.email}</span>
+                <div className="flex items-center justify-center sm:justify-start space-x-2 min-w-0">
+                  <EnvelopeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                  <span className="truncate">{profile.email}</span>
                   {!profile.showEmail ? (
-                    <LockClosedIcon className="h-3.5 w-3.5 text-yellow-400" title="Email hidden from others" />
+                    <LockClosedIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-400 flex-shrink-0" title="Email hidden from others" />
                   ) : (
-                    <LockOpenIcon className="h-3.5 w-3.5 text-green-400" title="Email visible to others" />
+                    <LockOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-400 flex-shrink-0" title="Email visible to others" />
                   )}
                 </div>
-                
+
                 {/* Phone numbers with privacy indicator - includes both WhatsApp and Alternate */}
                 {(profile.whatsappNumber || profile.alternateNumber) && (
-                  <div className="flex items-center space-x-2">
-                    <PhoneIcon className="h-4 w-4" />
-                    <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-center sm:justify-start space-x-2 min-w-0">
+                    <PhoneIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <div className="flex items-center space-x-2 min-w-0">
                       {profile.whatsappNumber && (
-                        <span title="WhatsApp">{profile.whatsappNumber}</span>
+                        <span title="WhatsApp" className="whitespace-nowrap">{profile.whatsappNumber}</span>
                       )}
                       {profile.whatsappNumber && profile.alternateNumber && (
                         <span className="text-white/50">|</span>
                       )}
                       {profile.alternateNumber && (
-                        <span title="Alternate">{profile.alternateNumber}</span>
+                        <span title="Alternate" className="whitespace-nowrap">{profile.alternateNumber}</span>
                       )}
                     </div>
                     {!profile.showPhone ? (
-                      <LockClosedIcon className="h-3.5 w-3.5 text-yellow-400" title="Phone numbers hidden from others" />
+                      <LockClosedIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-400 flex-shrink-0" title="Phone numbers hidden from others" />
                     ) : (
-                      <LockOpenIcon className="h-3.5 w-3.5 text-green-400" title="Phone numbers visible to others" />
+                      <LockOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-400 flex-shrink-0" title="Phone numbers visible to others" />
                     )}
                   </div>
                 )}
@@ -2214,9 +2214,9 @@ const Profile: React.FC = () => {
         </div>
 
         {/* Alumni Info Bar with Privacy Toggles */}
-        <div className="bg-gray-800 text-white px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="grid grid-cols-3 gap-8">
+        <div className="bg-gray-800 text-white px-4 sm:px-6 md:px-8 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
               <div>
                 <div className="text-xs text-gray-400 uppercase tracking-wide">
                   Batch
@@ -2231,7 +2231,7 @@ const Profile: React.FC = () => {
                   {profile.admissionYear || 'Not Set'}
                 </div>
               </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <div className="text-xs text-gray-400 uppercase tracking-wide">
                   Passout Year
                 </div>
@@ -2240,15 +2240,16 @@ const Profile: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Actions and Privacy Toggles on the right side */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <button
                 onClick={() => setShowIdentityCard(true)}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors duration-200"
+                className="inline-flex items-center px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors duration-200"
               >
                 <IdentificationIcon className="w-4 h-4 mr-2" />
-                ID Card
+                <span className="hidden sm:inline">ID Card</span>
+                <span className="sm:hidden">ID</span>
               </button>
               <PrivacyToggles />
             </div>
@@ -2259,15 +2260,15 @@ const Profile: React.FC = () => {
       {/* Profile Completion - Hidden when 100% complete */}
       {profileCompletionPercentage < 100 && (
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="px-8 py-4">
+          <div className="px-4 sm:px-6 md:px-8 py-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Profile Completion</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{profileCompletionPercentage}%</span>
+              <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Profile Completion</span>
+              <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">{profileCompletionPercentage}%</span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div 
+              <div
                 className={`h-2 rounded-full transition-all duration-500 ${
-                  profileCompletionPercentage >= 80 ? 'bg-green-500' : 
+                  profileCompletionPercentage >= 80 ? 'bg-green-500' :
                   profileCompletionPercentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
                 }`}
                 style={{ width: `${profileCompletionPercentage}%` }}
@@ -2278,9 +2279,9 @@ const Profile: React.FC = () => {
       )}
       
       {/* Tab Navigation */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-8">
-          <nav className="flex space-x-8">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <div className="px-4 sm:px-6 md:px-8">
+          <nav className="flex space-x-4 sm:space-x-6 md:space-x-8 min-w-max sm:min-w-0">
             {[
               { key: 'about', label: 'ABOUT' },
               { key: 'address', label: 'ADDRESS' },
@@ -2290,7 +2291,7 @@ const Profile: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as 'about' | 'address' | 'career' | 'social')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
@@ -2304,11 +2305,11 @@ const Profile: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8">
         {activeTab === 'about' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {/* Left Column */}
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6 md:space-y-8">
               {/* Personal Information Section - Clean Rewrite */}
               <SectionCard 
                 title="Personal Information" 
@@ -2350,7 +2351,7 @@ const Profile: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                     {/* Admission Year */}
                     {editingSection === 'personal' ? (
                       <div className="space-y-1">
@@ -2574,7 +2575,7 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Right Column */}
-            <div className="space-y-8">
+            <div className="space-y-4 sm:space-y-6 md:space-y-8">
               {/* Contact Information Section - Editable */}
               <SectionCard
                 title="Contact Information"

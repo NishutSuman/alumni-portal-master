@@ -13,10 +13,11 @@ const generateDashboardCacheKey = (filters = {}) => {
     bloodGroup, 
     eligibleOnly = 'false',
     page = 1, 
-    limit = 20
+    limit = 20,
+    city
   } = filters;
   
-  return `lifelink:dashboard:${bloodGroup || 'all'}:eligible:${eligibleOnly}:page:${page}:limit:${limit}`;
+  return `lifelink:dashboard:${bloodGroup || 'all'}:eligible:${eligibleOnly}:page:${page}:limit:${limit}:city:${city || 'all'}`;
 };
 
 const generateUserBloodProfileCacheKey = (userId) => {

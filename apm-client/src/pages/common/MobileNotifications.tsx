@@ -136,31 +136,27 @@ const MobileNotifications: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors -ml-2"
-              >
-                <ArrowLeftIcon className="h-6 w-6" />
-              </button>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white ml-2">
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-red-500 rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
-              </h1>
-            </div>
-          </div>
-          
-          {/* Filter Tabs */}
-          <div className="flex mt-4 space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 pt-16">
+      {/* Header with close button */}
+      <div className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
+        <div className="flex items-center justify-between px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Notifications
+          </h1>
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            title="Close notifications"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* Notifications Content */}
+      <div className="px-4 pt-4">
+        {/* Filter Tabs */}
+        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
             <button
               onClick={() => setFilter('all')}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
@@ -203,11 +199,9 @@ const MobileNotifications: React.FC = () => {
               </button>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Notifications List */}
-      <div className="px-4 py-4">
+        {/* Notifications List */}
+        <div className="mt-4">
         {error ? (
           <div className="text-center py-8">
             <ExclamationCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -286,6 +280,7 @@ const MobileNotifications: React.FC = () => {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

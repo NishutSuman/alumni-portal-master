@@ -5,9 +5,10 @@ const router = express.Router();
 // ============================================
 // MIDDLEWARE IMPORTS
 // ============================================
-const { 
-  authenticateToken, 
-  requireRole 
+const {
+  authenticateToken,
+  requireRole,
+  optionalAuth
 } = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
 
@@ -54,124 +55,108 @@ const albumController = require('../controllers/album/album.controller');
 const photoController = require('../controllers/album/photo.controller');
 
 // ============================================
-// ADMIN-ONLY MIDDLEWARE
-// All album routes require SUPER_ADMIN access
-// ============================================
-router.use(authenticateToken);
-router.use(requireRole('SUPER_ADMIN'));
-
-// ============================================
 // ALBUM MANAGEMENT ROUTES
 // ============================================
 
 /**
- * Get all albums with pagination and filtering
+ * Get all albums with pagination and filtering (Public - all users can view)
  * GET /api/albums
  */
 router.get('/',
-  [
-    cacheAlbumsList
-  ],
+  optionalAuth,
+  cacheAlbumsList,
   asyncHandler(albumController.getAlbums)
 );
 
 /**
- * Get single album with photos
+ * Get single album with photos (Public - all users can view)
  * GET /api/albums/:albumId
  */
 router.get('/:albumId',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    cacheAlbumDetails
-  ],
+  optionalAuth,
+  validateAlbumIdParam,
+  cacheAlbumDetails,
   asyncHandler(albumController.getAlbum)
 );
 
 /**
- * Create new album (with optional cover image)
+ * Get album statistics (Public - all users can view)
+ * GET /api/albums/:albumId/stats
+ */
+router.get('/:albumId/stats',
+  optionalAuth,
+  validateAlbumIdParam,
+  cacheAlbumStats,
+  asyncHandler(albumController.getAlbumStats)
+);
+
+/**
+ * Create new album (ADMIN ONLY - with optional cover image)
  * POST /api/albums
  */
 router.post('/',
-  [
-    uploadAlbumCover,
-    handleUploadError,
-    validateCreateAlbum,
-    validateAlbumNameUnique,
-    autoInvalidateAlbumCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  uploadAlbumCover,
+  handleUploadError,
+  validateCreateAlbum,
+  validateAlbumNameUnique,
+  autoInvalidateAlbumCaches,
   asyncHandler(albumController.createAlbum)
 );
 
 /**
- * Update album details (with optional cover image)
+ * Update album details (ADMIN ONLY - with optional cover image)
  * PUT /api/albums/:albumId
  */
 router.put('/:albumId',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    uploadAlbumCover,
-    handleUploadError,
-    validateUpdateAlbum,
-    validateAlbumNameUnique,
-    autoInvalidateAlbumCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  uploadAlbumCover,
+  handleUploadError,
+  validateUpdateAlbum,
+  validateAlbumNameUnique,
+  autoInvalidateAlbumCaches,
   asyncHandler(albumController.updateAlbum)
 );
 
 /**
- * Delete album and all its photos
+ * Delete album and all its photos (ADMIN ONLY)
  * DELETE /api/albums/:albumId
  */
 router.delete('/:albumId',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(albumController.deleteAlbum)
 );
 
 /**
- * Archive/Unarchive album
+ * Archive/Unarchive album (ADMIN ONLY)
  * POST /api/albums/:albumId/archive
  */
 router.post('/:albumId/archive',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    autoInvalidateAlbumCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  autoInvalidateAlbumCaches,
   asyncHandler(albumController.toggleArchiveAlbum)
 );
 
 /**
- * Set album cover from existing photo
+ * Set album cover from existing photo (ADMIN ONLY)
  * POST /api/albums/:albumId/cover
  */
 router.post('/:albumId/cover',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    validateSetCover,
-    autoInvalidateAlbumCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  validateSetCover,
+  autoInvalidateAlbumCaches,
   asyncHandler(albumController.setAlbumCover)
-);
-
-/**
- * Get album statistics
- * GET /api/albums/:albumId/stats
- */
-router.get('/:albumId/stats',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    cacheAlbumStats
-  ],
-  asyncHandler(albumController.getAlbumStats)
 );
 
 // ============================================
@@ -179,50 +164,46 @@ router.get('/:albumId/stats',
 // ============================================
 
 /**
- * Get photos in album with pagination
+ * Get photos in album with pagination (Public - all users can view)
  * GET /api/albums/:albumId/photos
  */
 router.get('/:albumId/photos',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    cacheAlbumPhotos
-  ],
-  asyncHandler(photoController.getPhotos) // Uses albumId filter from query
+  optionalAuth,
+  validateAlbumIdParam,
+  cacheAlbumPhotos,
+  asyncHandler(photoController.getPhotos)
 );
 
 /**
- * Upload single photo to album
+ * Upload single photo to album (ADMIN ONLY)
  * POST /api/albums/:albumId/photos
  */
 router.post('/:albumId/photos',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    uploadSinglePhoto,
-    handleUploadError,
-    validatePhotoUpload,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  uploadSinglePhoto,
+  handleUploadError,
+  validatePhotoUpload,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.uploadPhotoToAlbum)
 );
 
 /**
- * Bulk upload photos to album
+ * Bulk upload photos to album (ADMIN ONLY)
  * POST /api/albums/:albumId/photos/bulk
  */
 router.post('/:albumId/photos/bulk',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    uploadAlbumPhotos,
-    handleUploadError,
-    validateBulkUploadPhotos,
-    validatePhotoUpload,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  uploadAlbumPhotos,
+  handleUploadError,
+  validateBulkUploadPhotos,
+  validatePhotoUpload,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.bulkUploadPhotos)
 );
 
@@ -231,83 +212,74 @@ router.post('/:albumId/photos/bulk',
 // ============================================
 
 /**
- * Get specific photo in album
+ * Get specific photo in album (Public - all users can view)
  * GET /api/albums/:albumId/photos/:photoId
  */
 router.get('/:albumId/photos/:photoId',
-  [
-    validateAlbumIdParam,
-    validatePhotoIdParam,
-    validateAlbumAccess,
-    validatePhotoAccess,
-    cachePhotoDetails
-  ],
+  optionalAuth,
+  validateAlbumIdParam,
+  validatePhotoIdParam,
+  cachePhotoDetails,
   asyncHandler(photoController.getPhoto)
 );
 
 /**
- * Update photo details (caption, tags)
+ * Update photo details - caption, tags (ADMIN ONLY)
  * PUT /api/albums/:albumId/photos/:photoId
  */
 router.put('/:albumId/photos/:photoId',
-  [
-    validateAlbumIdParam,
-    validatePhotoIdParam,
-    validateAlbumAccess,
-    validatePhotoAccess,
-    validateUpdatePhoto,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  validatePhotoIdParam,
+  validateUpdatePhoto,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.updatePhoto)
 );
 
 /**
- * Delete specific photo from album
+ * Delete specific photo from album (ADMIN ONLY)
  * DELETE /api/albums/:albumId/photos/:photoId
  */
 router.delete('/:albumId/photos/:photoId',
-  [
-    validateAlbumIdParam,
-    validatePhotoIdParam,
-    validateAlbumAccess,
-    validatePhotoAccess,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  validatePhotoIdParam,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.deletePhoto)
 );
 
 // ============================================
-// BULK PHOTO OPERATIONS
+// BULK PHOTO OPERATIONS (ADMIN ONLY)
 // ============================================
 
 /**
- * Bulk delete photos from album
+ * Bulk delete photos from album (ADMIN ONLY)
  * POST /api/albums/:albumId/photos/bulk-delete
  */
 router.post('/:albumId/photos/bulk-delete',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    validateBulkDeletePhotos,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  validateBulkDeletePhotos,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.bulkDeletePhotos)
 );
 
 /**
- * Move photos to different album
+ * Move photos to different album (ADMIN ONLY)
  * POST /api/albums/:albumId/photos/move
  */
 router.post('/:albumId/photos/move',
-  [
-    validateAlbumIdParam,
-    validateAlbumAccess,
-    validateMovePhotos,
-    autoInvalidateAlbumCaches,
-    autoInvalidatePhotoCaches
-  ],
+  authenticateToken,
+  requireRole('SUPER_ADMIN'),
+  validateAlbumIdParam,
+  validateMovePhotos,
+  autoInvalidateAlbumCaches,
+  autoInvalidatePhotoCaches,
   asyncHandler(photoController.movePhotos)
 );
 
@@ -316,36 +288,53 @@ router.post('/:albumId/photos/move',
 // ============================================
 
 /**
- * Search photos across all albums
+ * Search photos across all albums (Public - all users can view)
  * GET /api/albums/photos/search
  */
 router.get('/photos/search',
-  [
-    cachePhotoSearch
-  ],
+  optionalAuth,
+  cachePhotoSearch,
   asyncHandler(photoController.searchPhotos)
 );
 
 /**
- * Get recent photos across all albums
+ * Get recent photos across all albums (Public - all users can view)
  * GET /api/albums/photos/recent
  */
 router.get('/photos/recent',
-  [
-    cacheRecentPhotos
-  ],
+  optionalAuth,
+  cacheRecentPhotos,
   asyncHandler(photoController.getRecentPhotos)
 );
 
 /**
- * Get all photos across all albums (admin view)
+ * Get all photos across all albums (Public - all users can view)
  * GET /api/albums/photos/all
  */
 router.get('/photos/all',
-  [
-    cachePhotoSearch
-  ],
+  optionalAuth,
+  cachePhotoSearch,
   asyncHandler(photoController.getPhotos)
+);
+
+// ============================================
+// R2 IMAGE PROXY ROUTES
+// ============================================
+
+/**
+ * Serve album cover image from R2 (Public proxy)
+ * GET /api/albums/cover/:albumId
+ */
+router.get('/cover/:albumId',
+  asyncHandler(albumController.serveAlbumCover)
+);
+
+/**
+ * Serve album photo from R2 (Public proxy)
+ * GET /api/albums/photo/:filename
+ */
+router.get('/photo/:filename',
+  asyncHandler(photoController.servePhoto)
 );
 
 // ============================================

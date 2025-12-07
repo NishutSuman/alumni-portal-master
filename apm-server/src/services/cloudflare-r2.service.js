@@ -154,7 +154,7 @@ class CloudflareR2Service {
    */
   validateEventImage(file) {
     const errors = [];
-    
+
     if (!file) {
       errors.push('No file provided');
       return { valid: false, error: 'No file provided' };
@@ -172,8 +172,82 @@ class CloudflareR2Service {
       errors.push(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
     }
 
-    return { 
-      valid: errors.length === 0, 
+    return {
+      valid: errors.length === 0,
+      error: errors.length > 0 ? errors.join(', ') : null
+    };
+  }
+
+  /**
+   * Upload album cover image
+   */
+  async uploadAlbumCover(file) {
+    const filename = this.generateUniqueFilename(file.originalname, 'album_cover');
+    return this.uploadFile(file, 'alumni-portal/album-covers', filename);
+  }
+
+  /**
+   * Upload album photo
+   */
+  async uploadAlbumPhoto(file) {
+    const filename = this.generateUniqueFilename(file.originalname, 'photo');
+    return this.uploadFile(file, 'alumni-portal/album-photos', filename);
+  }
+
+  /**
+   * Validate album cover image
+   */
+  validateAlbumCover(file) {
+    const errors = [];
+
+    if (!file) {
+      errors.push('No file provided');
+      return { valid: false, error: 'No file provided' };
+    }
+
+    // Size limit - 3MB for album covers
+    const sizeLimit = 3 * 1024 * 1024;
+    if (file.size > sizeLimit) {
+      errors.push(`File size exceeds 3MB limit for album covers`);
+    }
+
+    // Allowed types for album covers
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      errors.push(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
+    }
+
+    return {
+      valid: errors.length === 0,
+      error: errors.length > 0 ? errors.join(', ') : null
+    };
+  }
+
+  /**
+   * Validate album photo
+   */
+  validateAlbumPhoto(file) {
+    const errors = [];
+
+    if (!file) {
+      errors.push('No file provided');
+      return { valid: false, error: 'No file provided' };
+    }
+
+    // Size limit - 5MB for album photos
+    const sizeLimit = 5 * 1024 * 1024;
+    if (file.size > sizeLimit) {
+      errors.push(`File size exceeds 5MB limit for album photos`);
+    }
+
+    // Allowed types for album photos
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      errors.push(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
+    }
+
+    return {
+      valid: errors.length === 0,
       error: errors.length > 0 ? errors.join(', ') : null
     };
   }

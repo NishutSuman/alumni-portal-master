@@ -3,6 +3,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams } = require('../../utils/response');
 const PhotoService = require('../../services/PhotoService');
 const { generatePhotoUrl, cleanupUploadedFiles } = require('../../middleware/upload.middleware');
+const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
 
 // ============================================
 // ALBUM MANAGEMENT CONTROLLERS
@@ -15,20 +16,20 @@ const { generatePhotoUrl, cleanupUploadedFiles } = require('../../middleware/upl
  */
 const getAlbums = async (req, res) => {
   try {
-    const { 
-      page, 
-      limit, 
+    const {
       search,
-      isArchived = 'false',
+      includeArchived,
       sortBy = 'createdAt',
       sortOrder = 'desc'
     } = req.query;
 
-    const { skip, take } = getPaginationParams(page, limit);
+    const { page, limit, skip } = getPaginationParams(req.query, 12);
 
     // Build filters
+    // includeArchived: true = show ONLY archived albums
+    // includeArchived: false or undefined = show ONLY active (non-archived) albums
     const whereClause = {
-      isArchived: isArchived === 'true'
+      isArchived: includeArchived === 'true'
     };
 
     if (search) {
@@ -55,7 +56,7 @@ const getAlbums = async (req, res) => {
           }
         },
         skip,
-        take,
+        take: limit,
         orderBy: { [finalSortBy]: finalSortOrder }
       }),
       prisma.album.count({ where: whereClause })
@@ -65,7 +66,7 @@ const getAlbums = async (req, res) => {
     const albumsWithStats = await Promise.all(
       albums.map(async (album) => {
         const stats = await PhotoService.getAlbumPhotoStats(album.id);
-        
+
         return {
           id: album.id,
           name: album.name,
@@ -73,8 +74,10 @@ const getAlbums = async (req, res) => {
           coverImage: album.coverImage,
           isArchived: album.isArchived,
           creator: album.creator,
-          photoCount: album._count.photos,
-          totalSize: stats.totalSize,
+          _count: {
+            photos: album._count.photos
+          },
+          totalSize: Number(stats.totalSize), // Convert BigInt to Number
           totalSizeFormatted: stats.totalSizeFormatted,
           createdAt: album.createdAt,
           updatedAt: album.updatedAt
@@ -82,12 +85,19 @@ const getAlbums = async (req, res) => {
       })
     );
 
+    const pagination = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: totalCount,
+      pages: Math.ceil(totalCount / limit),
+      hasNext: page < Math.ceil(totalCount / limit),
+      hasPrev: page > 1
+    };
+
     return paginatedResponse(
       res,
       { albums: albumsWithStats },
-      totalCount,
-      page,
-      limit,
+      pagination,
       'Albums retrieved successfully'
     );
   } catch (error) {
@@ -172,11 +182,11 @@ const getAlbum = async (req, res) => {
       coverImage: album.coverImage,
       isArchived: album.isArchived,
       creator: album.creator,
-      stats: {
-        photoCount: album._count.photos,
-        totalSize: stats.totalSize,
-        totalSizeFormatted: stats.totalSizeFormatted
+      _count: {
+        photos: album._count.photos
       },
+      totalSize: stats.totalSize,
+      totalSizeFormatted: stats.totalSizeFormatted,
       photos: includePhotos === 'true' ? photos : undefined,
       photosPagination: includePhotos === 'true' ? photosPagination : undefined,
       createdAt: album.createdAt,
@@ -199,11 +209,26 @@ const createAlbum = async (req, res) => {
   try {
     const { name, description } = req.body;
     const userId = req.user.id;
-    
+
     // Handle cover image if uploaded
     let coverImageUrl = null;
     if (req.file) {
-      coverImageUrl = generatePhotoUrl(req, req.file);
+      // Check if Cloudflare R2 is configured
+      if (!cloudflareR2Service.isConfigured()) {
+        return errorResponse(res, 'Cloudflare R2 storage is not configured', 500);
+      }
+
+      // Validate album cover
+      const validation = cloudflareR2Service.validateAlbumCover(req.file);
+      if (!validation.valid) {
+        return errorResponse(res, validation.error, 400);
+      }
+
+      // Upload to R2
+      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file);
+
+      // Store the full R2 URL (same as profile pictures)
+      coverImageUrl = uploadResult.url;
     }
 
     const album = await prisma.album.create({
@@ -245,7 +270,9 @@ const createAlbum = async (req, res) => {
       coverImage: album.coverImage,
       isArchived: album.isArchived,
       creator: album.creator,
-      photoCount: album._count.photos,
+      _count: {
+        photos: album._count.photos
+      },
       createdAt: album.createdAt,
       updatedAt: album.updatedAt
     };
@@ -253,12 +280,6 @@ const createAlbum = async (req, res) => {
     return successResponse(res, { album: albumData }, 'Album created successfully', 201);
   } catch (error) {
     console.error('Create album error:', error);
-    
-    // Cleanup uploaded file on error
-    if (req.file) {
-      cleanupUploadedFiles(req.file);
-    }
-    
     return errorResponse(res, 'Failed to create album', 500);
   }
 };
@@ -289,11 +310,30 @@ const updateAlbum = async (req, res) => {
         select: { coverImage: true }
       });
 
-      updateData.coverImage = generatePhotoUrl(req, req.file);
-      
-      // Clean up old cover image file (optional)
+      // Check if Cloudflare R2 is configured
+      if (!cloudflareR2Service.isConfigured()) {
+        return errorResponse(res, 'Cloudflare R2 storage is not configured', 500);
+      }
+
+      // Validate album cover
+      const validation = cloudflareR2Service.validateAlbumCover(req.file);
+      if (!validation.valid) {
+        return errorResponse(res, validation.error, 400);
+      }
+
+      // Upload new cover to R2
+      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file);
+
+      // Store the full R2 URL (same as profile pictures)
+      updateData.coverImage = uploadResult.url;
+
+      // Delete old cover image from R2
       if (oldAlbum?.coverImage) {
-        // Could implement cleanup of old cover image here
+        try {
+          await cloudflareR2Service.deleteFileByUrl(oldAlbum.coverImage);
+        } catch (cleanupError) {
+          console.warn('Failed to cleanup old album cover:', cleanupError);
+        }
       }
     }
 
@@ -336,7 +376,9 @@ const updateAlbum = async (req, res) => {
       coverImage: updatedAlbum.coverImage,
       isArchived: updatedAlbum.isArchived,
       creator: updatedAlbum.creator,
-      photoCount: updatedAlbum._count.photos,
+      _count: {
+        photos: updatedAlbum._count.photos
+      },
       totalSize: stats.totalSize,
       totalSizeFormatted: stats.totalSizeFormatted,
       createdAt: updatedAlbum.createdAt,
@@ -382,10 +424,22 @@ const deleteAlbum = async (req, res) => {
 
     const photoCount = album.photos.length;
 
-    // Delete all photos in the album (this will also clean up files)
+    // Delete all photos in the album (this will also clean up files from R2)
     if (photoCount > 0) {
       const photoIds = album.photos.map(photo => photo.id);
       await PhotoService.bulkDeletePhotos(photoIds, userId);
+    }
+
+    // Delete album cover from R2 if exists
+    if (album.coverImage) {
+      try {
+        console.log('Deleting album cover from R2:', album.coverImage);
+        await cloudflareR2Service.deleteFileByUrl(album.coverImage);
+        console.log('Album cover deleted from R2 successfully');
+      } catch (coverError) {
+        console.error('Album cover cleanup error:', coverError);
+        // Don't throw error for cover cleanup failure
+      }
     }
 
     // Delete the album
@@ -457,7 +511,9 @@ const setAlbumCover = async (req, res) => {
       id: updatedAlbum.id,
       name: updatedAlbum.name,
       coverImage: updatedAlbum.coverImage,
-      photoCount: updatedAlbum._count.photos
+      _count: {
+        photos: updatedAlbum._count.photos
+      }
     };
 
     return successResponse(res, { album: albumData }, 'Album cover updated successfully');
@@ -522,7 +578,9 @@ const toggleArchiveAlbum = async (req, res) => {
       coverImage: updatedAlbum.coverImage,
       isArchived: updatedAlbum.isArchived,
       creator: updatedAlbum.creator,
-      photoCount: updatedAlbum._count.photos,
+      _count: {
+        photos: updatedAlbum._count.photos
+      },
       createdAt: updatedAlbum.createdAt,
       updatedAt: updatedAlbum.updatedAt
     };
@@ -590,6 +648,75 @@ const getAlbumStats = async (req, res) => {
   }
 };
 
+/**
+ * Serve album cover image from R2
+ * GET /api/albums/cover/:albumId
+ * Access: Public (proxy for R2 private bucket)
+ */
+const serveAlbumCover = async (req, res) => {
+  try {
+    const { albumId } = req.params;
+
+    // Get album from database to retrieve the cover image URL and updatedAt
+    const album = await prisma.album.findUnique({
+      where: { id: albumId },
+      select: { coverImage: true, updatedAt: true }
+    });
+
+    if (!album || !album.coverImage) {
+      console.log('Album or cover image not found for albumId:', albumId);
+      return res.status(404).send('Image not found');
+    }
+
+    console.log('Fetching album cover from R2:', album.coverImage);
+
+    let key;
+
+    // Check if coverImage is a full URL or just a filename
+    if (album.coverImage.startsWith('http://') || album.coverImage.startsWith('https://')) {
+      // Extract the key from the full R2 URL (same approach as profile pictures)
+      const urlParts = album.coverImage.split('.com/');
+      if (urlParts.length < 2) {
+        console.error('Invalid R2 URL format:', album.coverImage);
+        return res.status(400).send('Invalid image URL');
+      }
+      key = urlParts[1]; // e.g., "alumni-portal/album-covers/album_cover_xxx.png"
+    } else {
+      // It's just a filename, prepend the album-covers path
+      key = `alumni-portal/album-covers/${album.coverImage}`;
+    }
+
+    console.log('Fetching album cover with key:', key);
+
+    // Get file from R2
+    const result = await cloudflareR2Service.getFile(key);
+
+    if (!result.success) {
+      console.error('Failed to fetch album cover from R2:', result.error);
+      return res.status(404).send('Image not found');
+    }
+
+    // Set content type and cache headers
+    // Use updatedAt timestamp for ETag to bust cache when image is updated
+    const etag = `"${albumId}-${album.updatedAt.getTime()}"`;
+
+    res.set({
+      'Content-Type': result.contentType,
+      'Content-Length': result.size,
+      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+      'ETag': etag,
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin'
+    });
+
+    // Send the image buffer
+    return res.send(result.data);
+  } catch (error) {
+    console.error('Serve album cover error:', error);
+    return res.status(500).send('Error serving image');
+  }
+};
+
 module.exports = {
   getAlbums,
   getAlbum,
@@ -598,5 +725,6 @@ module.exports = {
   deleteAlbum,
   setAlbumCover,
   toggleArchiveAlbum,
-  getAlbumStats
+  getAlbumStats,
+  serveAlbumCover
 };

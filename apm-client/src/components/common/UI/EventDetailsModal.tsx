@@ -78,97 +78,104 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+      <div className="flex min-h-full items-center justify-center p-4 text-center">
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
-        
-        <div className="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
+
+        <div className="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 w-full text-left shadow-xl transition-all my-8 max-w-2xl max-h-[85vh] flex flex-col">
           {/* Header */}
-          <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
-            <button
-              type="button"
-              className="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-guild-500 focus:ring-offset-2"
-              onClick={onClose}
-            >
-              <span className="sr-only">Close</span>
-              <XMarkIcon className="h-6 w-6" />
-            </button>
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
+                Event Details
+              </h3>
+              <button
+                type="button"
+                className="rounded-md p-2 bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-guild-500 transition-colors"
+                onClick={onClose}
+              >
+                <span className="sr-only">Close</span>
+                <XMarkIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+            </div>
           </div>
 
-          {/* Event Image */}
-          {event.heroImage && (
-            <div className="mb-6">
-              <img
-                src={`http://localhost:3000/api/events/${event.id}/hero-image`}
-                alt={event.title}
-                className="w-full h-64 object-cover rounded-lg"
-                onError={(e) => {
-                  console.error('Image failed to load:', event.heroImage);
-                  console.error('Proxy URL:', `http://localhost:3000/api/events/${event.id}/hero-image`);
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-                onLoad={() => {
-                  console.log('Event image loaded successfully in modal via proxy:', `http://localhost:3000/api/events/${event.id}/hero-image`);
-                }}
-              />
-            </div>
-          )}
+          {/* Scrollable Content */}
+          <div className="overflow-y-auto flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
+            {/* Event Image */}
+            {event.heroImage && (
+              <div className="mb-4 sm:mb-6 -mx-4 sm:mx-0 sm:rounded-lg overflow-hidden">
+                <img
+                  src={`http://localhost:3000/api/events/${event.id}/hero-image`}
+                  alt={event.title}
+                  className="w-full h-48 sm:h-64 object-cover"
+                  onError={(e) => {
+                    console.error('Image failed to load:', event.heroImage);
+                    console.error('Proxy URL:', `http://localhost:3000/api/events/${event.id}/hero-image`);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                  onLoad={() => {
+                    console.log('Event image loaded successfully in modal via proxy:', `http://localhost:3000/api/events/${event.id}/hero-image`);
+                  }}
+                />
+              </div>
+            )}
 
           {/* Content */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Title and Category */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
                 {event.category && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                     {event.category.name}
                   </span>
                 )}
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
                   {event.status.replace('_', ' ')}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
                 {event.title}
               </h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 {event.description}
               </p>
             </div>
 
             {/* Event Details Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               {/* Date & Time */}
-              <div className="flex items-start space-x-3">
-                <CalendarIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-                <div>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">Date & Time</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex items-start space-x-2.5 sm:space-x-3">
+                <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Date & Time</div>
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 break-words">
                     {formatEventTime(event.eventDate, event.startTime, event.endTime)}
                   </div>
                 </div>
               </div>
 
               {/* Location/Mode */}
-              <div className="flex items-start space-x-3">
+              <div className="flex items-start space-x-2.5 sm:space-x-3">
                 {event.eventMode === 'VIRTUAL' ? (
-                  <ClockIcon className="h-5 w-5 text-gray-400 mt-0.5" />
+                  <ClockIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mt-0.5 flex-shrink-0" />
                 ) : (
-                  <MapPinIcon className="h-5 w-5 text-gray-400 mt-0.5" />
+                  <MapPinIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mt-0.5 flex-shrink-0" />
                 )}
-                <div>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                     {event.eventMode === 'VIRTUAL' ? 'Event Mode' : 'Location'}
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                     {event.eventMode === 'VIRTUAL' ? (
-                      <span className={`px-2 py-1 rounded-full text-xs ${getEventModeColor(event.eventMode)}`}>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${getEventModeColor(event.eventMode)}`}>
                         Virtual Event
                       </span>
                     ) : (
-                      <div className="flex items-center space-x-2">
-                        <span>{event.venue || 'Venue TBA'}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="break-words">{event.venue || 'Venue TBA'}</span>
                         {event.eventMode === 'HYBRID' && (
-                          <span className={`px-2 py-1 rounded-full text-xs ${getEventModeColor(event.eventMode)}`}>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${getEventModeColor(event.eventMode)}`}>
                             Hybrid
                           </span>
                         )}
@@ -180,11 +187,11 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
               {/* Capacity */}
               {event.maxCapacity && (
-                <div className="flex items-start space-x-3">
-                  <UsersIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">Capacity</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-start space-x-2.5 sm:space-x-3">
+                  <UsersIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Capacity</div>
+                    <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                       {event._count?.registrations || event.registrationCount || 0} / {event.maxCapacity} registered
                     </div>
                   </div>
@@ -193,11 +200,11 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
               {/* Registration Fee */}
               {Number(event.registrationFee) > 0 && (
-                <div className="flex items-start space-x-3">
-                  <CurrencyRupeeIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">Registration Fee</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-start space-x-2.5 sm:space-x-3">
+                  <CurrencyRupeeIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Registration Fee</div>
+                    <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                       ₹{event.registrationFee}
                       {Number(event.guestFee) > 0 && (
                         <span className="text-xs ml-1">(Guest: ₹{event.guestFee})</span>
@@ -210,15 +217,15 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
             {/* Meeting Link for Virtual Events */}
             {event.eventMode !== 'PHYSICAL' && event.meetingLink && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4">
+                <h4 className="text-xs sm:text-sm font-medium text-blue-900 dark:text-blue-100 mb-1.5 sm:mb-2">
                   Meeting Link
                 </h4>
                 <a
                   href={event.meetingLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-500 text-sm break-all"
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-500 text-xs sm:text-sm break-all"
                 >
                   {event.meetingLink}
                 </a>
@@ -226,11 +233,11 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
             )}
           </div>
 
-          {/* Footer */}
-          <div className="mt-6 flex justify-end space-x-3">
+          {/* Footer - Sticky on mobile */}
+          <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-6 sm:py-4 flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary text-sm sm:text-base py-2 sm:py-2.5 px-4 sm:px-6"
               onClick={onClose}
             >
               Close
@@ -238,11 +245,12 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
             {event.status === 'REGISTRATION_OPEN' && (
               <button
                 type="button"
-                className="btn-guild"
+                className="btn-guild text-sm sm:text-base py-2 sm:py-2.5 px-4 sm:px-6"
               >
                 Register Now
               </button>
             )}
+          </div>
           </div>
         </div>
       </div>

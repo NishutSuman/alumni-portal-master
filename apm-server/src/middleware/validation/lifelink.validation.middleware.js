@@ -239,6 +239,11 @@ const schemas = {
       .min(1)
       .max(50)
       .default(20)
+      .optional(),
+    
+    city: Joi.string()
+      .trim()
+      .max(100)
       .optional()
   }),
 

@@ -28,6 +28,7 @@ const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   className = '',
 }) => {
   const { user, role, isActive, addedAt } = member
+  const [imageError, setImageError] = React.useState(false)
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 border border-gray-200 dark:border-gray-700 ${className}`}>
@@ -36,11 +37,12 @@ const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
         <div className="flex items-start space-x-4">
           {/* Profile Photo */}
           <div className="flex-shrink-0">
-            {user.profilePhoto ? (
+            {!imageError && user.id ? (
               <img
-                src={user.profilePhoto}
+                src={`/api/users/profile-picture/${user.id}`}
                 alt={user.fullName}
                 className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+                onError={() => setImageError(true)}
               />
             ) : (
               <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">

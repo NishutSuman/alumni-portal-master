@@ -28,6 +28,7 @@ import { useSearchAlumniQuery, useGetAlumniStatsQuery, useGetAlumniProfileQuery 
 import { useGetPublicOrganizationQuery } from '../../store/api/apiSlice'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../../components/common/UI/LoadingSpinner'
+import BrandedLoader from '../../components/common/UI/BrandedLoader'
 
 // Employment status options
 const EMPLOYMENT_STATUS_OPTIONS = [
@@ -172,7 +173,7 @@ const AlumniDirectory: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       <style jsx>{`
         .perspective-1000 {
           perspective: 1000px;
@@ -186,23 +187,52 @@ const AlumniDirectory: React.FC = () => {
         .rotate-y-180 {
           transform: rotateY(180deg);
         }
+        /* Hide scrollbar on mobile */
+        .hide-scrollbar-mobile::-webkit-scrollbar {
+          display: none;
+        }
+        .hide-scrollbar-mobile {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        /* Show scrollbar on desktop */
+        @media (min-width: 1024px) {
+          .hide-scrollbar-mobile::-webkit-scrollbar {
+            display: block;
+            width: 8px;
+          }
+          .hide-scrollbar-mobile::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .hide-scrollbar-mobile::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+          }
+          .hide-scrollbar-mobile::-webkit-scrollbar-thumb:hover {
+            background: #555;
+          }
+          .hide-scrollbar-mobile {
+            -ms-overflow-style: auto;
+            scrollbar-width: thin;
+          }
+        }
       `}</style>
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header - Fixed Section */}
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 lg:gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <UserGroupIcon className="h-8 w-8 text-blue-600" />
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <UserGroupIcon className="h-6 w-6 lg:h-8 lg:w-8 text-blue-600" />
                 Alumni Directory
               </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              <p className="mt-1 text-xs lg:text-sm text-gray-600 dark:text-gray-400">
                 Connect with {stats?.totalAlumni || 0} verified alumni from our community
               </p>
             </div>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              className="inline-flex items-center px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
               <ChartBarIcon className="h-4 w-4 mr-2" />
               {showStats ? 'Hide' : 'Show'} Stats
@@ -211,51 +241,36 @@ const AlumniDirectory: React.FC = () => {
         </div>
       </div>
 
-      {/* Statistics Section */}
+      {/* Statistics Section - Fixed Section */}
       <AnimatePresence>
         {showStats && !statsLoading && stats && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+            className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
+              <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 {/* Total Alumni */}
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    <UsersIcon className="h-8 w-8 text-white/80" />
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 lg:p-4">
+                  <div className="flex items-center gap-2 lg:gap-3">
+                    <UsersIcon className="h-6 w-6 lg:h-8 lg:w-8 text-white/80" />
                     <div>
-                      <p className="text-3xl font-bold">{stats.totalAlumni}</p>
-                      <p className="text-sm text-white/80">Total Alumni</p>
+                      <p className="text-xl lg:text-3xl font-bold">{stats.totalAlumni}</p>
+                      <p className="text-xs lg:text-sm text-white/80">Total Alumni</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Recent Joins */}
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    <SparklesIcon className="h-8 w-8 text-white/80" />
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 lg:p-4">
+                  <div className="flex items-center gap-2 lg:gap-3">
+                    <SparklesIcon className="h-6 w-6 lg:h-8 lg:w-8 text-white/80" />
                     <div>
-                      <p className="text-3xl font-bold">{stats.recentJoins}</p>
-                      <p className="text-sm text-white/80">New (30 days)</p>
+                      <p className="text-xl lg:text-3xl font-bold">{stats.recentJoins}</p>
+                      <p className="text-xs lg:text-sm text-white/80">New (30 days)</p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Employment Distribution */}
-                <div className="col-span-2 bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                  <p className="text-sm text-white/80 mb-2">Employment Status</p>
-                  <div className="flex flex-wrap gap-2">
-                    {stats.employmentDistribution.map((item) => (
-                      <span
-                        key={item.status}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-white/20"
-                      >
-                        {item.status.replace('_', ' ')}: {item.count}
-                      </span>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -264,9 +279,10 @@ const AlumniDirectory: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Search and Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      {/* Search and Filters - Fixed Section */}
+      <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 pt-4 lg:pt-6 pb-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 lg:p-4">
           {/* Search Bar */}
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
@@ -396,12 +412,20 @@ const AlumniDirectory: React.FC = () => {
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </div>
       </div>
 
-      {/* Alumni Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      {/* Alumni Grid - Scrollable Section */}
+      <div className="flex-1 overflow-hidden">
         {alumniLoading ? (
+          <div className="h-full flex justify-center items-center">
+            <BrandedLoader message="" size="lg" />
+          </div>
+        ) : (
+        <div className="h-full overflow-y-auto pb-20 lg:pb-8 hide-scrollbar-mobile">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2">
+        {alumniLoading === undefined ? (
           <div className="flex justify-center items-center h-64">
             <LoadingSpinner />
           </div>
@@ -419,7 +443,7 @@ const AlumniDirectory: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
               {alumni.map((alumnus) => {
                 const isFlipped = flippedCards.has(alumnus.id)
                 return (
@@ -427,7 +451,7 @@ const AlumniDirectory: React.FC = () => {
                     key={alumnus.id}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="relative group h-64 w-full perspective-1000"
+                    className="relative group h-56 md:h-64 w-full perspective-1000"
                   >
                     <div
                       className={`relative w-full h-full transform-style-preserve-3d transition-transform duration-700 ${
@@ -448,45 +472,45 @@ const AlumniDirectory: React.FC = () => {
                           </svg>
                         </button>
 
-                        <div className="p-4 text-center h-full flex flex-col justify-center">
+                        <div className="p-3 md:p-4 text-center h-full flex flex-col justify-center">
                           {/* Profile Image */}
-                          <div className="flex justify-center mb-3">
+                          <div className="flex justify-center mb-2 md:mb-3">
                             {alumnus.profileImage ? (
                               <img
                                 src={`/api/users/profile-picture/${alumnus.id}`}
                                 alt={alumnus.fullName}
-                                className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
+                                className="h-12 w-12 md:h-16 md:w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement
                                   target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(alumnus.fullName)}&background=3B82F6&color=fff&size=64`
                                 }}
                               />
                             ) : (
-                              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg font-bold border-2 border-gray-100 dark:border-gray-700">
+                              <div className="h-12 w-12 md:h-16 md:w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm md:text-lg font-bold border-2 border-gray-100 dark:border-gray-700">
                                 {alumnus.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                               </div>
                             )}
                           </div>
-                          
+
                           {/* Name and Batch */}
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate mb-1">
+                          <h3 className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white truncate mb-1 px-1">
                             {alumnus.fullName}
                           </h3>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                          <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-400 mb-2 md:mb-4">
                             Batch {alumnus.batch}
                           </p>
 
                           {/* Social Links */}
-                          <div className="flex items-center justify-center gap-3 mb-4">
+                          <div className="flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
                             {alumnus.linkedinUrl && (
                               <a
                                 href={alumnus.linkedinUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                className="p-1.5 md:p-2 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                                 title="LinkedIn"
                               >
-                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                <svg className="h-3 w-3 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
                                 </svg>
                               </a>
@@ -494,10 +518,10 @@ const AlumniDirectory: React.FC = () => {
                             {alumnus.email && (
                               <a
                                 href={`mailto:${alumnus.email}`}
-                                className="p-2 rounded-full bg-gray-50 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors"
+                                className="p-1.5 md:p-2 rounded-full bg-gray-50 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors"
                                 title="Email"
                               >
-                                <EnvelopeIcon className="h-4 w-4" />
+                                <EnvelopeIcon className="h-3 w-3 md:h-4 md:w-4" />
                               </a>
                             )}
                             {alumnus.whatsappNumber && (
@@ -505,10 +529,10 @@ const AlumniDirectory: React.FC = () => {
                                 href={`https://wa.me/${alumnus.whatsappNumber.replace(/[^0-9]/g, '')}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                className="p-1.5 md:p-2 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                                 title="WhatsApp"
                               >
-                                <PhoneIcon className="h-4 w-4" />
+                                <PhoneIcon className="h-3 w-3 md:h-4 md:w-4" />
                               </a>
                             )}
                           </div>
@@ -516,8 +540,8 @@ const AlumniDirectory: React.FC = () => {
 
                         {/* Bio Hover Effect - Slides from Bottom with Blue Theme */}
                         {alumnus.bio && (
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/95 via-blue-500/90 to-transparent p-4 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out">
-                            <p className="text-xs leading-relaxed line-clamp-3">
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/95 via-blue-500/90 to-transparent p-3 md:p-4 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out">
+                            <p className="text-[10px] md:text-xs leading-relaxed line-clamp-2 md:line-clamp-3">
                               {alumnus.bio}
                             </p>
                           </div>
@@ -526,9 +550,9 @@ const AlumniDirectory: React.FC = () => {
 
                       {/* Back Side - Organization Logo */}
                       <div className="absolute inset-0 backface-hidden rotate-y-180 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-sm border border-blue-500 dark:border-blue-400 overflow-hidden border-b-4 border-b-yellow-400">
-                        <div className="h-full flex flex-col items-center justify-center text-white p-4">
+                        <div className="h-full flex flex-col items-center justify-center text-white p-3 md:p-4">
                           {/* Organization Logo */}
-                          <div className="w-20 h-20 flex items-center justify-center mb-4">
+                          <div className="w-12 h-12 md:w-20 md:h-20 flex items-center justify-center mb-2 md:mb-4">
                             {organizationData ? (
                               <img
                                 src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/organization/files/logo`}
@@ -539,34 +563,34 @@ const AlumniDirectory: React.FC = () => {
                                   target.style.display = 'none'
                                   const parent = target.parentElement
                                   if (parent) {
-                                    parent.innerHTML = `<svg class="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>`
+                                    parent.innerHTML = `<svg class="h-8 w-8 md:h-10 md:w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>`
                                   }
                                 }}
                               />
                             ) : (
-                              <BuildingOfficeIcon className="h-10 w-10 text-white" />
+                              <BuildingOfficeIcon className="h-8 w-8 md:h-10 md:w-10 text-white" />
                             )}
                           </div>
-                          
+
                           {/* Organization Name */}
-                          <h3 className="text-lg font-bold mb-2 text-center">
+                          <h3 className="text-xs md:text-lg font-bold mb-1 md:mb-2 text-center px-2 line-clamp-2">
                             {organizationData?.name || 'Alumni Portal'}
                           </h3>
-                          
+
                           {/* Organization Short Name or Tagline */}
-                          <p className="text-sm text-center text-white/80 mb-2">
+                          <p className="text-[10px] md:text-sm text-center text-white/80 mb-1 md:mb-2 px-2 line-clamp-2">
                             {organizationData?.shortName || 'Connecting generations of excellence'}
                           </p>
-                          
+
                           {/* Foundation Year */}
                           {organizationData?.foundationYear && (
-                            <p className="text-xs text-white/60 mb-2">
+                            <p className="text-[10px] md:text-xs text-white/60 mb-1 md:mb-2">
                               Est. {organizationData.foundationYear}
                             </p>
                           )}
-                          
+
                           {/* Member Since */}
-                          <div className="mt-2 text-xs text-white/60">
+                          <div className="mt-1 md:mt-2 text-[10px] md:text-xs text-white/60">
                             Member since {new Date(alumnus.createdAt).getFullYear()}
                           </div>
                         </div>
@@ -632,6 +656,9 @@ const AlumniDirectory: React.FC = () => {
               </div>
             )}
           </>
+        )}
+          </div>
+        </div>
         )}
       </div>
 

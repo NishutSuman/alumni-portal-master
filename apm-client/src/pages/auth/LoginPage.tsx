@@ -1,9 +1,11 @@
-// src/pages/auth/LoginPage.tsx - FIXED undefined result issue
+// src/pages/auth/LoginPage.tsx
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { selectIsDark } from '@/store/slices/themeSlice'
 import ThemeToggle from '@/components/common/UI/ThemeToggle'
-import OrganizationLogo from '@/components/common/UI/OrganizationLogo'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 const LoginPage = () => {
@@ -12,7 +14,9 @@ const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(false)
   const { login, isLoading, error } = useAuth()
   const location = useLocation()
-  
+  const navigate = useNavigate()
+  const isDark = useSelector(selectIsDark)
+
   // Check for email verification success
   useEffect(() => {
     if (location.state?.emailVerified) {
@@ -25,12 +29,10 @@ const LoginPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const result = await login({ email, password, rememberMe })
-    
-    // FIXED: Now we check if result exists before accessing properties
+
     if (result && result.success) {
-      // Navigation is handled in the login function
       console.log('Login successful')
     } else {
       console.log('Login failed:', result?.error)
@@ -38,118 +40,154 @@ const LoginPage = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-guild-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
-      <div className="max-w-md w-full mx-4">
-        {/* Theme toggle in top right */}
-        <div className="flex justify-end mb-4">
-          <ThemeToggle />
-        </div>
-        
-        <div className="glass-card p-8">
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <OrganizationLogo size="2xl" className="flex-shrink-0" />
-            </div>
-            <h1 className="text-3xl font-bold text-gradient-guild mb-2">Welcome to Alumni Portal</h1>
-            <p className="text-gray-600 dark:text-gray-300">Sign in to your account</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-blue-900/20 dark:to-purple-900/20">
+      {/* Fixed Navbar - Logo and Theme Toggle Only */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link to="/" className="flex items-center h-10">
+              <img
+                src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                alt="GUILD"
+                className="h-full w-auto object-contain"
+              />
+            </Link>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
+        </div>
+      </nav>
 
-          {/* Success message for email verification */}
-          {location.state?.emailVerified && (
-            <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 p-4 rounded-lg mb-6 border border-green-200 dark:border-green-800">
-              <div className="flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                {location.state.message || 'Email verified successfully! You can now sign in.'}
+      {/* Login Form */}
+      <div className="min-h-screen flex items-center justify-center pt-16 px-4">
+        <div className="max-w-md w-full">
+          {/* Back Button Above Form */}
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors group"
+          >
+            <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <span>Back to Home</span>
+          </button>
+
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 md:p-10">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="flex justify-center mb-6">
+                <img
+                  src={isDark ? '/brand/guild-logo-white.png' : '/brand/guild-logo.png'}
+                  alt="GUILD"
+                  className="h-20 w-auto object-contain"
+                />
               </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-error-50 dark:bg-error-900/20 text-error-700 dark:text-error-200 p-4 rounded-lg mb-6 border border-error-200 dark:border-error-800">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
-                placeholder="Enter your email"
-                required
-                disabled={isLoading}
-              />
+              <h1 className="text-3xl md:text-4xl font-bold mb-2">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
+                  Welcome Back
+                </span>
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
             </div>
 
-            <div>
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-input"
-                placeholder="Enter your password"
-                required
-                disabled={isLoading}
-              />
-            </div>
+            {/* Success message for email verification */}
+            {location.state?.emailVerified && (
+              <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 p-4 rounded-xl mb-6 border border-green-200 dark:border-green-800">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  {location.state.message || 'Email verified successfully! You can now sign in.'}
+                </div>
+              </div>
+            )}
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 p-4 rounded-xl mb-6 border border-red-200 dark:border-red-800">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Email Address
+                </label>
                 <input
-                  type="checkbox"
-                  id="remember-me"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-guild-600 rounded border-gray-300 focus:ring-guild-500"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Enter your email"
+                  required
                   disabled={isLoading}
                 />
-                <label htmlFor="remember-me" className="ml-2 text-sm text-gray-600 dark:text-gray-300">
-                  Remember me
-                </label>
               </div>
-              <Link
-                to="/auth/forgot-password"
-                className="text-sm text-guild-600 hover:text-guild-500 dark:text-guild-400 dark:hover:text-guild-300"
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Enter your password"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    disabled={isLoading}
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Remember me</span>
+                </label>
+                <Link
+                  to="/auth/forgot-password"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-semibold text-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Forgot password?
-              </Link>
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-gray-600 dark:text-gray-400">
+                Don't have an account?{' '}
+                <Link
+                  to="/auth/register"
+                  className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all"
+                >
+                  Join GUILD
+                </Link>
+              </p>
             </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn-guild w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Signing in...
-                </div>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              Don't have an account?{' '}
-              <Link to="/auth/register" className="text-guild-600 hover:text-guild-500 dark:text-guild-400 dark:hover:text-guild-300 font-medium">
-                Join GUILD
-              </Link>
-            </p>
           </div>
-          
-          <div className="mt-4 text-center">
-            <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-              ← Back to Homepage
-            </Link>
+
+          {/* Company Credit */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Powered by{' '}
+              <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
+                Digikite
+              </span>
+            </p>
           </div>
         </div>
       </div>

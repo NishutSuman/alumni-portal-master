@@ -277,25 +277,9 @@ const getFileUrl = (req, filename, subfolder = '') => {
 // PHOTO & ALBUM UPLOAD CONFIGURATIONS
 // ============================================
 
-// Album cover image upload (single file, 3MB limit)
+// Album cover image upload (single file, 3MB limit) - Memory storage for R2 upload
 const uploadAlbumCover = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadPath = './public/uploads/albums/covers/';
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const extension = path.extname(file.originalname);
-      const baseName = path.basename(file.originalname, extension);
-      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-      const filename = `album_cover_${cleanBaseName}_${uniqueSuffix}${extension}`;
-      cb(null, filename);
-    }
-  }),
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (imageTypes.includes(file.mimetype)) {
@@ -310,25 +294,9 @@ const uploadAlbumCover = multer({
   }
 }).single('coverImage');
 
-// Album photos upload (multiple files, 5MB each)
+// Album photos upload (multiple files, 5MB each) - Memory storage for R2 upload
 const uploadAlbumPhotos = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadPath = './public/uploads/albums/photos/';
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const extension = path.extname(file.originalname);
-      const baseName = path.basename(file.originalname, extension);
-      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-      const filename = `photo_${cleanBaseName}_${uniqueSuffix}${extension}`;
-      cb(null, filename);
-    }
-  }),
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (imageTypes.includes(file.mimetype)) {
@@ -343,25 +311,9 @@ const uploadAlbumPhotos = multer({
   }
 }).array('photos', 20);
 
-// Single photo upload
+// Single photo upload - Memory storage for R2 upload
 const uploadSinglePhoto = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadPath = './public/uploads/albums/photos/';
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const extension = path.extname(file.originalname);
-      const baseName = path.basename(file.originalname, extension);
-      const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-      const filename = `photo_${cleanBaseName}_${uniqueSuffix}${extension}`;
-      cb(null, filename);
-    }
-  }),
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
     if (imageTypes.includes(file.mimetype)) {

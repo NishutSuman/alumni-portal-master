@@ -2,6 +2,7 @@
 const { prisma } = require('../config/database');
 const fs = require('fs').promises;
 const path = require('path');
+const { cloudflareR2Service } = require('./cloudflare-r2.service');
 
 // ============================================
 // PHOTO SERVICE CLASS
@@ -16,30 +17,41 @@ class PhotoService {
   /**
    * Process and save photo with metadata
    */
-  static async processPhotoUpload(file, albumId, uploadedBy, caption = null, tags = []) {
+  static async processPhotoUpload(file, albumId, uploadedBy, caption = null, tags = [], includeRelations = true) {
     try {
       if (!file) {
         throw new Error('No file provided');
       }
 
-      // Generate photo URL
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-      const relativePath = file.path.replace('./public', '').replace(/\\/g, '/');
-      const photoUrl = `${baseUrl}${relativePath}`;
+      // Check if Cloudflare R2 is configured
+      if (!cloudflareR2Service.isConfigured()) {
+        throw new Error('Cloudflare R2 storage is not configured');
+      }
+
+      // Validate album photo
+      const validation = cloudflareR2Service.validateAlbumPhoto(file);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      // Upload to R2
+      const uploadResult = await cloudflareR2Service.uploadAlbumPhoto(file);
+      const photoUrl = uploadResult.url;
 
       // Extract metadata
       const metadata = {
         originalName: file.originalname,
-        filename: file.filename,
+        filename: uploadResult.filename,
         mimetype: file.mimetype,
         size: file.size,
         uploadedAt: new Date().toISOString(),
         dimensions: null, // Could be extracted using sharp library if needed
         format: file.mimetype.split('/')[1].toUpperCase(),
-        sizeFormatted: this.formatFileSize(file.size)
+        sizeFormatted: this.formatFileSize(file.size),
+        r2Key: uploadResult.key
       };
 
-      // Create photo record
+      // Create photo record (skip includes for bulk uploads to improve performance)
       const photo = await prisma.photo.create({
         data: {
           url: photoUrl,
@@ -49,14 +61,14 @@ class PhotoService {
           albumId,
           uploadedBy
         },
-        include: {
+        include: includeRelations ? {
           album: {
             select: { id: true, name: true }
           },
           uploader: {
             select: { id: true, fullName: true }
           }
-        }
+        } : false
       });
 
       return {
@@ -65,16 +77,7 @@ class PhotoService {
       };
     } catch (error) {
       console.error('Photo processing error:', error);
-      
-      // Clean up uploaded file on error
-      if (file?.path) {
-        try {
-          await fs.unlink(file.path);
-        } catch (cleanupError) {
-          console.error('File cleanup error:', cleanupError);
-        }
-      }
-      
+
       return {
         success: false,
         error: error.message
@@ -98,13 +101,19 @@ class PhotoService {
         totalFailed: 0
       };
 
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const caption = bulkCaption ? `${bulkCaption} (${i + 1}/${files.length})` : null;
-        
-        const result = await this.processPhotoUpload(file, albumId, uploadedBy, caption, []);
-        
+      // Process all files in parallel for better performance
+      // Skip database includes to speed up bulk operations
+      const uploadPromises = files.map((file, index) => {
+        const caption = bulkCaption ? `${bulkCaption} (${index + 1}/${files.length})` : null;
+        return this.processPhotoUpload(file, albumId, uploadedBy, caption, [], false)
+          .then(result => ({ ...result, filename: file.originalname }));
+      });
+
+      // Wait for all uploads to complete
+      const uploadResults = await Promise.all(uploadPromises);
+
+      // Aggregate results
+      for (const result of uploadResults) {
         if (result.success) {
           results.successful.push({
             photoId: result.photo.id,
@@ -114,7 +123,7 @@ class PhotoService {
           results.totalUploaded++;
         } else {
           results.failed.push({
-            filename: file.originalname,
+            filename: result.filename,
             error: result.error
           });
           results.totalFailed++;
@@ -214,20 +223,23 @@ class PhotoService {
         throw new Error('Insufficient permissions to delete this photo');
       }
 
-      // Delete photo record
+      // Delete photo record from database first (fast operation)
       await prisma.photo.delete({
         where: { id: photoId }
       });
 
-      // Clean up file
-      try {
-        const filePath = this.getFilePathFromUrl(photo.url);
-        if (filePath) {
-          await fs.unlink(filePath);
-        }
-      } catch (fileError) {
-        console.error('File cleanup error:', fileError);
-        // Don't throw error for file cleanup failure
+      // Clean up file from R2 storage asynchronously (don't block response)
+      if (photo.url) {
+        console.log('Scheduling R2 deletion for:', photo.url);
+        // Delete in background without blocking
+        setImmediate(async () => {
+          try {
+            await cloudflareR2Service.deleteFileByUrl(photo.url);
+            console.log('Photo deleted from R2 successfully:', photo.url);
+          } catch (fileError) {
+            console.error('R2 file cleanup error:', fileError);
+          }
+        });
       }
 
       return {
@@ -256,19 +268,76 @@ class PhotoService {
         totalFailed: 0
       };
 
-      for (const photoId of photoIds) {
-        try {
-          const result = await this.deletePhoto(photoId, userId);
-          if (result.success) {
-            results.deleted.push(result.deletedPhoto);
-            results.totalDeleted++;
+      // Fetch all photos at once with permissions check
+      const photos = await prisma.photo.findMany({
+        where: {
+          id: { in: photoIds }
+        },
+        include: {
+          album: {
+            select: { createdBy: true }
           }
-        } catch (error) {
+        }
+      });
+
+      // Separate photos into allowed and denied
+      const photosToDelete = [];
+      const photoUrlsToDelete = [];
+
+      for (const photo of photos) {
+        const canDelete = photo.uploadedBy === userId || photo.album?.createdBy === userId;
+
+        if (canDelete) {
+          photosToDelete.push(photo.id);
+          if (photo.url) {
+            photoUrlsToDelete.push(photo.url);
+          }
+          results.deleted.push({
+            id: photo.id,
+            filename: photo.metadata?.filename,
+            url: photo.url
+          });
+          results.totalDeleted++;
+        } else {
           results.failed.push({
-            photoId,
-            error: error.message
+            photoId: photo.id,
+            error: 'Insufficient permissions'
           });
           results.totalFailed++;
+        }
+      }
+
+      // Add failed entries for photos that don't exist
+      const foundPhotoIds = photos.map(p => p.id);
+      const missingPhotoIds = photoIds.filter(id => !foundPhotoIds.includes(id));
+      for (const photoId of missingPhotoIds) {
+        results.failed.push({
+          photoId,
+          error: 'Photo not found'
+        });
+        results.totalFailed++;
+      }
+
+      // Batch delete all allowed photos from database
+      if (photosToDelete.length > 0) {
+        await prisma.photo.deleteMany({
+          where: {
+            id: { in: photosToDelete }
+          }
+        });
+
+        // Schedule R2 cleanup in background (don't block response)
+        if (photoUrlsToDelete.length > 0) {
+          setImmediate(async () => {
+            for (const url of photoUrlsToDelete) {
+              try {
+                await cloudflareR2Service.deleteFileByUrl(url);
+                console.log('Photo deleted from R2:', url);
+              } catch (error) {
+                console.error('R2 cleanup error:', error);
+              }
+            }
+          });
         }
       }
 
@@ -358,20 +427,23 @@ class PhotoService {
         },
         include: {
           album: {
-            select: { createdBy: true }
+            select: { createdBy: true, id: true }
           }
         }
       });
 
       // Check permissions for each photo
       for (const photo of photos) {
-        const canMove = photo.uploadedBy === userId || 
+        const canMove = photo.uploadedBy === userId ||
                        photo.album?.createdBy === userId;
-                       
+
         if (!canMove) {
           throw new Error(`Insufficient permissions to move photo ${photo.id}`);
         }
       }
+
+      // Collect unique source album IDs BEFORE moving
+      const sourceAlbumIds = [...new Set(photos.map(photo => photo.albumId).filter(Boolean))];
 
       // Move photos
       const updatedPhotos = await prisma.photo.updateMany({
@@ -386,7 +458,9 @@ class PhotoService {
       return {
         movedCount: updatedPhotos.count,
         targetAlbum: targetAlbum.name,
-        photoIds
+        photoIds,
+        sourceAlbumIds, // Return source album IDs for cache invalidation
+        targetAlbumId
       };
     } catch (error) {
       console.error('Move photos error:', error);
@@ -458,26 +532,23 @@ class PhotoService {
     try {
       const stats = await prisma.photo.aggregate({
         where: { albumId },
-        _count: true,
-        _sum: {
-          // Can't directly sum JSON field, would need raw query for file sizes
-        }
+        _count: true
       });
 
       // Get total file size with raw query
       const sizeResult = await prisma.$queryRaw`
         SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
-        FROM photos 
-        WHERE album_id = ${albumId} 
+        FROM "public"."photos"
+        WHERE "albumId" = ${albumId}
           AND metadata->>'size' IS NOT NULL
       `;
 
-      const totalSize = sizeResult[0]?.total_size || 0;
+      const totalSize = Number(sizeResult[0]?.total_size || 0);
 
       return {
         totalPhotos: stats._count,
         totalSize,
-        totalSizeFormatted: this.formatFileSize(parseInt(totalSize))
+        totalSizeFormatted: this.formatFileSize(totalSize)
       };
     } catch (error) {
       console.error('Album photo stats error:', error);

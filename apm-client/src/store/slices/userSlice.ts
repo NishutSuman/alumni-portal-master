@@ -7,7 +7,7 @@ export interface UserProfile {
   // Personal Information
   fullName: string
   dateOfBirth?: string
-  profilePictureUrl?: string
+  profileImage?: string
   bio?: string
   currentLocation?: string
   
@@ -140,7 +140,7 @@ const userSlice = createSlice({
 // Helper functions
 function calculateProfileCompletion(profile: UserProfile): number {
   const fields = [
-    'fullName', 'dateOfBirth', 'profilePictureUrl', 'bio', 'currentLocation',
+    'fullName', 'dateOfBirth', 'profileImage', 'bio', 'currentLocation',
     'whatsappNumber', 'personalEmail', 'admissionYear', 'passoutYear',
     'employmentStatus', 'currentCompany', 'jobTitle'
   ]

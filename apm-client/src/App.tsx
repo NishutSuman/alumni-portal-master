@@ -46,8 +46,10 @@ const Groups = React.lazy(() => import('./pages/user/Groups'))
 const Posts = React.lazy(() => import('./pages/user/Posts'))
 const UserSocial = React.lazy(() => import('./pages/user/Social'))
 const UserEvents = React.lazy(() => import('./pages/user/Events'))
-// const UserLifeLink = React.lazy(() => import('./pages/user/LifeLink'))
-// const UserSupport = React.lazy(() => import('./pages/user/Support'))
+const UserGallery = React.lazy(() => import('./pages/user/Gallery'))
+const UserLifeLink = React.lazy(() => import('./pages/user/LifeLink'))
+const UserTreasury = React.lazy(() => import('./pages/user/Treasury'))
+const UserSupport = React.lazy(() => import('./pages/user/Support'))
 // const UserSettings = React.lazy(() => import('./pages/user/Settings'))
 
 // Admin pages
@@ -59,11 +61,11 @@ const PostsManagement = React.lazy(() => import('./pages/admin/PostsManagement')
 const PollManagement = React.lazy(() => import('./pages/admin/PollManagement'))
 const GroupsManagement = React.lazy(() => import('./pages/admin/GroupsManagement'))
 const EventsManagement = React.lazy(() => import('./pages/admin/EventsManagement'))
+const GalleryManagement = React.lazy(() => import('./pages/admin/GalleryManagement'))
 const AdminSocial = React.lazy(() => import('./pages/admin/Social'))
 const AdminEvents = React.lazy(() => import('./pages/admin/Events'))
-// const AdminFinance = React.lazy(() => import('./pages/admin/Finance'))
-// const AdminContent = React.lazy(() => import('./pages/admin/Content'))
-// const AdminSystem = React.lazy(() => import('./pages/admin/System'))
+const AdminTreasury = React.lazy(() => import('./pages/admin/Treasury'))
+const AdminSupport = React.lazy(() => import('./pages/admin/Support'))
 
 // Error fallback component
 const ErrorFallback = ({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) => (
@@ -210,9 +212,13 @@ function App() {
       '/user/social': 'Social - GUILD',
       '/user/posts': 'Posts - GUILD',
       '/user/events': 'My Events - GUILD',
+      '/user/gallery': 'Gallery - GUILD',
       '/user/lifelink': 'LifeLink - GUILD',
+      '/user/treasury': 'Treasury - GUILD',
       '/user/support': 'Support - GUILD',
       '/admin/dashboard': 'Admin Dashboard - GUILD',
+      '/admin/treasury': 'Treasury - GUILD',
+      '/admin/support': 'Support Management - GUILD',
       '/admin/users': 'User Management - GUILD',
       '/admin/organization': 'Organization Management - GUILD',
       '/admin/groups': 'Groups Management - GUILD',
@@ -221,6 +227,7 @@ function App() {
       '/admin/polls': 'Poll Management - GUILD',
       '/admin/events-management': 'Event Management - GUILD',
       '/admin/events': 'Events - GUILD',
+      '/admin/gallery': 'Gallery Management - GUILD',
       '/organization': 'Organization - GUILD',
     }
 
@@ -304,6 +311,26 @@ function App() {
                   <UserEvents />
                 </VerifiedRoute>
               } />
+              <Route path="gallery" element={
+                <VerifiedRoute>
+                  <UserGallery />
+                </VerifiedRoute>
+              } />
+              <Route path="lifelink" element={
+                <VerifiedRoute>
+                  <UserLifeLink />
+                </VerifiedRoute>
+              } />
+              <Route path="treasury" element={
+                <VerifiedRoute>
+                  <UserTreasury />
+                </VerifiedRoute>
+              } />
+              <Route path="support" element={
+                <VerifiedRoute>
+                  <UserSupport />
+                </VerifiedRoute>
+              } />
             </Route>
 
             {/* Organization route - accessible to all authenticated users */}
@@ -333,6 +360,9 @@ function App() {
               <Route path="social" element={<AdminSocial />} />
               <Route path="posts" element={<PostsManagement />} />
               <Route path="polls" element={<PollManagement />} />
+              <Route path="gallery" element={<GalleryManagement />} />
+              <Route path="treasury" element={<AdminTreasury />} />
+              <Route path="support" element={<AdminSupport />} />
               <Route path="profile" element={<UserProfile />} />
             </Route>
 

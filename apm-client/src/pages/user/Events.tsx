@@ -419,100 +419,115 @@ const Events: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Events</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Discover and participate in alumni events
-          </p>
+    <div className="flex flex-col h-screen lg:h-auto overflow-hidden lg:overflow-visible">
+      {/* Header - Fixed on mobile */}
+      <div className="flex-shrink-0 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent px-4 sm:px-0 pt-4 lg:pt-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Events</h1>
+            <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+              Discover and participate in alumni events
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
+      {/* Tabs - Fixed on mobile */}
+      <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 -mx-4 sm:mx-0 overflow-x-auto scrollbar-hide bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent mt-4">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 px-4 sm:px-0 min-w-min">
           <button
             onClick={() => setActiveTab('active')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 sm:py-3 px-1.5 sm:px-2 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 ${
               activeTab === 'active'
                 ? 'border-guild-500 text-guild-600 dark:text-guild-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Active Events
-            <span className="ml-2 bg-guild-100 text-guild-600 py-0.5 px-2 rounded-full text-xs">
-              {events.filter((event: Event) => {
-                const eventDate = new Date(event.eventDate)
-                return eventDate >= now && !['COMPLETED', 'CANCELLED'].includes(event.status)
-              }).length}
+            <span className="flex items-center gap-1 sm:gap-2">
+              <span className="hidden sm:inline">Active Events</span>
+              <span className="sm:hidden">Active</span>
+              <span className="bg-guild-100 text-guild-600 dark:bg-guild-900/30 dark:text-guild-400 py-0.5 px-1.5 rounded-full text-xs">
+                {events.filter((event: Event) => {
+                  const eventDate = new Date(event.eventDate)
+                  return eventDate >= now && !['COMPLETED', 'CANCELLED'].includes(event.status)
+                }).length}
+              </span>
             </span>
           </button>
           <button
             onClick={() => setActiveTab('booked')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 sm:py-3 px-1.5 sm:px-2 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 ${
               activeTab === 'booked'
                 ? 'border-guild-500 text-guild-600 dark:text-guild-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Your Bookings
+            <span className="hidden sm:inline">Your Bookings</span>
+            <span className="sm:hidden">Bookings</span>
           </button>
           <button
             onClick={() => setActiveTab('past')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 sm:py-3 px-1.5 sm:px-2 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 ${
               activeTab === 'past'
                 ? 'border-guild-500 text-guild-600 dark:text-guild-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            Past Events
-            <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
-              {events.filter((event: Event) => {
-                const eventDate = new Date(event.eventDate)
-                return eventDate < now || ['COMPLETED', 'CANCELLED'].includes(event.status)
-              }).length}
+            <span className="flex items-center gap-1 sm:gap-2">
+              <span className="hidden sm:inline">Past Events</span>
+              <span className="sm:hidden">Past</span>
+              <span className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 py-0.5 px-1.5 rounded-full text-xs">
+                {events.filter((event: Event) => {
+                  const eventDate = new Date(event.eventDate)
+                  return eventDate < now || ['COMPLETED', 'CANCELLED'].includes(event.status)
+                }).length}
+              </span>
             </span>
           </button>
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 sm:py-3 px-1.5 sm:px-2 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-shrink-0 ${
               activeTab === 'analytics'
                 ? 'border-guild-500 text-guild-600 dark:text-guild-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
             }`}
           >
-            <ChartBarIcon className="h-4 w-4 inline mr-1" />
-            Analytics
+            <span className="flex items-center gap-1">
+              <ChartBarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Analytics</span>
+            </span>
           </button>
         </nav>
       </div>
 
-      {/* Content */}
-      {activeTab === 'analytics' ? (
-        <PublicEventAnalytics />
-      ) : filteredEvents.length === 0 ? (
-        <div className="text-center py-12">
-          <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-            No {activeTab === 'booked' ? 'booked' : activeTab} events
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {activeTab === 'active' 
-              ? "There are no upcoming events at the moment." 
-              : activeTab === 'booked'
-              ? "You haven't registered for any events yet."
-              : "No past events to display."
-            }
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto lg:overflow-visible">
+        <div className="py-4 sm:py-6 pb-24 lg:pb-6">
+          {activeTab === 'analytics' ? (
+            <div className="px-4 sm:px-0">
+              <PublicEventAnalytics />
+            </div>
+          ) : filteredEvents.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                No {activeTab === 'booked' ? 'booked' : activeTab} events
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {activeTab === 'active'
+                  ? "There are no upcoming events at the moment."
+                  : activeTab === 'booked'
+                  ? "You haven't registered for any events yet."
+                  : "No past events to display."
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 px-4 sm:px-0">
           {filteredEvents.map((event: any) => (
             <div
               key={event.id}
-              className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow duration-200"
+              className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:shadow rounded-lg hover:shadow-lg transition-shadow duration-200"
             >
               {/* Event Image */}
               {event.heroImage && (
@@ -520,7 +535,7 @@ const Events: React.FC = () => {
                   <img
                     src={`${import.meta.env.VITE_API_BASE_URL}/events/${event.id}/hero-image`}
                     alt={event.title}
-                    className="w-full h-48 object-cover"
+                    className="w-full h-40 sm:h-48 object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}
@@ -529,54 +544,54 @@ const Events: React.FC = () => {
               )}
 
               {/* Event Content */}
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {/* Category and Status */}
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between gap-2 mb-3">
                   {event.category && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 truncate">
                       {event.category.name}
                     </span>
                   )}
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(event.status)}`}>
                     {event.status.replace('_', ' ')}
                   </span>
                 </div>
 
                 {/* Event Title */}
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-2 line-clamp-2">
                   {event.title}
                 </h3>
 
                 {/* Event Description */}
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 line-clamp-2">
                   {event.description}
                 </p>
 
                 {/* Event Details */}
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {/* Date & Time */}
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <CalendarIcon className="flex-shrink-0 mr-2 h-4 w-4" />
-                    {formatEventTime(event.eventDate, event.startTime, event.endTime)}
+                  <div className="flex items-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    <CalendarIcon className="flex-shrink-0 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="truncate">{formatEventTime(event.eventDate, event.startTime, event.endTime)}</span>
                   </div>
 
                   {/* Location/Mode */}
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                     {event.eventMode === 'VIRTUAL' ? (
                       <>
-                        <ClockIcon className="flex-shrink-0 mr-2 h-4 w-4" />
-                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                        <ClockIcon className="flex-shrink-0 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                           Virtual Event
                         </span>
                       </>
                     ) : (
                       <>
-                        <MapPinIcon className="flex-shrink-0 mr-2 h-4 w-4" />
-                        <span className="truncate">
+                        <MapPinIcon className="flex-shrink-0 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="truncate flex-1">
                           {event.venue || 'Venue TBA'}
                         </span>
                         {event.eventMode === 'HYBRID' && (
-                          <span className="ml-2 px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                          <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 whitespace-nowrap">
                             Hybrid
                           </span>
                         )}
@@ -586,70 +601,72 @@ const Events: React.FC = () => {
 
                   {/* Capacity & Registrations */}
                   {event.maxCapacity && (
-                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      <UsersIcon className="flex-shrink-0 mr-2 h-4 w-4" />
-                      {event._count?.registrations || event.registrationCount || 0} / {event.maxCapacity} registered
+                    <div className="flex items-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                      <UsersIcon className="flex-shrink-0 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="truncate">{event._count?.registrations || event.registrationCount || 0} / {event.maxCapacity} registered</span>
                     </div>
                   )}
 
                   {/* Fee */}
                   {Number(event.registrationFee) > 0 && (
-                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      <CurrencyRupeeIcon className="flex-shrink-0 mr-2 h-4 w-4" />
-                      ₹{event.registrationFee}
-                      {Number(event.guestFee) > 0 && (
-                        <span className="text-xs ml-1">(Guest: ₹{event.guestFee})</span>
-                      )}
+                    <div className="flex items-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                      <CurrencyRupeeIcon className="flex-shrink-0 mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="truncate">
+                        ₹{event.registrationFee}
+                        {Number(event.guestFee) > 0 && (
+                          <span className="text-xs ml-1">(Guest: ₹{event.guestFee})</span>
+                        )}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* Action Buttons */}
-                <div className="mt-4 space-y-2">
+                <div className="mt-3 sm:mt-4 space-y-2">
                   {activeTab === 'active' ? (
                     <>
                       {/* Register Button - Show for PUBLISHED and REGISTRATION_OPEN events, hide if already registered */}
                       {(['PUBLISHED', 'REGISTRATION_OPEN'].includes(event.status)) && !registeredEventIds.has(event.id) && (
-                        <button 
-                          className="w-full btn-guild text-sm"
+                        <button
+                          className="w-full btn-guild text-xs sm:text-sm py-2.5 sm:py-2"
                           onClick={() => handleRegister(event)}
                         >
                           Register Now
                         </button>
                       )}
-                      
+
                       {/* Already Registered Badge */}
                       {registeredEventIds.has(event.id) && (
-                        <div className="w-full text-center py-2 bg-green-100 text-green-800 rounded-md text-sm font-medium">
+                        <div className="w-full text-center py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-md text-xs sm:text-sm font-medium">
                           ✓ Already Registered
                         </div>
                       )}
-                      
+
                       {/* View Details Button */}
-                      <button 
-                        className="w-full btn-secondary text-sm inline-flex items-center justify-center"
+                      <button
+                        className="w-full btn-secondary text-xs sm:text-sm py-2.5 sm:py-2 inline-flex items-center justify-center gap-1"
                         onClick={() => handleViewDetails(event)}
                       >
-                        <EyeIcon className="h-4 w-4 mr-1" />
+                        <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         View Details
                       </button>
                     </>
                   ) : activeTab === 'booked' ? (
                     /* Your Bookings - Show Registration Details */
-                    <button 
-                      className="w-full btn-guild text-sm inline-flex items-center justify-center"
+                    <button
+                      className="w-full btn-guild text-xs sm:text-sm py-2.5 sm:py-2 inline-flex items-center justify-center gap-1"
                       onClick={() => handleViewRegistration(event)}
                     >
-                      <EyeIcon className="h-4 w-4 mr-1" />
+                      <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       View Registration Details
                     </button>
                   ) : (
                     /* Past Events */
-                    <button 
-                      className="w-full btn-secondary text-sm inline-flex items-center justify-center"
+                    <button
+                      className="w-full btn-secondary text-xs sm:text-sm py-2.5 sm:py-2 inline-flex items-center justify-center gap-1"
                       onClick={() => handleViewDetails(event)}
                     >
-                      <EyeIcon className="h-4 w-4 mr-1" />
+                      <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       View Event
                     </button>
                   )}
@@ -657,8 +674,10 @@ const Events: React.FC = () => {
               </div>
             </div>
           ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Modals */}
       <EventDetailsModal

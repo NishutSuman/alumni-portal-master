@@ -3,6 +3,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams } = require('../../utils/response');
 const PhotoService = require('../../services/PhotoService');
 const { generatePhotoUrl, cleanupUploadedFiles, extractPhotoMetadata } = require('../../middleware/upload.middleware');
+const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
 
 // ============================================
 // PHOTO MANAGEMENT CONTROLLERS
@@ -15,15 +16,18 @@ const { generatePhotoUrl, cleanupUploadedFiles, extractPhotoMetadata } = require
  */
 const getPhotos = async (req, res) => {
   try {
-    const { 
-      page, 
-      limit, 
-      albumId,
+    const {
+      page,
+      limit,
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       uploadedBy
     } = req.query;
+
+    // Get albumId from URL params (when route is /albums/:albumId/photos)
+    // or from query params (when route is /photos?albumId=xxx)
+    const albumId = req.params.albumId || req.query.albumId;
 
     const { skip, take } = getPaginationParams(page, limit);
 
@@ -75,12 +79,19 @@ const getPhotos = async (req, res) => {
       updatedAt: photo.updatedAt
     }));
 
+    const pagination = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: totalCount,
+      pages: Math.ceil(totalCount / limit),
+      hasNext: page < Math.ceil(totalCount / limit),
+      hasPrev: page > 1
+    };
+
     return paginatedResponse(
       res,
       { photos: photosData },
-      totalCount,
-      page,
-      limit,
+      pagination,
       'Photos retrieved successfully'
     );
   } catch (error) {
@@ -204,20 +215,26 @@ const uploadPhotoToAlbum = async (req, res) => {
       return errorResponse(res, result.error, 500);
     }
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'photo_upload',
-        details: {
-          photoId: result.photo.id,
-          albumId,
-          albumName: album.name,
-          hasCaption: !!caption,
-          tagCount: processedTags.length
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+    // Log activity (async - don't block response)
+    setImmediate(async () => {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'photo_upload',
+            details: {
+              photoId: result.photo.id,
+              albumId,
+              albumName: album.name,
+              hasCaption: !!caption,
+              tagCount: processedTags.length
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          }
+        });
+      } catch (error) {
+        console.error('Failed to log photo upload activity:', error);
       }
     });
 
@@ -284,26 +301,36 @@ const bulkUploadPhotos = async (req, res) => {
       bulkCaption
     );
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'photos_bulk_upload',
-        details: {
-          albumId,
-          albumName: album.name,
-          totalFiles: req.files.length,
-          successful: results.totalUploaded,
-          failed: results.totalFailed
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+    // Log activity (async - don't block response)
+    setImmediate(async () => {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'photos_bulk_upload',
+            details: {
+              albumId,
+              albumName: album.name,
+              totalFiles: req.files.length,
+              successful: results.totalUploaded,
+              failed: results.totalFailed
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          }
+        });
+      } catch (error) {
+        console.error('Failed to log bulk upload activity:', error);
       }
     });
 
     const message = `Bulk upload completed: ${results.totalUploaded} successful, ${results.totalFailed} failed`;
-    
-    return successResponse(res, { uploadResults: results }, message, 201);
+
+    // Match frontend expected format: { uploaded: [...], failed: [...] }
+    return successResponse(res, {
+      uploaded: results.successful,
+      failed: results.failed
+    }, message, 201);
   } catch (error) {
     console.error('Bulk upload photos error:', error);
     
@@ -411,17 +438,23 @@ const deletePhoto = async (req, res) => {
       return errorResponse(res, 'Failed to delete photo', 500);
     }
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'photo_delete',
-        details: {
-          photoId,
-          filename: result.deletedPhoto.filename
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+    // Log activity (async - don't block response)
+    setImmediate(async () => {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'photo_delete',
+            details: {
+              photoId,
+              filename: result.deletedPhoto.filename
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          }
+        });
+      } catch (error) {
+        console.error('Failed to log photo delete activity:', error);
       }
     });
 
@@ -448,25 +481,35 @@ const bulkDeletePhotos = async (req, res) => {
 
     const results = await PhotoService.bulkDeletePhotos(photoIds, userId);
 
-    // Log activity
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'photos_bulk_delete',
-        details: {
-          requestedCount: photoIds.length,
-          deletedCount: results.totalDeleted,
-          failedCount: results.totalFailed,
-          photoIds
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+    // Log activity (async - don't block response)
+    setImmediate(async () => {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'photos_bulk_delete',
+            details: {
+              requestedCount: photoIds.length,
+              deletedCount: results.totalDeleted,
+              failedCount: results.totalFailed,
+              photoIds
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          }
+        });
+      } catch (error) {
+        console.error('Failed to log bulk delete activity:', error);
       }
     });
 
     const message = `Bulk delete completed: ${results.totalDeleted} deleted, ${results.totalFailed} failed`;
-    
-    return successResponse(res, { deleteResults: results }, message);
+
+    // Match frontend expected format: { deleted: number, failed: number }
+    return successResponse(res, {
+      deleted: results.totalDeleted,
+      failed: results.totalFailed
+    }, message);
   } catch (error) {
     console.error('Bulk delete photos error:', error);
     return errorResponse(res, 'Failed to delete photos', 500);
@@ -489,6 +532,26 @@ const movePhotos = async (req, res) => {
 
     const result = await PhotoService.movePhotosToAlbum(photoIds, targetAlbumId, userId);
 
+    // Manually invalidate cache for BOTH source and target albums
+    const { CacheService } = require('../../config/redis');
+
+    // Invalidate target album caches
+    await CacheService.deletePattern(`photos:album:${targetAlbumId}:*`);
+    console.log(`🗑️ Invalidated cache for target album: ${targetAlbumId}`);
+
+    // Invalidate source album caches
+    if (result.sourceAlbumIds && result.sourceAlbumIds.length > 0) {
+      for (const sourceAlbumId of result.sourceAlbumIds) {
+        await CacheService.deletePattern(`photos:album:${sourceAlbumId}:*`);
+        console.log(`🗑️ Invalidated cache for source album: ${sourceAlbumId}`);
+      }
+    }
+
+    // Invalidate general album lists
+    await CacheService.deletePattern('photos:albums:list');
+    await CacheService.deletePattern('photos:admin:albums');
+    await CacheService.deletePattern('photos:recent');
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -497,6 +560,7 @@ const movePhotos = async (req, res) => {
         details: {
           photoIds,
           targetAlbumId,
+          sourceAlbumIds: result.sourceAlbumIds,
           targetAlbumName: result.targetAlbum,
           movedCount: result.movedCount
         },
@@ -658,6 +722,51 @@ const getRecentPhotos = async (req, res) => {
   }
 };
 
+/**
+ * Serve photo from R2
+ * GET /api/albums/photo/:filename
+ * Access: Public (proxy for R2 private bucket)
+ */
+const servePhoto = async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    if (!filename) {
+      return res.status(400).send('Filename is required');
+    }
+
+    console.log('Fetching photo from R2:', filename);
+
+    // Photos are stored in alumni-portal/album-photos/ directory
+    const key = `alumni-portal/album-photos/${filename}`;
+    console.log('Fetching photo with key:', key);
+
+    // Get file from R2
+    const result = await cloudflareR2Service.getFile(key);
+
+    if (!result.success) {
+      console.error('Failed to fetch photo from R2:', result.error);
+      return res.status(404).send('Image not found');
+    }
+
+    // Set content type and cache headers
+    res.set({
+      'Content-Type': result.contentType,
+      'Content-Length': result.size,
+      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+      'ETag': `"${filename}"`,
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin'
+    });
+
+    // Send the image buffer
+    return res.send(result.data);
+  } catch (error) {
+    console.error('Serve photo error:', error);
+    return res.status(500).send('Error serving image');
+  }
+};
+
 module.exports = {
   getPhotos,
   getPhoto,
@@ -668,5 +777,6 @@ module.exports = {
   bulkDeletePhotos,
   movePhotos,
   searchPhotos,
-  getRecentPhotos
+  getRecentPhotos,
+  servePhoto
 };
