@@ -39,20 +39,36 @@ app.use(
 app.use("/api/payments/webhook/*", express.raw({ type: "application/json" }));
 
 // CORS configuration - Allow both development ports and mobile access
+const allowedOrigins = [
+	process.env.FRONTEND_URL,
+	process.env.CORS_ORIGIN,
+	"http://localhost",
+	"http://localhost:3000",
+	"http://localhost:5000",
+	"http://localhost:3001",
+	"http://localhost:5173",
+	"http://localhost:5174",
+	"http://localhost:4173",
+	"http://192.168.1.3:3000",
+	"capacitor://localhost",
+	"ionic://localhost",
+].filter(Boolean); // Remove undefined/null values
+
+console.log("🌐 CORS allowed origins:", allowedOrigins);
+
 app.use(
 	cors({
-		origin: [
-			process.env.FRONTEND_URL || "http://localhost:3000",
-			"http://localhost", // Allow Capacitor app (Android emulator)
-			"http://localhost:5000", // Allow testing port
-			"http://localhost:3001", // Allow dev port
-			"http://localhost:5173", // Vite default port
-			"http://localhost:5174", // Vite alternate port
-			"http://localhost:4173", // Vite preview port
-			"http://192.168.1.3:3000", // Allow mobile access via IP
-			"capacitor://localhost", // Capacitor app access
-			"ionic://localhost", // Ionic app access
-		],
+		origin: function (origin, callback) {
+			// Allow requests with no origin (mobile apps, curl, etc.)
+			if (!origin) return callback(null, true);
+
+			if (allowedOrigins.includes(origin)) {
+				callback(null, true);
+			} else {
+				console.warn(`⚠️ CORS blocked origin: ${origin}`);
+				callback(new Error("Not allowed by CORS"));
+			}
+		},
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
