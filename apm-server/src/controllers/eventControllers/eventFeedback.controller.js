@@ -4,6 +4,7 @@ const { successResponse, errorResponse, paginatedResponse, getPaginationParams }
 const feedbackService = require('../../services/feedback/FeedbackService');
 const feedbackAnalyticsService = require('../../services/feedback/FeedbackAnalyticsService');
 const sentimentAnalysisService = require('../../services/feedback/SentimentAnalysisService');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // ==========================================
 // ADMIN FEEDBACK MANAGEMENT
@@ -20,11 +21,11 @@ const createOrUpdateFeedbackForm = async (req, res) => {
   
   try {
     // Check if event exists and is authorized
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
         status: true,
         eventDate: true,
         feedbackForm: { select: { id: true } }
@@ -114,8 +115,8 @@ const getFeedbackForm = async (req, res) => {
   const isAdmin = req.user?.role === 'SUPER_ADMIN';
   
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
       include: {
         feedbackForm: {
           include: {
@@ -182,7 +183,10 @@ const addFeedbackField = async (req, res) => {
   try {
     // Get feedback form
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         fields: { select: { orderIndex: true } },
         _count: { select: { responses: true } }
@@ -262,9 +266,12 @@ const updateFeedbackField = async (req, res) => {
   try {
     // Get field with form info
     const field = await prisma.eventFeedbackField.findFirst({
-      where: { 
+      where: {
         id: fieldId,
-        feedbackForm: { eventId }
+        feedbackForm: {
+          eventId,
+          event: { ...getTenantFilter(req) }
+        }
       },
       include: {
         feedbackForm: {
@@ -329,9 +336,12 @@ const deleteFeedbackField = async (req, res) => {
   try {
     // Get field with response count
     const field = await prisma.eventFeedbackField.findFirst({
-      where: { 
+      where: {
         id: fieldId,
-        feedbackForm: { eventId }
+        feedbackForm: {
+          eventId,
+          event: { ...getTenantFilter(req) }
+        }
       },
       include: {
         feedbackForm: {
@@ -396,7 +406,10 @@ const reorderFeedbackFields = async (req, res) => {
 
     // Get feedback form
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         fields: true,
         _count: { select: { responses: true } }
@@ -470,7 +483,11 @@ const submitFeedback = async (req, res) => {
   try {
     // Get feedback form with fields
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId, isActive: true },
+      where: {
+        eventId,
+        isActive: true,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         fields: {
           orderBy: { orderIndex: 'asc' }
@@ -605,10 +622,13 @@ const submitFeedback = async (req, res) => {
 const getMyFeedbackResponse = async (req, res) => {
   const { eventId } = req.params;
   const userId = req.user.id;
-  
+
   try {
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       select: { id: true }
     });
 
@@ -653,10 +673,13 @@ const getMyFeedbackResponse = async (req, res) => {
  */
 const getFeedbackAnalytics = async (req, res) => {
   const { eventId } = req.params;
-  
+
   try {
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       select: { id: true }
     });
 
@@ -687,7 +710,10 @@ const getFeedbackResponses = async (req, res) => {
   
   try {
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         fields: {
           select: { id: true, fieldLabel: true, fieldType: true }
@@ -764,7 +790,10 @@ const exportFeedbackResponses = async (req, res) => {
   
   try {
     const feedbackForm = await prisma.eventFeedbackForm.findFirst({
-      where: { eventId },
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         event: { select: { title: true } },
         fields: {

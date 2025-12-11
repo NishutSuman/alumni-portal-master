@@ -8,7 +8,8 @@ const {
 	calculatePagination,
 } = require("../../utils/response");
 const eventService = require("../../services/event/event.service");
-const emailManager = require("../../services/email/EmailManager");
+const tenantEmailManager = require("../../services/email/TenantEmailManager");
+const { getTenantFilter, getTenantData, getTenantCode, getOrganizationName } = require('../../utils/tenant.util');
 
 // ==========================================
 // ADMIN REGISTRATION MANAGEMENT
@@ -23,8 +24,11 @@ const getEventRegistrations = async (req, res) => {
 
 	try {
 		// Check if event exists
-		const event = await prisma.event.findUnique({
-			where: { id: eventId },
+		const event = await prisma.event.findFirst({
+			where: {
+				id: eventId,
+				...getTenantFilter(req),
+			},
 			select: { id: true, title: true },
 		});
 
@@ -129,8 +133,11 @@ const getRegistrationStats = async (req, res) => {
 
 	try {
 		// Check if event exists
-		const event = await prisma.event.findUnique({
-			where: { id: eventId },
+		const event = await prisma.event.findFirst({
+			where: {
+				id: eventId,
+				...getTenantFilter(req),
+			},
 			select: {
 				id: true,
 				title: true,
@@ -184,8 +191,11 @@ const registerForEvent = async (req, res) => {
 
 	try {
 		// Get event details with form fields
-		const event = await prisma.event.findUnique({
-			where: { id: eventId },
+		const event = await prisma.event.findFirst({
+			where: {
+				id: eventId,
+				...getTenantFilter(req),
+			},
 			include: {
 				form: {
 					include: {
@@ -346,15 +356,20 @@ const registerForEvent = async (req, res) => {
 			},
 		});
 
-    // ✅ ADD THIS: Send registration confirmation email
+    // ✅ Send registration confirmation email (TENANT-AWARE)
 		try {
-			if (emailManager.isInitialized) {
-				const emailService = emailManager.getService();
+			const tenantCode = getTenantCode(req);
+			const organizationName = getOrganizationName(req);
+			const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+
+			if (emailService) {
 				await emailService.sendRegistrationConfirmation(
 					req.user,
 					event,
-					completeRegistration
+					completeRegistration,
+					{ organizationName }
 				);
+				console.log(`✅ Registration confirmation email sent (Tenant: ${tenantCode || 'default'})`);
 			}
 		} catch (emailError) {
 			console.error("Registration confirmation email failed:", emailError);

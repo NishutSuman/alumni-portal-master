@@ -1,6 +1,7 @@
 // src/controllers/comment.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
+const { getTenantFilter } = require('../../utils/tenant.util');
 
 // Create a comment on a post
 const createComment = async (req, res) => {
@@ -16,9 +17,15 @@ const createComment = async (req, res) => {
   }
   
   try {
-    // Check if post exists and allows comments
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists and allows comments (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: {
         id: true,
         allowComments: true,
@@ -34,19 +41,19 @@ const createComment = async (req, res) => {
         },
       },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
-    
+
     if (!post.isPublished || post.isArchived) {
       return errorResponse(res, 'Cannot comment on this post', 400);
     }
-    
+
     if (!post.allowComments) {
       return errorResponse(res, 'Comments are disabled for this post', 400);
     }
-    
+
     // Validate mentions (ensure mentioned users exist)
     let validMentions = [];
     if (mentions && mentions.length > 0) {
@@ -169,10 +176,16 @@ const createReply = async (req, res) => {
   }
   
   try {
-    // Check if post and parent comment exist
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post and parent comment exist (with tenant isolation)
     const [post, parentComment] = await Promise.all([
-      prisma.post.findUnique({
-        where: { id: postId },
+      prisma.post.findFirst({
+        where: {
+          id: postId,
+          ...tenantFilter, // Multi-tenant isolation
+        },
         select: {
           id: true,
           allowComments: true,
@@ -193,23 +206,23 @@ const createReply = async (req, res) => {
         },
       }),
     ]);
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
-    
+
     if (!parentComment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
     if (parentComment.postId !== postId) {
       return errorResponse(res, 'Comment does not belong to this post', 400);
     }
-    
+
     if (!post.isPublished || post.isArchived) {
       return errorResponse(res, 'Cannot reply to this comment', 400);
     }
-    
+
     if (!post.allowComments) {
       return errorResponse(res, 'Comments are disabled for this post', 400);
     }
@@ -337,14 +350,20 @@ const getPostComments = async (req, res) => {
   const { postId } = req.params;
   const { page, limit, skip } = getPaginationParams(req.query, 10);
   const sortOrder = req.query.sortOrder || 'desc';
-  
+
   try {
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: { id: true, isPublished: true, isArchived: true },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -466,16 +485,32 @@ const getPostComments = async (req, res) => {
 const updateComment = async (req, res) => {
   const { postId, commentId } = req.params;
   const { content } = req.body;
-  
+
   if (!content || content.trim().length === 0) {
     return errorResponse(res, 'Comment content is required', 400);
   }
-  
+
   if (content.length > 1000) {
     return errorResponse(res, 'Comment content must be less than 1000 characters', 400);
   }
-  
+
   try {
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // First verify the post belongs to this tenant
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
+      select: { id: true },
+    });
+
+    if (!post) {
+      return errorResponse(res, 'Post not found', 404);
+    }
+
     // Get existing comment
     const existingComment = await prisma.comment.findUnique({
       where: { id: commentId },
@@ -489,11 +524,11 @@ const updateComment = async (req, res) => {
         },
       },
     });
-    
+
     if (!existingComment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
     if (existingComment.postId !== postId) {
       return errorResponse(res, 'Comment does not belong to this post', 400);
     }
@@ -555,8 +590,24 @@ const updateComment = async (req, res) => {
 // Delete a comment
 const deleteComment = async (req, res) => {
   const { postId, commentId } = req.params;
-  
+
   try {
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // First verify the post belongs to this tenant
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
+      select: { id: true },
+    });
+
+    if (!post) {
+      return errorResponse(res, 'Post not found', 404);
+    }
+
     // Get existing comment with replies count
     const existingComment = await prisma.comment.findUnique({
       where: { id: commentId },
@@ -568,11 +619,11 @@ const deleteComment = async (req, res) => {
         },
       },
     });
-    
+
     if (!existingComment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
     if (existingComment.postId !== postId) {
       return errorResponse(res, 'Comment does not belong to this post', 400);
     }

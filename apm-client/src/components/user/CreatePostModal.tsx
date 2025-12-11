@@ -65,7 +65,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
     
     // Convert R2 URL to proxy URL
-    const baseUrl = 'http://localhost:3000';
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     if (index !== undefined) {
       // Additional image
       return `${baseUrl}/api/posts/${postId}/images/${index}`;

@@ -3,10 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
+// const rateLimit = require("express-rate-limit"); // Disabled for development
 const config = require("./config");
 const { PrismaClient } = require("@prisma/client");
 const { asyncHandler } = require("./utils/response");
+const { cloudflareR2Service } = require('./services/cloudflare-r2.service');
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
@@ -32,6 +33,8 @@ app.use(
 				frameSrc: ["'self'", "blob:", "data:"], // Allow frames
 			},
 		},
+		crossOriginResourcePolicy: false, // Disable to allow cross-origin image loading
+		crossOriginEmbedderPolicy: false, // Disable to allow cross-origin image embedding
 	})
 );
 
@@ -47,29 +50,27 @@ app.use(
 		origin: true, // Allow all origins temporarily
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Tenant-Code"],
 	})
 );
 
-// Rate limiting - DISABLED for testing (can be enabled later)
-const limiter = rateLimit({
-	windowMs: config.rateLimit.windowMs,
-	max: config.rateLimit.max,
-	message: {
-		error: "Too many requests from this IP, please try again later.",
-	},
-	standardHeaders: true,
-	legacyHeaders: false,
-	skip: (req) => {
-		// Skip rate limiting in development mode or for testing
-		return config.nodeEnv === "development";
-	},
-});
-
-// Apply rate limiting only in production
-if (config.nodeEnv === "production") {
-	app.use("/api/", limiter);
-}
+// Rate limiting - DISABLED for development/testing
+// Uncomment below to enable rate limiting in production
+// const limiter = rateLimit({
+// 	windowMs: config.rateLimit.windowMs,
+// 	max: config.rateLimit.max,
+// 	message: {
+// 		error: "Too many requests from this IP, please try again later.",
+// 	},
+// 	standardHeaders: true,
+// 	legacyHeaders: false,
+// 	skip: (req) => {
+// 		return config.nodeEnv === "development";
+// 	},
+// });
+// if (config.nodeEnv === "production") {
+// 	app.use("/api/", limiter);
+// }
 
 // Body parsing middleware with conditional parsing
 app.use((req, res, next) => {
@@ -171,6 +172,23 @@ emailManager
 	});
 
 // =============================================
+// MULTI-TENANT MIDDLEWARE
+// =============================================
+
+const { autoTenantMiddleware } = require("./middleware/tenant.middleware");
+
+// Apply auto-selecting tenant middleware to all API routes
+// This extracts tenant context from X-Tenant-Code header
+// - In development: Uses optional middleware (doesn't fail if no tenant)
+// - In production with MULTI_TENANT_MODE=true: Enforces tenant header
+// - With ENFORCE_TENANT=true: Always enforces tenant header
+app.use("/api", autoTenantMiddleware);
+
+const enforceMode = process.env.ENFORCE_TENANT === 'true' ||
+  (process.env.NODE_ENV === 'production' && process.env.MULTI_TENANT_MODE === 'true');
+console.log(`🏢 Multi-tenant middleware enabled (enforce: ${enforceMode})`);
+
+// =============================================
 // API ROUTES REGISTRATION
 // =============================================
 
@@ -183,13 +201,44 @@ app.use("/api/batches", require("./routes/batches.route"));
 app.get("/api/users/profile-picture/:userId", asyncHandler(async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
+    // Check if this is a dummy profile picture request (for marquee feature)
+    if (userId.startsWith('dummy-pp')) {
+      const dummyFileName = userId.replace('dummy-', '');
+      // Get tenant code from query parameter (preferred) or header (fallback)
+      const tenantCode = req.query.tenant || req.headers['x-tenant-code'] || 'default';
+      const key = `tenants/${tenantCode}/profile-pictures/${dummyFileName}.jpeg`;
+
+      console.log('Fetching dummy profile picture with key:', key, 'tenant:', tenantCode);
+
+      const result = await cloudflareR2Service.getFile(key);
+
+      if (!result.success) {
+        console.error('Failed to fetch dummy profile picture from R2:', result.error);
+        // Return placeholder for failed dummy images
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <rect width="100" height="100" fill="#f3f4f6"/>
+          <circle cx="50" cy="50" r="25" fill="#6b7280"/>
+        </svg>`;
+        res.set('Content-Type', 'image/svg+xml');
+        return res.send(placeholderSvg);
+      }
+
+      res.set({
+        'Content-Type': result.contentType || 'image/jpeg',
+        'Cache-Control': 'public, max-age=2592000', // 30 days for dummy images
+        'ETag': `"dummy-${dummyFileName}"`
+      });
+
+      return res.send(result.data);
+    }
+
     // Get user profile picture URL
     const user = await prisma.user.findUnique({
       where: { id: userId, isActive: true },
       select: { profileImage: true }
     });
-    
+
     if (!user || !user.profileImage) {
       // Return placeholder image
       const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -201,10 +250,10 @@ app.get("/api/users/profile-picture/:userId", asyncHandler(async (req, res) => {
     }
     
     console.log(`Fetching profile picture from R2:`, user.profileImage);
-    
+
     // Since R2 URLs are private, we need to fetch using the R2 service
-    const { cloudflareR2Service } = require('./services/cloudflare-r2.service');
-    
+    // cloudflareR2Service is already imported at the top of the file
+
     try {
       // Extract the key from the URL
       const urlParts = user.profileImage.split('.com/');
@@ -227,9 +276,7 @@ app.get("/api/users/profile-picture/:userId", asyncHandler(async (req, res) => {
       res.set({
         'Content-Type': fileData.contentType || 'image/png',
         'Cache-Control': 'public, max-age=300', // 5 minutes instead of 1 hour
-        'ETag': `"${Date.now()}"`, // Generate ETag based on current time
-        'Access-Control-Allow-Origin': '*',
-        'Cross-Origin-Resource-Policy': 'cross-origin'
+        'ETag': `"${Date.now()}"` // Generate ETag based on current time
       });
       
       // Send the file
@@ -250,6 +297,135 @@ app.get("/api/users/profile-picture/:userId", asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Profile picture proxy error:', error);
     res.status(500).json({ success: false, message: 'Failed to serve profile picture', error: error.message });
+  }
+}));
+
+// Organization file proxy route by ID - serves files from R2 for specific organization
+// Used by Developer Portal for multi-tenant support
+app.get("/api/organizations/:orgId/files/:type", asyncHandler(async (req, res) => {
+  try {
+    const { orgId, type } = req.params;
+
+    // Get organization by ID
+    const organization = await prisma.organization.findUnique({
+      where: { id: orgId }
+    });
+
+    if (!organization) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+
+    console.log(`Organization file proxy for org ${orgId}:`, {
+      logoUrl: organization.logoUrl,
+      bylawDocumentUrl: organization.bylawDocumentUrl,
+      registrationCertUrl: organization.registrationCertUrl
+    });
+
+    let fileUrl;
+    let contentType = 'application/octet-stream';
+
+    switch (type) {
+      case 'logo':
+        fileUrl = organization.logoUrl;
+        contentType = 'image/png';
+        break;
+      case 'bylaw':
+        fileUrl = organization.bylawDocumentUrl;
+        contentType = 'application/pdf';
+        break;
+      case 'certificate':
+        fileUrl = organization.registrationCertUrl;
+        if (fileUrl && fileUrl.includes('.pdf')) {
+          contentType = 'application/pdf';
+        } else {
+          contentType = 'image/png';
+        }
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid file type. Valid types: logo, bylaw, certificate' });
+    }
+
+    if (!fileUrl) {
+      console.log(`No ${type} file found for organization ${orgId}`);
+      // Return placeholder for images, 404 for documents
+      if (type === 'logo') {
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <rect width="100" height="100" fill="#f3f4f6"/>
+          <text x="50" y="50" text-anchor="middle" dy=".3em" fill="#6b7280" font-family="system-ui" font-size="12">LOGO</text>
+        </svg>`;
+        res.set('Content-Type', 'image/svg+xml');
+        return res.send(placeholderSvg);
+      } else if (type === 'certificate') {
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">
+          <rect width="100" height="60" fill="#f9f9f9" stroke="#e5e5e5"/>
+          <text x="50" y="30" text-anchor="middle" dy=".3em" fill="#6b7280" font-family="system-ui" font-size="10">CERT</text>
+        </svg>`;
+        res.set('Content-Type', 'image/svg+xml');
+        return res.send(placeholderSvg);
+      }
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    console.log(`Fetching ${type} from R2 for org ${orgId}:`, fileUrl);
+
+    // Fetch from R2
+    const { cloudflareR2Service } = require('./services/cloudflare-r2.service');
+
+    try {
+      // Extract key from URL
+      const urlParts = fileUrl.split('.com/');
+      if (urlParts.length < 2) {
+        throw new Error('Invalid R2 URL format');
+      }
+
+      const key = urlParts[1];
+      console.log(`Fetching file with key: ${key}`);
+
+      const fileData = await cloudflareR2Service.getFile(key);
+
+      if (!fileData.success) {
+        console.error('R2 getFile failed:', fileData.error);
+        throw new Error('Failed to get file from R2');
+      }
+
+      // Set headers
+      res.set({
+        'Content-Type': fileData.contentType || contentType,
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin'
+      });
+
+      return res.send(fileData.data);
+
+    } catch (r2Error) {
+      console.error('R2 fetch error for org', orgId, ':', r2Error.message);
+
+      if (type === 'logo') {
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <rect width="100" height="100" fill="#f3f4f6"/>
+          <text x="50" y="50" text-anchor="middle" dy=".3em" fill="#6b7280" font-family="system-ui" font-size="12">LOGO</text>
+        </svg>`;
+        res.set('Content-Type', 'image/svg+xml');
+        return res.send(placeholderSvg);
+      } else if (type === 'certificate') {
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">
+          <rect width="100" height="60" fill="#f9f9f9" stroke="#e5e5e5"/>
+          <text x="50" y="30" text-anchor="middle" dy=".3em" fill="#6b7280" font-family="system-ui" font-size="10">CERT</text>
+        </svg>`;
+        res.set('Content-Type', 'image/svg+xml');
+        return res.send(placeholderSvg);
+      }
+
+      return res.status(404).json({
+        success: false,
+        message: `${type.charAt(0).toUpperCase() + type.slice(1)} file not found in storage`
+      });
+    }
+
+  } catch (error) {
+    console.error('Organization file proxy error:', error);
+    res.status(500).json({ success: false, message: 'Failed to serve file', error: error.message });
   }
 }));
 
@@ -677,6 +853,7 @@ app.use("/api/polls", require("./routes/polls.route"));
 app.use("/api/lifelink", require("./routes/lifelink.route"));
 app.use("/api/tickets", require("./routes/tickets.route"));
 app.use("/api/membership", require("./routes/membership.route"));
+app.use("/api/demo", require("./routes/demo.route")); // Demo/showcase routes (marquee, etc.)
 app.use(
 	"/api/admin/membership",
 	require("./routes/admin/membershipAdmin.route")
@@ -689,6 +866,108 @@ app.use("/api/celebrations", require("./routes/celebrations.route"));
 // Organization public endpoint
 const organizationController = require("./controllers/admin/organization.controller");
 app.get("/api/organization", asyncHandler(organizationController.getOrganizationDetails));
+
+// Organization logo proxy endpoint (public - for navbar display)
+// GET /api/organization/files/logo - Proxies the logo from R2 storage
+app.get("/api/organization/files/logo", asyncHandler(async (req, res) => {
+  try {
+    const tenantCode = req.headers['x-tenant-code'] || 'default';
+
+    // Build tenant filter
+    let tenantFilter = {};
+    if (tenantCode && tenantCode !== 'default') {
+      tenantFilter = { tenantCode };
+    }
+
+    // Get organization with logo URL
+    const organization = await prisma.organization.findFirst({
+      where: { ...tenantFilter, isActive: true },
+      select: { logoUrl: true }
+    });
+
+    if (!organization || !organization.logoUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'Organization logo not found'
+      });
+    }
+
+    // Fetch logo from R2
+    const logoResponse = await fetch(organization.logoUrl);
+
+    if (!logoResponse.ok) {
+      return res.status(404).json({
+        success: false,
+        message: 'Logo file not accessible'
+      });
+    }
+
+    // Get content type and stream the file
+    const contentType = logoResponse.headers.get('content-type') || 'image/png';
+    const logoBuffer = await logoResponse.arrayBuffer();
+
+    res.set({
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+      'Content-Length': logoBuffer.byteLength
+    });
+
+    return res.send(Buffer.from(logoBuffer));
+
+  } catch (error) {
+    console.error('Organization logo proxy error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to serve organization logo'
+    });
+  }
+}));
+console.log("🖼️ Organization logo proxy endpoint registered: GET /api/organization/files/logo");
+
+// Public endpoint to list all organizations (for organization selection page)
+app.get("/api/public/organizations", asyncHandler(async (req, res) => {
+	try {
+		// Get all active organizations with basic public info
+		const organizations = await prisma.organization.findMany({
+			where: { isActive: true },
+			select: {
+				id: true,
+				name: true,
+				shortName: true,
+				tenantCode: true,
+				logoUrl: true,
+				description: true,
+			},
+			orderBy: { name: 'asc' }
+		});
+
+		// Map to frontend-compatible format and construct apiUrl
+		const baseUrl = process.env.API_BASE_URL || `http://localhost:${config.port}`;
+		const mappedOrganizations = organizations.map(org => ({
+			code: org.tenantCode || org.shortName,
+			name: org.name,
+			shortName: org.shortName,
+			apiUrl: `${baseUrl}/api`,
+			logoUrl: org.logoUrl,
+			description: org.description,
+			// For logo proxy URL
+			logoProxyUrl: org.logoUrl ? `/api/organizations/${org.id}/files/logo` : null,
+		}));
+
+		return res.json({
+			success: true,
+			data: { organizations: mappedOrganizations },
+			message: 'Organizations retrieved successfully'
+		});
+	} catch (error) {
+		console.error('Get public organizations error:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to fetch organizations'
+		});
+	}
+}));
+console.log("🏢 Public organizations endpoint registered: GET /api/public/organizations");
 app.use(
 	"/api/admin/verification",
 	require("./routes/admin/alumniVerification.route")
@@ -733,9 +1012,25 @@ try {
 // Email Routes
 app.use("/api", require("./routes/email.route"));
 
+// Developer Portal Routes - Multi-tenant management
+app.use("/api/developer", require("./routes/developer.route"));
+console.log("🔧 Developer portal routes registered");
+
 // Additional routes (disabled for now)
 // app.use('/api/transactions', require('./routes/transactions.route'));
 app.use('/api/notifications', require('./routes/notifications.route'));
+
+// System Announcements Routes
+app.use('/api/announcements', require('./routes/announcements.route'));
+console.log('📢 Announcement routes registered');
+
+// Tenant Configuration Routes - Multi-tenant email and push notification management
+app.use('/api/tenant-config', require('./routes/tenantConfig.route'));
+console.log('📧 Tenant configuration routes registered');
+
+// Subscription Admin Routes - Super Admin subscription management
+app.use('/api/admin/subscription', require('./routes/admin/subscriptionAdmin.route'));
+console.log('💳 Subscription admin routes registered');
 
 // =============================================
 // ERROR HANDLING

@@ -76,7 +76,7 @@ const cacheBatchMembers = cache(
 // Cache posts list (5 minutes for better real-time performance)
 const cachePosts = cache((req) => {
 	const { category, page, limit, search, status, isPublished, isArchived, sortBy, sortOrder, dateFrom, dateTo, tags } = req.query;
-	
+
 	// Handle both old status parameter and new isPublished/isArchived parameters
 	let publishedState;
 	if (isPublished !== undefined) {
@@ -86,38 +86,49 @@ const cachePosts = cache((req) => {
 	} else {
 		publishedState = 'published'; // default
 	}
-	
+
 	const archivedState = isArchived === 'true' ? 'archived' : 'notarchived';
-	
+
 	// Include user ID in cache key for user-specific data (userReactions)
 	const userId = req.user?.id || 'anonymous';
-	
+
+	// Include tenant ID for multi-tenant isolation
+	// FIXED: Use req.tenant?.id instead of req.tenantId (tenant middleware sets req.tenant, not req.tenantId)
+	const tenantId = req.tenant?.id || 'global';
+
 	// Include sort parameters in cache key
 	const sortParams = `${sortBy || 'createdAt'}:${sortOrder || 'desc'}`;
-	
+
 	// Include date range parameters in cache key
 	const dateParams = `${dateFrom || 'nostart'}:${dateTo || 'noend'}`;
-	
+
 	// Include tags in cache key (handle array of tags)
 	const tagsParam = tags ? (Array.isArray(tags) ? tags.join(',') : tags) : 'notags';
-	
-	return `posts:${category || "all"}:${publishedState}:${archivedState}:${search || "nosearch"}:user:${userId}:sort:${sortParams}:date:${dateParams}:tags:${tagsParam}:page:${page || 1}:limit:${limit || 10}`;
+
+	return `tenant:${tenantId}:posts:${category || "all"}:${publishedState}:${archivedState}:${search || "nosearch"}:user:${userId}:sort:${sortParams}:date:${dateParams}:tags:${tagsParam}:page:${page || 1}:limit:${limit || 10}`;
 }, 5 * 60);
 
-// Cache post details (30 minutes)
-const cachePost = cache((req) => CacheKeys.post(req.params.postId), 30 * 60);
+// Cache post details (30 minutes) - with tenant isolation
+const cachePost = cache((req) => {
+	const tenantId = req.tenant?.id || 'global';
+	return `tenant:${tenantId}:post:${req.params.postId}`;
+}, 30 * 60);
 
-// Cache post comments (20 minutes)
+// Cache post comments (20 minutes) - with tenant isolation
 const cachePostComments = cache(
-	(req) =>
-		CacheKeys.postComments(req.params.postId, req.query.page, req.query.limit),
+	(req) => {
+		const tenantId = req.tenant?.id || 'global';
+		return `tenant:${tenantId}:post:comments:${req.params.postId}:page:${req.query.page || 1}:limit:${req.query.limit || 10}`;
+	},
 	20 * 60
 );
 
-// Cache post likes (15 minutes)
+// Cache post likes (15 minutes) - with tenant isolation
 const cachePostLikes = cache(
-	(req) =>
-		`post:likes:${req.params.postId}:page:${req.query.page || 1}:limit:${req.query.limit || 20}`,
+	(req) => {
+		const tenantId = req.tenant?.id || 'global';
+		return `tenant:${tenantId}:post:likes:${req.params.postId}:page:${req.query.page || 1}:limit:${req.query.limit || 20}`;
+	},
 	15 * 60
 );
 
@@ -149,22 +160,47 @@ class CacheInvalidator {
 		console.log(`🗑️ Invalidated user cache: ${userId}`);
 	}
 
-	// Invalidate post-related caches (including likes and comments)
-	static async invalidatePost(postId) {
+	// Invalidate post-related caches (including likes and comments) - tenant-aware
+	static async invalidatePost(postId, tenantId = null) {
 		await CacheService.del(CacheKeys.post(postId));
-		await CacheService.delPattern("posts:*"); // Invalidate all post lists
-		await CacheService.delPattern(`post:comments:${postId}*`); // Invalidate post comments
-		await CacheService.delPattern(`post:likes:${postId}*`); // Invalidate post likes
-		console.log(`🗑️ Invalidated post cache: ${postId}`);
+		if (tenantId) {
+			// Tenant-specific cache invalidation
+			await CacheService.delPattern(`tenant:${tenantId}:posts:*`);
+			await CacheService.delPattern(`tenant:${tenantId}:post:${postId}*`);
+			await CacheService.delPattern(`tenant:${tenantId}:post:comments:${postId}*`);
+			await CacheService.delPattern(`tenant:${tenantId}:post:likes:${postId}*`);
+		} else {
+			// Global fallback - invalidate all tenant post caches
+			await CacheService.delPattern("tenant:*:posts:*");
+			await CacheService.delPattern(`*:post:${postId}*`);
+		}
+		await CacheService.delPattern("posts:*"); // Legacy non-tenant cache invalidation
+		await CacheService.delPattern(`post:comments:${postId}*`);
+		await CacheService.delPattern(`post:likes:${postId}*`);
+		console.log(`🗑️ Invalidated post cache: ${postId} (tenant: ${tenantId || 'all'})`);
 	}
 
-	// Invalidate specific post interactions (likes, comments, replies)
-	static async invalidatePostInteractions(postId) {
-		await CacheService.delPattern(`post:comments:${postId}*`); // Invalidate post comments
-		await CacheService.delPattern(`post:likes:${postId}*`); // Invalidate post likes
-		await CacheService.del(CacheKeys.post(postId)); // Invalidate post details (to update counts)
-		await CacheService.delPattern("posts:*"); // Invalidate all post lists for real-time updates
-		console.log(`🗑️ Invalidated post interactions cache: ${postId}`);
+	// Invalidate specific post interactions (likes, comments, replies) - tenant-aware
+	static async invalidatePostInteractions(postId, tenantId = null) {
+		if (tenantId) {
+			// Tenant-specific cache invalidation
+			await CacheService.delPattern(`tenant:${tenantId}:post:comments:${postId}*`);
+			await CacheService.delPattern(`tenant:${tenantId}:post:likes:${postId}*`);
+			await CacheService.delPattern(`tenant:${tenantId}:post:${postId}*`);
+			await CacheService.delPattern(`tenant:${tenantId}:posts:*`);
+		} else {
+			// Global fallback
+			await CacheService.delPattern(`*:post:comments:${postId}*`);
+			await CacheService.delPattern(`*:post:likes:${postId}*`);
+			await CacheService.delPattern(`*:post:${postId}*`);
+			await CacheService.delPattern("tenant:*:posts:*");
+		}
+		// Legacy cache invalidation
+		await CacheService.delPattern(`post:comments:${postId}*`);
+		await CacheService.delPattern(`post:likes:${postId}*`);
+		await CacheService.del(CacheKeys.post(postId));
+		await CacheService.delPattern("posts:*");
+		console.log(`🗑️ Invalidated post interactions cache: ${postId} (tenant: ${tenantId || 'all'})`);
 	}
 
 	// Invalidate batch-related caches
@@ -240,19 +276,26 @@ const invalidateUserCache = invalidateCache(async (req) => {
 // Invalidate post cache after post operations (create, update, delete, approve)
 const invalidatePostCache = invalidateCache(async (req) => {
 	const postId = req.params.postId;
+	// FIXED: Use req.tenant?.id instead of req.tenantId
+	const tenantId = req.tenant?.id || null;
 	if (postId) {
-		await CacheInvalidator.invalidatePost(postId);
+		await CacheInvalidator.invalidatePost(postId, tenantId);
 	}
 
 	// Also invalidate general posts cache for new posts
+	if (tenantId) {
+		await CacheService.delPattern(`tenant:${tenantId}:posts:*`);
+	}
 	await CacheService.delPattern("posts:*");
 });
 
 // Invalidate post interaction cache (likes, comments, replies)
 const invalidatePostInteractionCache = invalidateCache(async (req) => {
 	const postId = req.params.postId;
+	// FIXED: Use req.tenant?.id instead of req.tenantId
+	const tenantId = req.tenant?.id || null;
 	if (postId) {
-		await CacheInvalidator.invalidatePostInteractions(postId);
+		await CacheInvalidator.invalidatePostInteractions(postId, tenantId);
 	}
 });
 

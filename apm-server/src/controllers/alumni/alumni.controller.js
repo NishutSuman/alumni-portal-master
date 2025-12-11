@@ -1,6 +1,7 @@
 // src/controllers/alumni.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
+const { getTenantFilter } = require('../../utils/tenant.util');
 
 // Alumni Directory Search
 const searchAlumni = async (req, res) => {
@@ -20,12 +21,17 @@ const searchAlumni = async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query, 20);
   
   try {
+    // Get tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
     // Build dynamic where clause
     const whereClause = {
+      ...tenantFilter, // Apply tenant isolation
       isActive: true,
       isProfilePublic: true,
       isAlumniVerified: true, // Only show verified alumni
       isRejected: false, // Exclude rejected users
+      role: { not: 'DEVELOPER' }, // Exclude DEVELOPER role - they don't belong to any tenant
     };
     
     // General search across multiple fields
@@ -167,6 +173,19 @@ const searchAlumni = async (req, res) => {
 // Get alumni statistics
 const getAlumniStats = async (req, res) => {
   try {
+    // Get tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Base filter excluding DEVELOPER role
+    const baseUserFilter = {
+      ...tenantFilter,
+      isActive: true,
+      isProfilePublic: true,
+      isAlumniVerified: true,
+      isRejected: false,
+      role: { not: 'DEVELOPER' },
+    };
+
     const [
       totalAlumni,
       batchStats,
@@ -175,15 +194,10 @@ const getAlumniStats = async (req, res) => {
     ] = await Promise.all([
       // Total active alumni
       prisma.user.count({
-        where: { 
-          isActive: true, 
-          isProfilePublic: true,
-          isAlumniVerified: true,
-          isRejected: false
-        }
+        where: baseUserFilter
       }),
-      
-      // Alumni by batch
+
+      // Alumni by batch (Batch is global, not tenant-scoped)
       prisma.batch.findMany({
         select: {
           year: true,
@@ -193,25 +207,22 @@ const getAlumniStats = async (req, res) => {
         orderBy: { year: 'desc' },
         take: 10,
       }),
-      
+
       // Employment status distribution
       prisma.user.groupBy({
         by: ['employmentStatus'],
-        where: { 
-          isActive: true, 
-          isProfilePublic: true,
-          isAlumniVerified: true,
-          isRejected: false
-        },
+        where: baseUserFilter,
         _count: true,
       }),
-      
+
       // Recent joins (last 30 days)
       prisma.user.count({
         where: {
+          ...tenantFilter,
           isActive: true,
           isAlumniVerified: true,
           isRejected: false,
+          role: { not: 'DEVELOPER' },
           createdAt: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           }
@@ -240,15 +251,20 @@ const getAlumniStats = async (req, res) => {
 // Get individual alumni profile (public view)
 const getAlumniProfile = async (req, res) => {
   const { userId } = req.params;
-  
+
   try {
+    // Get tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
     const user = await prisma.user.findFirst({
       where: {
+        ...tenantFilter,
         id: userId,
         isActive: true,
         isProfilePublic: true,
         isAlumniVerified: true,
         isRejected: false,
+        role: { not: 'DEVELOPER' }, // Exclude DEVELOPER role
       },
       select: {
         id: true,

@@ -1,6 +1,7 @@
 // src/controllers/like.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
+const { getTenantFilter } = require('../../utils/tenant.util');
 
 // Toggle reaction on a post
 const toggleReaction = async (req, res) => {
@@ -15,9 +16,15 @@ const toggleReaction = async (req, res) => {
   }
   
   try {
-    // Check if post exists and allows likes
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists and allows likes (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: {
         id: true,
         allowLikes: true,
@@ -33,7 +40,7 @@ const toggleReaction = async (req, res) => {
         },
       },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -238,18 +245,24 @@ const toggleLike = async (req, res) => {
 const getPostLikes = async (req, res) => {
   const { postId } = req.params;
   const { page = 1, limit = 20 } = req.query;
-  
+
   try {
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: { id: true, isPublished: true, isArchived: true },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
-    
+
     if (!post.isPublished || post.isArchived) {
       return errorResponse(res, 'Cannot view likes for this post', 400);
     }
@@ -332,18 +345,24 @@ const checkUserLike = async (req, res) => {
 const getPostReactions = async (req, res) => {
   const { postId } = req.params;
   const userId = req.user?.id;
-  
+
   try {
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: { id: true, isPublished: true, isArchived: true },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
-    
+
     if (!post.isPublished || post.isArchived) {
       return errorResponse(res, 'Cannot view reactions for this post', 400);
     }
@@ -407,18 +426,24 @@ const getPostReactions = async (req, res) => {
 const getPostReactionUsers = async (req, res) => {
   const { postId } = req.params;
   const { reactionType, page = 1, limit = 20 } = req.query;
-  
+
   try {
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if post exists (with tenant isolation)
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: { id: true, isPublished: true, isArchived: true },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
-    
+
     if (!post.isPublished || post.isArchived) {
       return errorResponse(res, 'Cannot view reactions for this post', 400);
     }

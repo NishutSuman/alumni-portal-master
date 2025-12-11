@@ -25,12 +25,26 @@ router.get("/verify-email/:token", asyncHandler(authController.verifyEmail));
 router.post("/resend-verification", asyncHandler(authController.resendVerificationEmail));
 router.post("/test-email", asyncHandler(authController.testEmail));
 
+// Reactivation routes (public - for deactivated users)
+router.post("/request-reactivation", asyncHandler(authController.requestReactivation));
+router.post("/verify-reactivation", asyncHandler(authController.verifyReactivation));
+
+// Multi-org support routes (public)
+router.post("/organizations-by-email", asyncHandler(authController.getOrganizationsByEmail));
+router.get("/organizations", asyncHandler(authController.getAllOrganizations));
+router.get("/organization-by-code/:code", asyncHandler(authController.getOrganizationByCode));
+
 // Protected routes
 router.post("/logout", authenticateToken, asyncHandler(authController.logout));
 router.post(
 	"/change-password",
 	authenticateToken,
 	asyncHandler(authController.changePassword)
+);
+router.post(
+	"/deactivate-account",
+	authenticateToken,
+	asyncHandler(authController.deactivateAccount)
 );
 router.get(
 	"/me",

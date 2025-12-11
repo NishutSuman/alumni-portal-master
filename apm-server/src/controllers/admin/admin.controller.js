@@ -221,10 +221,13 @@ const getAllUsers = async (req, res) => {
     const { page = 1, limit = 20, search = '', batch, status, role } = req.query;
     const { role: adminRole, id: adminId } = req.user;
     const offset = (page - 1) * limit;
-    
+
     // Build where clause
     let whereClause = {
-      isActive: true
+      isActive: true,
+      // IMPORTANT: Never show DEVELOPER users in organization user lists
+      // Developers are independent cross-tenant users and don't belong to any org
+      role: { not: 'DEVELOPER' }
     };
     
     // Add search filter
@@ -260,9 +263,13 @@ const getAllUsers = async (req, res) => {
       }
     }
     
-    // Add role filter
+    // Add role filter - but never allow DEVELOPER to be shown
     if (role) {
-      whereClause.role = role;
+      // If someone tries to filter by DEVELOPER, ignore it
+      if (role !== 'DEVELOPER') {
+        whereClause.role = role;
+      }
+      // If role is DEVELOPER, keep the default { not: 'DEVELOPER' } filter
     }
     
     // For batch admins, only show users from their batch

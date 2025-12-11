@@ -31,11 +31,12 @@ import {
 import { selectIsDark } from '@/store/slices/themeSlice';
 import { selectUser } from '@/store/slices/authSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
+import SettingsModal from '@/components/common/UI/SettingsModal';
 
 interface MobileMoreSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  userRole: 'USER' | 'BATCH_ADMIN' | 'SUPER_ADMIN';
+  userRole: 'USER' | 'TEACHER' | 'BATCH_ADMIN' | 'SUPER_ADMIN' | 'DEVELOPER';
   userName: string;
   userEmail: string;
   onLogout: () => void;
@@ -60,6 +61,7 @@ const MobileMoreSidebar: React.FC<MobileMoreSidebarProps> = ({
   const isDark = useSelector(selectIsDark);
   const user = useSelector(selectUser);
   const [imageError, setImageError] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleLogout = () => {
     onClose();
@@ -131,6 +133,7 @@ const MobileMoreSidebar: React.FC<MobileMoreSidebarProps> = ({
   const menuItems = getMenuItems();
 
   return (
+    <>
     <Transition show={isOpen} as={Fragment}>
       <Dialog onClose={onClose} className="relative z-50 lg:hidden">
         {/* Backdrop */}
@@ -213,20 +216,22 @@ const MobileMoreSidebar: React.FC<MobileMoreSidebarProps> = ({
 
             {/* Footer - Theme Toggle & Logout */}
             <div className="border-t border-gray-200 dark:border-gray-800 p-4 space-y-3">
-              {/* Theme Toggle & Notifications */}
-              <div className="flex items-center justify-between px-3 py-2">
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Dark Mode
-                  </span>
-                  <ThemeToggle />
-                </div>
+              {/* Theme, Notifications & Settings */}
+              <div className="flex items-center justify-center space-x-6 px-3 py-2">
+                <ThemeToggle />
                 <button
                   onClick={() => handleNavigation('/notifications')}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   title="Notifications"
                 >
-                  <BellIcon className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  <BellIcon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                </button>
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  title="Settings"
+                >
+                  <Cog6ToothIcon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                 </button>
               </div>
 
@@ -261,6 +266,13 @@ const MobileMoreSidebar: React.FC<MobileMoreSidebarProps> = ({
         </Transition.Child>
       </Dialog>
     </Transition>
+
+    {/* Settings Modal */}
+    <SettingsModal
+      isOpen={isSettingsOpen}
+      onClose={() => setIsSettingsOpen(false)}
+    />
+    </>
   );
 };
 

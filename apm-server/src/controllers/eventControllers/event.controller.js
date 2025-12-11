@@ -3,6 +3,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
 const { deleteUploadedFile, getFileUrl } = require('../../middleware/upload.middleware');
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // Helper function to generate unique slug
 const generateSlug = (title, suffix = '') => {
@@ -27,14 +28,16 @@ const getAllEvents = async (req, res) => {
   } = req.query;
   
   const { page, limit, skip } = getPaginationParams(req.query, 10);
-  
+
   try {
-    // Build where clause
-    const whereClause = {};
-    
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+    const whereClause = { ...tenantFilter };
+
     console.log('🔍 Events API Request:', {
       user: req.user?.role,
-      query: req.query
+      query: req.query,
+      tenant: req.tenant?.tenantCode || 'single-tenant'
     });
     
     // Default status filter for public users (exclude DRAFT for regular users only)
@@ -204,14 +207,17 @@ const getAllEvents = async (req, res) => {
 // Get single event by ID or slug (public)
 const getEventById = async (req, res) => {
   const { eventId } = req.params;
-  
+
   try {
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
     // Try to find by ID first, then by slug
     const whereClause = eventId.length === 25 // CUID length
-      ? { id: eventId }
-      : { slug: eventId };
-    
-    const event = await prisma.event.findUnique({
+      ? { id: eventId, ...tenantFilter }
+      : { slug: eventId, ...tenantFilter };
+
+    const event = await prisma.event.findFirst({
       where: whereClause,
       include: {
         category: {
@@ -429,38 +435,42 @@ const createEvent = async (req, res) => {
     let images = [];
     
     if (req.files) {
-      // Upload hero image to Cloudflare R2
+      // Get tenant code from tenant middleware (preferred) or header (fallback)
+      const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+      console.log('📁 Uploading event images for tenant:', tenantCode);
+
+      // Upload hero image to Cloudflare R2 (tenant-aware)
       if (req.files.heroImage && req.files.heroImage[0]) {
         try {
           const heroImageFile = req.files.heroImage[0];
           const validation = cloudflareR2Service.validateEventImage(heroImageFile);
-          
+
           if (!validation.valid) {
             return errorResponse(res, validation.error, 400);
           }
-          
-          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero');
+
+          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero', tenantCode);
           heroImage = uploadResult.url;
         } catch (error) {
           console.error('Hero image upload failed:', error);
           return errorResponse(res, 'Failed to upload hero image', 500);
         }
       }
-      
-      // Upload gallery images to Cloudflare R2
+
+      // Upload gallery images to Cloudflare R2 (tenant-aware)
       if (req.files.images) {
         try {
           const uploadPromises = req.files.images.map(async (file) => {
             const validation = cloudflareR2Service.validateEventImage(file);
-            
+
             if (!validation.valid) {
               throw new Error(`Invalid image: ${validation.error}`);
             }
-            
-            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery');
+
+            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery', tenantCode);
             return uploadResult.url;
           });
-          
+
           images = await Promise.all(uploadPromises);
         } catch (error) {
           console.error('Gallery images upload failed:', error);
@@ -468,7 +478,10 @@ const createEvent = async (req, res) => {
         }
       }
     }
-    
+
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
+
     // Create event
     const event = await prisma.event.create({
       data: {
@@ -506,6 +519,8 @@ const createEvent = async (req, res) => {
         prizeDetails: prizeDetails?.trim(),
         organizerDetails: organizerDetails?.trim(),
         createdBy: req.user.id,
+        // Multi-tenant support
+        ...tenantData,
       },
       include: {
         category: {
@@ -561,11 +576,14 @@ const createEvent = async (req, res) => {
 const updateEvent = async (req, res) => {
   const { eventId } = req.params;
   const updateData = req.body;
-  
+
   try {
+    // Verify event belongs to tenant before updating
+    const tenantFilter = getTenantFilter(req);
+
     // Get existing event
-    const existingEvent = await prisma.event.findUnique({
-      where: { id: eventId },
+    const existingEvent = await prisma.event.findFirst({
+      where: { id: eventId, ...tenantFilter },
       select: {
         id: true,
         title: true,
@@ -685,14 +703,18 @@ const updateEvent = async (req, res) => {
             }
           }
           
-          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero');
+          // Get tenant code from tenant middleware (preferred) or header (fallback)
+          const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+          console.log('📁 Updating event hero image for tenant:', tenantCode);
+
+          const uploadResult = await cloudflareR2Service.uploadEventImage(heroImageFile, 'hero', tenantCode);
           heroImage = uploadResult.url;
         } catch (error) {
           console.error('Hero image upload failed:', error);
           return errorResponse(res, 'Failed to upload hero image', 500);
         }
       }
-      
+
       // Update gallery images
       if (req.files.images) {
         try {
@@ -711,15 +733,19 @@ const updateEvent = async (req, res) => {
               }
             }
           }
-          
+
+          // Get tenant code from tenant middleware (preferred) or header (fallback)
+          const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+          console.log('📁 Updating event gallery images for tenant:', tenantCode);
+
           const uploadPromises = req.files.images.map(async (file) => {
             const validation = cloudflareR2Service.validateEventImage(file);
-            
+
             if (!validation.valid) {
               throw new Error(`Invalid image: ${validation.error}`);
             }
-            
-            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery');
+
+            const uploadResult = await cloudflareR2Service.uploadEventImage(file, 'gallery', tenantCode);
             return uploadResult.url;
           });
           
@@ -790,11 +816,14 @@ const updateEvent = async (req, res) => {
 // Delete event (Super Admin only)
 const deleteEvent = async (req, res) => {
   const { eventId } = req.params;
-  
+
   try {
+    // Verify event belongs to tenant before deleting
+    const tenantFilter = getTenantFilter(req);
+
     // Get event with related data
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...tenantFilter },
       select: {
         id: true,
         title: true,
@@ -881,16 +910,19 @@ const deleteEvent = async (req, res) => {
 const updateEventStatus = async (req, res) => {
   const { eventId } = req.params;
   const { status } = req.body;
-  
+
   // Validate status
   const validStatuses = ['DRAFT', 'PUBLISHED', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ARCHIVED'];
   if (!validStatuses.includes(status)) {
     return errorResponse(res, 'Invalid event status', 400);
   }
-  
+
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    // Verify event belongs to tenant before updating status
+    const tenantFilter = getTenantFilter(req);
+
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...tenantFilter },
       select: { id: true, title: true, status: true },
     });
     

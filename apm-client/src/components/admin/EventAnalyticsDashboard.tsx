@@ -246,7 +246,6 @@ const EventAnalyticsDashboard: React.FC = () => {
     setIsSaving(true)
     try {
       const token = auth.token || localStorage.getItem('token')
-      console.log('Auth state:', { auth, token })
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events/${selectedEventId}/privacy-settings`, {
         method: 'PUT',

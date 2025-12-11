@@ -9,6 +9,7 @@ const {
 } = require("../../utils/response");
 const eventService = require("../../services/event/event.service");
 const emailManager = require("../../services/email/EmailManager");
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // ==========================================
 // USER GUEST MANAGEMENT
@@ -687,8 +688,11 @@ const getAllEventGuests = async (req, res) => {
 
 	try {
 		// Check if event exists
-		const event = await prisma.event.findUnique({
-			where: { id: eventId },
+		const event = await prisma.event.findFirst({
+			where: {
+				id: eventId,
+				...getTenantFilter(req),
+			},
 			select: { id: true, title: true, hasGuests: true },
 		});
 

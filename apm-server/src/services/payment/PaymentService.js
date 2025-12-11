@@ -6,12 +6,41 @@
 const { PrismaClient } = require("@prisma/client");
 const PaymentProviderFactory = require("./PaymentProviderFactory");
 const paymentConfig = require("../../config/payment");
-const emailManager = require("../email/EmailManager");
+const tenantEmailManager = require("../email/TenantEmailManager");
 const MembershipService = require("../membership/membership.service");
 const BatchPaymentService = require("./batchPayment.service");
 const NotificationService = require("../notification.service");
+const SubscriptionService = require("../subscription/SubscriptionService");
 
 const prisma = new PrismaClient();
+
+/**
+ * Helper function to get tenant code from user's organization
+ * @param {string} userId - User ID
+ * @returns {Promise<{tenantCode: string|null, organizationName: string}>}
+ */
+async function getTenantInfoFromUser(userId) {
+	try {
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			include: {
+				organization: {
+					select: {
+						tenantCode: true,
+						name: true
+					}
+				}
+			}
+		});
+		return {
+			tenantCode: user?.organization?.tenantCode || null,
+			organizationName: user?.organization?.name || 'Alumni Portal'
+		};
+	} catch (error) {
+		console.error('Error getting tenant info from user:', error);
+		return { tenantCode: null, organizationName: 'Alumni Portal' };
+	}
+}
 
 class PaymentService {
 	constructor() {
@@ -433,6 +462,21 @@ class PaymentService {
 					calculation =
 						await this.calculateStandaloneMerchandiseTotal(referenceId); // referenceId = userId for standalone
 					break;
+				case "SUBSCRIPTION_RENEWAL":
+					calculation = await this.calculateSubscriptionRenewalTotal(referenceId, userId); // referenceId = paymentRequestId
+					break;
+				case "SUBSCRIPTION_UPGRADE":
+					calculation = await this.calculateSubscriptionUpgradeTotal(referenceId, userId); // referenceId = paymentRequestId
+					break;
+				case "SUBSCRIPTION_NEW":
+					// For new subscriptions, paymentData should include planId, billingCycle
+					calculation = await this.calculateNewSubscriptionTotal(
+						referenceId, // organizationId
+						paymentData.planId,
+						paymentData.billingCycle || 'YEARLY',
+						userId
+					);
+					break;
 				default:
 					throw new Error(`Unsupported reference type: ${referenceType}`);
 			}
@@ -577,6 +621,223 @@ class PaymentService {
 			};
 		} catch (error) {
 			console.error("Membership payment calculation failed:", error);
+			throw error;
+		}
+	}
+
+	// ==========================================
+	// SUBSCRIPTION PAYMENT METHODS
+	// ==========================================
+
+	/**
+	 * Calculate subscription renewal payment total
+	 * @param {string} paymentRequestId - The payment request ID
+	 * @param {string} userId - The user (Super Admin) initiating payment
+	 */
+	async calculateSubscriptionRenewalTotal(paymentRequestId, userId) {
+		try {
+			// Get the payment request
+			const paymentRequest = await prisma.subscriptionPaymentRequest.findUnique({
+				where: { id: paymentRequestId },
+				include: {
+					subscription: {
+						include: {
+							organization: true,
+							plan: true
+						}
+					}
+				}
+			});
+
+			if (!paymentRequest) {
+				throw new Error("Payment request not found");
+			}
+
+			if (paymentRequest.status !== 'APPROVED') {
+				throw new Error("Payment request must be approved before payment");
+			}
+
+			// Get user details for payment
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { fullName: true, email: true, whatsappNumber: true }
+			});
+
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			const amount = parseFloat(paymentRequest.amount);
+
+			return {
+				breakdown: {
+					subscriptionFee: amount,
+					total: amount,
+				},
+				items: [{
+					type: 'subscription_renewal',
+					description: `Subscription Renewal - ${paymentRequest.subscription.plan.name} (${paymentRequest.subscription.organization.name})`,
+					amount: amount
+				}],
+				user: user,
+				metadata: {
+					paymentRequestId: paymentRequest.id,
+					subscriptionId: paymentRequest.subscriptionId,
+					organizationId: paymentRequest.subscription.organizationId,
+					organizationName: paymentRequest.subscription.organization.name,
+					planId: paymentRequest.subscription.planId,
+					planName: paymentRequest.subscription.plan.name,
+					billingCycle: paymentRequest.subscription.billingCycle,
+					requestType: paymentRequest.requestType
+				}
+			};
+		} catch (error) {
+			console.error("Subscription renewal calculation failed:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Calculate subscription upgrade payment total
+	 * @param {string} paymentRequestId - The payment request ID for upgrade
+	 * @param {string} userId - The user (Super Admin) initiating payment
+	 */
+	async calculateSubscriptionUpgradeTotal(paymentRequestId, userId) {
+		try {
+			const paymentRequest = await prisma.subscriptionPaymentRequest.findUnique({
+				where: { id: paymentRequestId },
+				include: {
+					subscription: {
+						include: {
+							organization: true,
+							plan: true
+						}
+					}
+				}
+			});
+
+			if (!paymentRequest) {
+				throw new Error("Payment request not found");
+			}
+
+			if (paymentRequest.status !== 'APPROVED') {
+				throw new Error("Payment request must be approved before payment");
+			}
+
+			if (paymentRequest.requestType !== 'PLAN_UPGRADE') {
+				throw new Error("This is not an upgrade request");
+			}
+
+			// Get new plan details
+			const newPlan = await prisma.subscriptionPlan.findUnique({
+				where: { id: paymentRequest.requestedPlanId }
+			});
+
+			if (!newPlan) {
+				throw new Error("Requested plan not found");
+			}
+
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { fullName: true, email: true, whatsappNumber: true }
+			});
+
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			const amount = parseFloat(paymentRequest.amount);
+
+			return {
+				breakdown: {
+					upgradeFee: amount,
+					total: amount,
+				},
+				items: [{
+					type: 'subscription_upgrade',
+					description: `Plan Upgrade: ${paymentRequest.subscription.plan.name} → ${newPlan.name} (${paymentRequest.subscription.organization.name})`,
+					amount: amount
+				}],
+				user: user,
+				metadata: {
+					paymentRequestId: paymentRequest.id,
+					subscriptionId: paymentRequest.subscriptionId,
+					organizationId: paymentRequest.subscription.organizationId,
+					organizationName: paymentRequest.subscription.organization.name,
+					currentPlanId: paymentRequest.subscription.planId,
+					currentPlanName: paymentRequest.subscription.plan.name,
+					newPlanId: newPlan.id,
+					newPlanName: newPlan.name,
+					requestType: paymentRequest.requestType
+				}
+			};
+		} catch (error) {
+			console.error("Subscription upgrade calculation failed:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Calculate new subscription payment total
+	 * @param {string} organizationId - Organization ID
+	 * @param {string} planId - Plan ID
+	 * @param {string} billingCycle - MONTHLY or YEARLY
+	 * @param {string} userId - The user (Super Admin) initiating payment
+	 */
+	async calculateNewSubscriptionTotal(organizationId, planId, billingCycle, userId) {
+		try {
+			const organization = await prisma.organization.findUnique({
+				where: { id: organizationId }
+			});
+
+			if (!organization) {
+				throw new Error("Organization not found");
+			}
+
+			const plan = await prisma.subscriptionPlan.findUnique({
+				where: { id: planId }
+			});
+
+			if (!plan) {
+				throw new Error("Plan not found");
+			}
+
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { fullName: true, email: true, whatsappNumber: true }
+			});
+
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			// Calculate price based on billing cycle
+			const amount = billingCycle === 'YEARLY'
+				? parseFloat(plan.priceYearly)
+				: parseFloat(plan.priceMonthly);
+
+			return {
+				breakdown: {
+					subscriptionFee: amount,
+					total: amount,
+				},
+				items: [{
+					type: 'subscription_new',
+					description: `New Subscription - ${plan.name} (${billingCycle}) for ${organization.name}`,
+					amount: amount
+				}],
+				user: user,
+				metadata: {
+					organizationId: organization.id,
+					organizationName: organization.name,
+					planId: plan.id,
+					planName: plan.name,
+					billingCycle: billingCycle,
+					requestType: 'NEW_SUBSCRIPTION'
+				}
+			};
+		} catch (error) {
+			console.error("New subscription calculation failed:", error);
 			throw error;
 		}
 	}
@@ -820,42 +1081,44 @@ class PaymentService {
 					}
 				}, 200);
 
-				// Send payment confirmation email
+				// Send payment confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-
-						// Get registration and event details for email
-						const registrationDetails = await tx.eventRegistration.findUnique({
-							where: { id: referenceId },
-							include: {
-								event: {
-									select: {
-										id: true,
-										title: true,
-										eventDate: true,
-										venue: true,
-										eventMode: true,
-									},
-								},
-								user: {
-									select: {
-										id: true,
-										fullName: true,
-										email: true,
-									},
+					// Get registration and event details for email
+					const registrationDetails = await tx.eventRegistration.findUnique({
+						where: { id: referenceId },
+						include: {
+							event: {
+								select: {
+									id: true,
+									title: true,
+									eventDate: true,
+									venue: true,
+									eventMode: true,
 								},
 							},
-						});
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									email: true,
+								},
+							},
+						},
+					});
 
-						if (registrationDetails) {
+					if (registrationDetails) {
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
+
+						if (emailService) {
 							await emailService.sendPaymentConfirmation(
 								registrationDetails.user,
 								transaction,
-								registrationDetails.event
+								registrationDetails.event,
+								{ organizationName: tenantInfo.organizationName }
 							);
 							console.log(
-								"✅ Event registration payment confirmation email sent"
+								`✅ Event registration payment confirmation email sent (Tenant: ${tenantInfo.tenantCode || 'default'})`
 							);
 						}
 					}
@@ -907,27 +1170,30 @@ class PaymentService {
 					});
 				}
 
-				// Send merchandise payment confirmation email
+				// Send merchandise payment confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-								batchYear: true,
-							},
-						});
+					const user = await tx.user.findUnique({
+						where: { id: transaction.userId },
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							batchYear: true,
+						},
+					});
 
-						if (user) {
+					if (user) {
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
+
+						if (emailService) {
 							await emailService.sendPaymentConfirmation(
 								user,
 								transaction,
-								null
+								null,
+								{ organizationName: tenantInfo.organizationName }
 							);
-							console.log("✅ Merchandise payment confirmation email sent");
+							console.log(`✅ Merchandise payment confirmation email sent (Tenant: ${tenantInfo.tenantCode || 'default'})`);
 						}
 					}
 				} catch (emailError) {
@@ -950,27 +1216,30 @@ class PaymentService {
 					transaction.amount
 				);
 
-				// Send membership confirmation email
+				// Send membership confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-								batchYear: true,
-							},
-						});
+					const user = await tx.user.findUnique({
+						where: { id: transaction.userId },
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							batchYear: true,
+						},
+					});
 
-						if (user) {
+					if (user) {
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
+
+						if (emailService) {
 							await emailService.sendMembershipConfirmation(
 								user,
 								transaction,
-								null
+								null,
+								{ organizationName: tenantInfo.organizationName }
 							);
-							console.log("✅ Membership confirmation email sent");
+							console.log(`✅ Membership confirmation email sent (Tenant: ${tenantInfo.tenantCode || 'default'})`);
 						}
 					}
 				} catch (emailError) {
@@ -989,27 +1258,30 @@ class PaymentService {
 					data
 				);
 
-				// Send batch payment confirmation email
+				// Send batch payment confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-								batchYear: true,
-							},
-						});
+					const user = await tx.user.findUnique({
+						where: { id: transaction.userId },
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							batchYear: true,
+						},
+					});
 
-						if (user) {
+					if (user) {
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
+
+						if (emailService) {
 							await emailService.sendPaymentConfirmation(
 								user,
 								transaction,
-								null
+								null,
+								{ organizationName: tenantInfo.organizationName }
 							);
-							console.log("✅ Batch payment confirmation email sent");
+							console.log(`✅ Batch payment confirmation email sent (Tenant: ${tenantInfo.tenantCode || 'default'})`);
 						}
 					}
 				} catch (emailError) {
@@ -1092,27 +1364,30 @@ class PaymentService {
 				break;
 
 			case "DONATION":
-				// Send donation confirmation email
+				// Send donation confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-								batchYear: true,
-							},
-						});
+					const donationUser = await tx.user.findUnique({
+						where: { id: transaction.userId },
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+							batchYear: true,
+						},
+					});
 
-						if (user) {
+					if (donationUser) {
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
+
+						if (emailService) {
 							await emailService.sendDonationConfirmation(
-								user,
+								donationUser,
 								transaction,
-								null
+								null,
+								{ organizationName: tenantInfo.organizationName }
 							);
-							console.log("✅ Donation confirmation email sent");
+							console.log(`✅ Donation confirmation email sent (Tenant: ${tenantInfo.tenantCode || 'default'})`);
 						}
 					}
 				} catch (emailError) {
@@ -1191,104 +1466,105 @@ class PaymentService {
 				// Store registration ID for post-transaction operations
 				const registrationId = newRegistration.id;
 
-				// Send payment confirmation email
+				// Send payment confirmation email (TENANT-AWARE)
 				try {
-					if (emailManager.isInitialized) {
-						const emailService = emailManager.getService();
+					// Get event details for email
+					const eventDetails = await tx.event.findUnique({
+						where: { id: referenceId },
+						select: {
+							id: true,
+							title: true,
+							eventDate: true,
+							startTime: true,
+							endTime: true,
+							venue: true,
+							eventMode: true,
+							meetingLink: true,
+						},
+					});
 
-						// Get event details for email
-						const eventDetails = await tx.event.findUnique({
-							where: { id: referenceId },
-							select: {
-								id: true,
-								title: true,
-								eventDate: true,
-								startTime: true,
-								endTime: true,
-								venue: true,
-								eventMode: true,
-								meetingLink: true,
-							},
-						});
+					const eventPaymentUser = await tx.user.findUnique({
+						where: { id: transaction.userId },
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
+					});
 
-						const user = await tx.user.findUnique({
-							where: { id: transaction.userId },
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-							},
-						});
+					if (eventDetails && eventPaymentUser) {
+						// Get tenant info for email service
+						const tenantInfo = await getTenantInfoFromUser(transaction.userId);
+						const emailService = await tenantEmailManager.getServiceForTenant(tenantInfo.tenantCode);
 
-						if (eventDetails && user) {
-							// Fetch the complete registration with guest details for email
-							const registrationForEmail = await tx.eventRegistration.findUnique({
-								where: { id: newRegistration.id },
-								include: {
-									guests: true,
-									event: true,
-									user: {
-										select: {
-											id: true,
-											fullName: true,
-											email: true
-										}
+						// Fetch the complete registration with guest details for email
+						const registrationForEmail = await tx.eventRegistration.findUnique({
+							where: { id: newRegistration.id },
+							include: {
+								guests: true,
+								event: true,
+								user: {
+									select: {
+										id: true,
+										fullName: true,
+										email: true
 									}
 								}
+							}
+						});
+
+						if (registrationForEmail && emailService) {
+							console.log("📧 About to call sendRegistrationConfirmation with:", {
+								userId: eventPaymentUser.id,
+								userEmail: eventPaymentUser.email,
+								eventTitle: eventDetails.title,
+								registrationId: registrationForEmail.id,
+								tenant: tenantInfo.tenantCode || 'default'
 							});
 
-							if (registrationForEmail) {
-								console.log("📧 About to call sendRegistrationConfirmation with:", {
-									userId: user.id,
-									userEmail: user.email,
-									eventTitle: eventDetails.title,
-									registrationId: registrationForEmail.id
-								});
-								
-								await emailService.sendRegistrationConfirmation(
-									user,
-									eventDetails,
-									registrationForEmail
-								);
-							} else {
-								console.error("❌ Failed to fetch registration for email");
-							}
-							console.log("✅ Event registration confirmation email sent successfully");
+							await emailService.sendRegistrationConfirmation(
+								eventPaymentUser,
+								eventDetails,
+								registrationForEmail,
+								{ organizationName: tenantInfo.organizationName }
+							);
+							console.log(`✅ Event registration confirmation email sent successfully (Tenant: ${tenantInfo.tenantCode || 'default'})`);
+						} else {
+							console.error("❌ Failed to fetch registration for email or email service unavailable");
+						}
 
-							// Send push notification for successful registration
-							try {
-								const PushNotificationService = require("../../utils/push-notification.util");
-								
-								// Send push notification using sendToToken method (mock mode for development)
-								const pushResult = await PushNotificationService.sendToToken({
-									token: 'mock-device-token', // In production, fetch actual device token from user
-									title: '🎉 Registration Confirmed!',
-									body: `You're successfully registered for ${eventDetails.title}. Check your email for details.`,
-									data: {
-										type: 'EVENT_REGISTRATION_SUCCESS',
-										eventId: eventDetails.id,
-										registrationId: newRegistration.id,
-									},
-									priority: 'normal'
-								});
-								
-								if (pushResult.success) {
-									console.log("✅ Event registration push notification sent successfully");
-								} else {
-									console.error("⚠️ Push notification failed:");
-									console.error("Error details:", pushResult.error);
-									console.error("Error message:", pushResult.message);
-								}
-							} catch (pushError) {
-								console.error("❌ Event registration push notification failed:", pushError);
+						// Send push notification for successful registration
+						try {
+							const PushNotificationService = require("../../utils/push-notification.util");
+
+							// Send push notification using sendToToken method (mock mode for development)
+							const pushResult = await PushNotificationService.sendToToken({
+								token: 'mock-device-token', // In production, fetch actual device token from user
+								title: '🎉 Registration Confirmed!',
+								body: `You're successfully registered for ${eventDetails.title}. Check your email for details.`,
+								data: {
+									type: 'EVENT_REGISTRATION_SUCCESS',
+									eventId: eventDetails.id,
+									registrationId: newRegistration.id,
+								},
+								priority: 'normal'
+							});
+
+							if (pushResult.success) {
+								console.log("✅ Event registration push notification sent successfully");
+							} else {
+								console.error("⚠️ Push notification failed:");
+								console.error("Error details:", pushResult.error);
+								console.error("Error message:", pushResult.message);
 							}
+						} catch (pushError) {
+							console.error("❌ Event registration push notification failed:", pushError);
 						}
 					}
 				} catch (emailError) {
 					console.error("❌ Event payment confirmation email failed:");
 					console.error("Error details:", emailError.message);
 					console.error("Stack trace:", emailError.stack);
-					console.error("Email manager initialized:", emailManager.isInitialized);
 				}
 
 				// Send success notification
@@ -1319,13 +1595,173 @@ class PaymentService {
 				}, 300);
 
 				console.log(`✅ Event payment processed and registration created: ${newRegistration.id}`);
-				
+
 				// Store for post-transaction operations
 				transaction._postTransactionOps = {
 					type: 'EVENT_PAYMENT',
 					registrationId: newRegistration.id,
 					transactionId: transaction.id
 				};
+				break;
+
+			// ==========================================
+			// SUBSCRIPTION PAYMENTS
+			// ==========================================
+			case "SUBSCRIPTION_RENEWAL":
+			case "SUBSCRIPTION_UPGRADE":
+				// Process subscription payment through SubscriptionService
+				const subscriptionMetadata = transaction.metadata;
+
+				try {
+					// Mark payment request as paid and activate/renew subscription
+					await SubscriptionService.markPaymentRequestPaid(
+						subscriptionMetadata.paymentRequestId,
+						{
+							transactionId: transaction.transactionNumber,
+							amount: parseFloat(transaction.amount),
+							invoiceUrl: null // Will be generated
+						},
+						transaction.userId
+					);
+
+					// Log activity
+					await tx.activityLog.create({
+						data: {
+							userId: transaction.userId,
+							action: referenceType === 'SUBSCRIPTION_RENEWAL' ? 'subscription_renewed' : 'subscription_upgraded',
+							details: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								amount: transaction.amount,
+								organizationId: subscriptionMetadata.organizationId,
+								organizationName: subscriptionMetadata.organizationName,
+								planName: subscriptionMetadata.planName || subscriptionMetadata.newPlanName,
+							},
+							ipAddress: null,
+							userAgent: null,
+						},
+					});
+
+					// Send notification to all Super Admins in the organization
+					const orgAdmins = await tx.user.findMany({
+						where: {
+							organizationId: subscriptionMetadata.organizationId,
+							role: 'SUPER_ADMIN',
+							isActive: true
+						},
+						select: { id: true }
+					});
+
+					if (orgAdmins.length > 0) {
+						await NotificationService.createAndSendNotification({
+							recipientIds: orgAdmins.map(a => a.id),
+							type: "PAYMENT_SUCCESS",
+							title: referenceType === 'SUBSCRIPTION_RENEWAL'
+								? "✅ Subscription Renewed!"
+								: "✅ Plan Upgraded!",
+							message: `Your organization's subscription has been ${referenceType === 'SUBSCRIPTION_RENEWAL' ? 'renewed' : 'upgraded'}. Amount paid: ₹${transaction.amount.toLocaleString("en-IN")}`,
+							data: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								amount: transaction.amount,
+								organizationId: subscriptionMetadata.organizationId,
+								paymentDate: new Date().toISOString(),
+							},
+							priority: "HIGH",
+							channels: ["PUSH", "IN_APP", "EMAIL"],
+							relatedEntityType: "SUBSCRIPTION",
+							relatedEntityId: subscriptionMetadata.subscriptionId,
+						});
+					}
+
+					console.log(`✅ Subscription ${referenceType === 'SUBSCRIPTION_RENEWAL' ? 'renewal' : 'upgrade'} payment processed for org: ${subscriptionMetadata.organizationName}`);
+				} catch (subscriptionError) {
+					console.error(`❌ Subscription payment processing failed:`, subscriptionError);
+					throw subscriptionError;
+				}
+				break;
+
+			case "SUBSCRIPTION_NEW":
+				// Process new subscription payment
+				const newSubMetadata = transaction.metadata;
+
+				try {
+					// Create and activate the subscription
+					const subscription = await SubscriptionService.createSubscription(
+						newSubMetadata.organizationId,
+						newSubMetadata.planId,
+						{
+							billingCycle: newSubMetadata.billingCycle,
+							status: 'PENDING' // Will be activated below
+						}
+					);
+
+					// Activate the subscription with payment details
+					await SubscriptionService.activateSubscription(
+						newSubMetadata.organizationId,
+						{
+							transactionId: transaction.transactionNumber,
+							amount: parseFloat(transaction.amount)
+						},
+						transaction.userId
+					);
+
+					// Log activity
+					await tx.activityLog.create({
+						data: {
+							userId: transaction.userId,
+							action: 'subscription_created',
+							details: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								amount: transaction.amount,
+								organizationId: newSubMetadata.organizationId,
+								organizationName: newSubMetadata.organizationName,
+								planId: newSubMetadata.planId,
+								planName: newSubMetadata.planName,
+								billingCycle: newSubMetadata.billingCycle,
+							},
+							ipAddress: null,
+							userAgent: null,
+						},
+					});
+
+					// Send notification
+					const newSubAdmins = await tx.user.findMany({
+						where: {
+							organizationId: newSubMetadata.organizationId,
+							role: 'SUPER_ADMIN',
+							isActive: true
+						},
+						select: { id: true }
+					});
+
+					if (newSubAdmins.length > 0) {
+						await NotificationService.createAndSendNotification({
+							recipientIds: newSubAdmins.map(a => a.id),
+							type: "PAYMENT_SUCCESS",
+							title: "🎉 Subscription Activated!",
+							message: `Your ${newSubMetadata.planName} subscription is now active. Welcome aboard!`,
+							data: {
+								transactionId: transaction.id,
+								transactionNumber: transaction.transactionNumber,
+								amount: transaction.amount,
+								organizationId: newSubMetadata.organizationId,
+								planName: newSubMetadata.planName,
+								paymentDate: new Date().toISOString(),
+							},
+							priority: "HIGH",
+							channels: ["PUSH", "IN_APP", "EMAIL"],
+							relatedEntityType: "SUBSCRIPTION",
+							relatedEntityId: subscription.id,
+						});
+					}
+
+					console.log(`✅ New subscription created and activated for org: ${newSubMetadata.organizationName}`);
+				} catch (newSubError) {
+					console.error(`❌ New subscription payment processing failed:`, newSubError);
+					throw newSubError;
+				}
 				break;
 		}
 	}
@@ -1536,6 +1972,9 @@ class PaymentService {
 				BATCH_ADMIN_PAYMENT: "Batch Payment",
 				MERCHANDISE_ORDER: "Merchandise Order",
 				DONATION: "Donation",
+				SUBSCRIPTION_RENEWAL: "Subscription Renewal",
+				SUBSCRIPTION_UPGRADE: "Plan Upgrade",
+				SUBSCRIPTION_NEW: "New Subscription",
 			};
 
 			const paymentTypeName =

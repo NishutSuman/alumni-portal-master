@@ -2,7 +2,6 @@
 // Organization selection page - First screen users see to select their school/organization
 
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectIsDark } from '@/store/slices/themeSlice'
 import ThemeToggle from '@/components/common/UI/ThemeToggle'
@@ -12,6 +11,7 @@ import {
   storeOrganization,
   getOrgLogoUrl,
   fetchOrgDetails,
+  fetchAllOrganizations,
   type Organization,
 } from '@/config/organizations'
 import { BuildingOfficeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
@@ -74,12 +74,36 @@ const OrganizationSelectPage: React.FC = () => {
   const [orgCode, setOrgCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const navigate = useNavigate()
+  const [organizations, setOrganizations] = useState<Organization[]>(ORGANIZATIONS)
   const isDark = useSelector(selectIsDark)
 
+  // Fetch organizations from API on mount
+  useEffect(() => {
+    const loadOrganizations = async () => {
+      setIsLoadingOrgs(true)
+      try {
+        const fetchedOrgs = await fetchAllOrganizations()
+        if (fetchedOrgs.length > 0) {
+          setOrganizations(fetchedOrgs)
+        } else {
+          // Fall back to static organizations if API returns empty
+          setOrganizations(ORGANIZATIONS)
+        }
+      } catch (err) {
+        console.error('Failed to fetch organizations:', err)
+        // Fall back to static organizations on error
+        setOrganizations(ORGANIZATIONS)
+      } finally {
+        setIsLoadingOrgs(false)
+      }
+    }
+    loadOrganizations()
+  }, [])
+
   // Filter organizations based on search query
-  const filteredOrganizations = ORGANIZATIONS.filter(
+  const filteredOrganizations = organizations.filter(
     (org) =>
       org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       org.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -183,7 +207,12 @@ const OrganizationSelectPage: React.FC = () => {
 
             {/* Organization List */}
             <div className="space-y-2 mb-5 max-h-48 overflow-y-auto">
-              {filteredOrganizations.length > 0 ? (
+              {isLoadingOrgs ? (
+                <div className="text-center py-6">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading organizations...</p>
+                </div>
+              ) : filteredOrganizations.length > 0 ? (
                 filteredOrganizations.map((org) => (
                   <button
                     key={org.code}
@@ -224,9 +253,13 @@ const OrganizationSelectPage: React.FC = () => {
                     </div>
                   </button>
                 ))
-              ) : (
+              ) : searchQuery ? (
                 <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
                   <p>No organizations found matching "{searchQuery}"</p>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
+                  <p>No organizations available. Please enter your organization code below.</p>
                 </div>
               )}
             </div>

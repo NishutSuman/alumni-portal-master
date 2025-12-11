@@ -88,6 +88,14 @@ const uploadPostFiles = multer({
 // POST MANAGEMENT ROUTES
 // ==========================================
 
+// Super Admin only routes (MUST come before parameterized routes)
+router.get(
+	"/admin/pending",
+	authenticateToken,
+	requireRole("SUPER_ADMIN"),
+	asyncHandler(postController.getPendingPosts)
+);
+
 // Public routes (no auth required, but can be enhanced with optional auth)
 router.get(
 	"/",
@@ -134,14 +142,6 @@ router.patch(
 	validatePostIdParam,
 	invalidatePostCache,
 	asyncHandler(postController.archivePost)
-);
-
-// Super Admin only routes
-router.get(
-	"/admin/pending",
-	authenticateToken,
-	requireRole("SUPER_ADMIN"),
-	asyncHandler(postController.getPendingPosts)
 );
 
 router.patch(

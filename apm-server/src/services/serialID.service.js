@@ -12,39 +12,40 @@ class SerialIdService {
    * Generate unique serial ID for user
    * Format: ORG_SHORT + COUNTER + NAME_CHARS + ADMISSION_YEAR + PASSOUT_YEAR
    * Example: JNV1234JMD0916
-   * 
+   *
    * @param {string} fullName - User's full name
    * @param {number} admissionYear - Admission year (e.g., 2009)
    * @param {number} passoutYear - Passout year (e.g., 2016)
+   * @param {string} organizationId - Organization ID for multi-tenant support (optional for backward compatibility)
    * @returns {Promise<{serialId: string, counter: number}>}
    */
-  static async generateSerialId(fullName, admissionYear, passoutYear) {
+  static async generateSerialId(fullName, admissionYear, passoutYear, organizationId = null) {
     try {
-      // Get organization details
-      const organization = await this.getOrganizationDetails();
-      
+      // Get organization details (use specific org if provided)
+      const organization = await this.getOrganizationDetails(organizationId);
+
       if (!organization) {
         throw new Error('Organization details not found. Please configure organization settings first.');
       }
-      
-      // Get next serial counter
-      const counter = await this.getNextSerialCounter();
-      
+
+      // Get next serial counter (per-organization)
+      const counter = await this.getNextSerialCounter(organization.id);
+
       // Extract meaningful characters from name
       const nameChars = this.extractNameCharacters(fullName);
-      
+
       // Format year digits
       const admissionYearDigits = admissionYear.toString().slice(-2); // Last 2 digits
       const passoutYearDigits = passoutYear.toString().slice(-2);     // Last 2 digits
-      
+
       // Construct serial ID
       const serialId = `${organization.shortName}${counter.toString().padStart(4, '0')}${nameChars}${admissionYearDigits}${passoutYearDigits}`;
-      
+
       return {
         serialId,
         counter
       };
-      
+
     } catch (error) {
       console.error('Serial ID generation error:', error);
       throw new Error(`Failed to generate serial ID: ${error.message}`);
@@ -110,34 +111,38 @@ class SerialIdService {
   }
   
   /**
-   * Get next serial counter (atomic increment)
+   * Get next serial counter (atomic increment) - per organization for multi-tenant
+   * Counter is based on actual user count for the organization to ensure accuracy
+   * @param {string} organizationId - Organization ID to increment counter for
    * @returns {Promise<number>} Next counter value
    */
-  static async getNextSerialCounter() {
+  static async getNextSerialCounter(organizationId) {
     try {
-      const cacheKey = 'system:serial_counter';
-      
-      // Use database atomic increment for thread safety
-      const organization = await prisma.organization.update({
-        where: { 
-          // Assuming single organization per instance
-          id: await this.getOrganizationId()
-        },
-        data: {
-          serialCounter: {
-            increment: 1
-          }
-        },
-        select: {
-          serialCounter: true
+      const orgId = organizationId || await this.getOrganizationId();
+      const cacheKey = `system:serial_counter:${orgId}`;
+
+      // Get actual user count for this organization (excluding developer accounts)
+      const userCount = await prisma.user.count({
+        where: {
+          organizationId: orgId,
+          role: { not: 'DEVELOPER' }
         }
       });
-      
+
+      // Next counter = current user count + 1 (for the new user being created)
+      const nextCounter = userCount + 1;
+
+      // Update organization's serialCounter to stay in sync
+      await prisma.organization.update({
+        where: { id: orgId },
+        data: { serialCounter: nextCounter }
+      });
+
       // Update cache
-      await CacheService.set(cacheKey, organization.serialCounter, 3600); // 1 hour
-      
-      return organization.serialCounter;
-      
+      await CacheService.set(cacheKey, nextCounter, 3600); // 1 hour
+
+      return nextCounter;
+
     } catch (error) {
       console.error('Serial counter increment error:', error);
       throw new Error('Failed to generate serial counter');
@@ -145,37 +150,55 @@ class SerialIdService {
   }
   
   /**
-   * Get organization details with caching
+   * Get organization details with caching - supports multi-tenant
+   * @param {string} organizationId - Specific organization ID (optional, for multi-tenant)
    * @returns {Promise<Object>} Organization details
    */
-  static async getOrganizationDetails() {
+  static async getOrganizationDetails(organizationId = null) {
     try {
-      const cacheKey = 'system:organization_details';
-      
+      const cacheKey = organizationId
+        ? `system:organization_details:${organizationId}`
+        : 'system:organization_details';
+
       // Check cache first
       let organization = await CacheService.get(cacheKey);
-      
+
       if (!organization) {
         // Get from database
-        organization = await prisma.organization.findFirst({
-          where: { isActive: true },
-          select: {
-            id: true,
-            name: true,
-            shortName: true,
-            foundationYear: true,
-            serialCounter: true
-          }
-        });
-        
+        if (organizationId) {
+          // Multi-tenant: fetch specific organization by ID
+          organization = await prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: {
+              id: true,
+              name: true,
+              shortName: true,
+              foundationYear: true,
+              serialCounter: true
+            }
+          });
+        } else {
+          // Single-tenant fallback: fetch first active organization
+          organization = await prisma.organization.findFirst({
+            where: { isActive: true },
+            select: {
+              id: true,
+              name: true,
+              shortName: true,
+              foundationYear: true,
+              serialCounter: true
+            }
+          });
+        }
+
         if (organization) {
           // Cache for 1 hour
           await CacheService.set(cacheKey, organization, 3600);
         }
       }
-      
+
       return organization;
-      
+
     } catch (error) {
       console.error('Get organization details error:', error);
       return null;
@@ -256,26 +279,28 @@ class SerialIdService {
    * Complete serial ID generation with uniqueness check
    * @param {string} fullName - User's full name
    * @param {number} admissionYear - Admission year
-   * @param {number} passoutYear - Passout year  
+   * @param {number} passoutYear - Passout year
+   * @param {string} organizationId - Organization ID for multi-tenant support (optional)
    * @returns {Promise<{serialId: string, counter: number}>}
    */
-  static async generateUniqueSerialId(fullName, admissionYear, passoutYear) {
+  static async generateUniqueSerialId(fullName, admissionYear, passoutYear, organizationId = null) {
     try {
-      // Generate base serial ID
+      // Generate base serial ID (pass organizationId for multi-tenant)
       const { serialId: baseSerialId, counter } = await this.generateSerialId(
-        fullName, 
-        admissionYear, 
-        passoutYear
+        fullName,
+        admissionYear,
+        passoutYear,
+        organizationId
       );
-      
+
       // Ensure uniqueness
       const uniqueSerialId = await this.ensureUniqueSerialId(baseSerialId);
-      
+
       return {
         serialId: uniqueSerialId,
         counter
       };
-      
+
     } catch (error) {
       console.error('Generate unique serial ID error:', error);
       throw error;

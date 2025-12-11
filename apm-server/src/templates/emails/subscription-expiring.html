@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subscription Expiring Soon</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background: white; }
+    .header { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; padding: 30px 20px; text-align: center; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .warning-icon { font-size: 48px; margin-bottom: 10px; }
+    .content { padding: 30px 20px; }
+    .warning-box { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .countdown { text-align: center; margin: 30px 0; }
+    .countdown-number { font-size: 64px; font-weight: bold; color: #D97706; }
+    .countdown-label { font-size: 18px; color: #6B7280; }
+    .details-box { background: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .details-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #E5E7EB; }
+    .details-row:last-child { border-bottom: none; }
+    .details-label { color: #6B7280; }
+    .details-value { font-weight: 600; color: #111827; }
+    .btn { display: inline-block; background: #F59E0B; color: white !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; }
+    .btn-container { text-align: center; margin: 30px 0; }
+    .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 12px; }
+    .impact-list { background: #FEE2E2; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    .impact-item { color: #DC2626; padding: 5px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="warning-icon">&#9888;</div>
+      <h1>Subscription Expiring Soon</h1>
+      <p style="margin: 10px 0 0;">Action Required</p>
+    </div>
+
+    <div class="content">
+      <p>Hello {{adminName}},</p>
+
+      <div class="warning-box">
+        <strong>Important:</strong> Your organization's subscription is expiring soon. Please renew to avoid service interruption.
+      </div>
+
+      <div class="countdown">
+        <div class="countdown-number">{{daysRemaining}}</div>
+        <div class="countdown-label">Days Remaining</div>
+      </div>
+
+      <div class="details-box">
+        <div class="details-row">
+          <span class="details-label">Organization</span>
+          <span class="details-value">{{organizationName}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Current Plan</span>
+          <span class="details-value">{{planName}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Expiry Date</span>
+          <span class="details-value" style="color: #DC2626;">{{expiryDate}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Renewal Amount</span>
+          <span class="details-value">{{currency}} {{renewalAmount}}</span>
+        </div>
+      </div>
+
+      <h3>What Happens If You Don't Renew?</h3>
+      <div class="impact-list">
+        <div class="impact-item">&#x2717; Access to premium features will be disabled</div>
+        <div class="impact-item">&#x2717; User limits will be reduced</div>
+        <div class="impact-item">&#x2717; Storage quota will be restricted</div>
+        <div class="impact-item">&#x2717; Some portal functionalities may become unavailable</div>
+      </div>
+
+      <div class="btn-container">
+        <a href="{{renewUrl}}" class="btn">Renew Now</a>
+      </div>
+
+      <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+        <strong>Need Help?</strong><br>
+        Contact our support team if you have any questions about your subscription or need assistance with the renewal process.
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>This is an automated reminder from {{organizationName}}.</p>
+      <p>&copy; {{year}} {{organizationName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

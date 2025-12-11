@@ -4,6 +4,7 @@ const { successResponse, errorResponse, paginatedResponse, getPaginationParams }
 const PhotoService = require('../../services/PhotoService');
 const { generatePhotoUrl, cleanupUploadedFiles } = require('../../middleware/upload.middleware');
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // ============================================
 // ALBUM MANAGEMENT CONTROLLERS
@@ -25,10 +26,12 @@ const getAlbums = async (req, res) => {
 
     const { page, limit, skip } = getPaginationParams(req.query, 12);
 
-    // Build filters
+    // Build filters with tenant support
     // includeArchived: true = show ONLY archived albums
     // includeArchived: false or undefined = show ONLY active (non-archived) albums
+    const tenantFilter = getTenantFilter(req);
     const whereClause = {
+      ...tenantFilter,
       isArchived: includeArchived === 'true'
     };
 
@@ -62,10 +65,10 @@ const getAlbums = async (req, res) => {
       prisma.album.count({ where: whereClause })
     ]);
 
-    // Get photo stats for each album
+    // Get photo stats for each album (with tenant filter)
     const albumsWithStats = await Promise.all(
       albums.map(async (album) => {
-        const stats = await PhotoService.getAlbumPhotoStats(album.id);
+        const stats = await PhotoService.getAlbumPhotoStats(album.id, tenantFilter);
 
         return {
           id: album.id,
@@ -116,8 +119,10 @@ const getAlbum = async (req, res) => {
     const { albumId } = req.params;
     const { includePhotos = 'true', photoPage = 1, photoLimit = 20 } = req.query;
 
-    const album = await prisma.album.findUnique({
-      where: { id: albumId },
+    // Apply tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const album = await prisma.album.findFirst({
+      where: { id: albumId, ...tenantFilter },
       include: {
         creator: {
           select: { id: true, fullName: true }
@@ -172,8 +177,8 @@ const getAlbum = async (req, res) => {
       };
     }
 
-    // Get album stats
-    const stats = await PhotoService.getAlbumPhotoStats(albumId);
+    // Get album stats (with tenant filter)
+    const stats = await PhotoService.getAlbumPhotoStats(albumId, tenantFilter);
 
     const albumData = {
       id: album.id,
@@ -224,19 +229,27 @@ const createAlbum = async (req, res) => {
         return errorResponse(res, validation.error, 400);
       }
 
-      // Upload to R2
-      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file);
+      // Get tenant code from tenant middleware (preferred) or header (fallback)
+      const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+      console.log('📁 Uploading album cover for tenant:', tenantCode);
+
+      // Upload to R2 (tenant-aware)
+      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file, tenantCode);
 
       // Store the full R2 URL (same as profile pictures)
       coverImageUrl = uploadResult.url;
     }
+
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
 
     const album = await prisma.album.create({
       data: {
         name: name.trim(),
         description: description?.trim() || null,
         coverImage: coverImageUrl,
-        createdBy: userId
+        createdBy: userId,
+        ...tenantData,
       },
       include: {
         creator: {
@@ -295,21 +308,26 @@ const updateAlbum = async (req, res) => {
     const { name, description, isArchived } = req.body;
     const userId = req.user.id;
 
+    // Verify album exists and belongs to tenant before update
+    const tenantFilter = getTenantFilter(req);
+    const existingAlbum = await prisma.album.findFirst({
+      where: { id: albumId, ...tenantFilter },
+      select: { id: true, coverImage: true }
+    });
+
+    if (!existingAlbum) {
+      return errorResponse(res, 'Album not found', 404);
+    }
+
     // Prepare update data
     const updateData = {};
-    
+
     if (name !== undefined) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim() || null;
     if (isArchived !== undefined) updateData.isArchived = isArchived;
 
     // Handle cover image update
     if (req.file) {
-      // Get old cover image URL for cleanup
-      const oldAlbum = await prisma.album.findUnique({
-        where: { id: albumId },
-        select: { coverImage: true }
-      });
-
       // Check if Cloudflare R2 is configured
       if (!cloudflareR2Service.isConfigured()) {
         return errorResponse(res, 'Cloudflare R2 storage is not configured', 500);
@@ -321,16 +339,20 @@ const updateAlbum = async (req, res) => {
         return errorResponse(res, validation.error, 400);
       }
 
-      // Upload new cover to R2
-      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file);
+      // Get tenant code from tenant middleware (preferred) or header (fallback)
+      const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+      console.log('📁 Updating album cover for tenant:', tenantCode);
+
+      // Upload new cover to R2 (tenant-aware)
+      const uploadResult = await cloudflareR2Service.uploadAlbumCover(req.file, tenantCode);
 
       // Store the full R2 URL (same as profile pictures)
       updateData.coverImage = uploadResult.url;
 
       // Delete old cover image from R2
-      if (oldAlbum?.coverImage) {
+      if (existingAlbum?.coverImage) {
         try {
-          await cloudflareR2Service.deleteFileByUrl(oldAlbum.coverImage);
+          await cloudflareR2Service.deleteFileByUrl(existingAlbum.coverImage);
         } catch (cleanupError) {
           console.warn('Failed to cleanup old album cover:', cleanupError);
         }
@@ -366,8 +388,8 @@ const updateAlbum = async (req, res) => {
       }
     });
 
-    // Get album stats
-    const stats = await PhotoService.getAlbumPhotoStats(albumId);
+    // Get album stats (with tenant filter)
+    const stats = await PhotoService.getAlbumPhotoStats(albumId, tenantFilter);
 
     const albumData = {
       id: updatedAlbum.id,
@@ -408,9 +430,10 @@ const deleteAlbum = async (req, res) => {
     const { albumId } = req.params;
     const userId = req.user.id;
 
-    // Get album with photos for cleanup
-    const album = await prisma.album.findUnique({
-      where: { id: albumId },
+    // Get album with photos for cleanup - apply tenant filter
+    const tenantFilter = getTenantFilter(req);
+    const album = await prisma.album.findFirst({
+      where: { id: albumId, ...tenantFilter },
       include: {
         photos: {
           select: { id: true, url: true, metadata: true }
@@ -490,7 +513,18 @@ const setAlbumCover = async (req, res) => {
     const { photoId } = req.body;
     const userId = req.user.id;
 
-    const updatedAlbum = await PhotoService.setAlbumCover(albumId, photoId, userId);
+    // Verify album belongs to tenant before proceeding
+    const tenantFilter = getTenantFilter(req);
+    const album = await prisma.album.findFirst({
+      where: { id: albumId, ...tenantFilter },
+      select: { id: true }
+    });
+
+    if (!album) {
+      return errorResponse(res, 'Album not found', 404);
+    }
+
+    const updatedAlbum = await PhotoService.setAlbumCover(albumId, photoId, userId, tenantFilter);
 
     // Log activity
     await prisma.activityLog.create({
@@ -533,8 +567,10 @@ const toggleArchiveAlbum = async (req, res) => {
     const { albumId } = req.params;
     const userId = req.user.id;
 
-    const album = await prisma.album.findUnique({
-      where: { id: albumId },
+    // Apply tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const album = await prisma.album.findFirst({
+      where: { id: albumId, ...tenantFilter },
       select: { id: true, name: true, isArchived: true }
     });
 
@@ -603,14 +639,16 @@ const getAlbumStats = async (req, res) => {
   try {
     const { albumId } = req.params;
 
+    // Apply tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
     const [album, stats, recentPhotos] = await Promise.all([
-      prisma.album.findUnique({
-        where: { id: albumId },
+      prisma.album.findFirst({
+        where: { id: albumId, ...tenantFilter },
         select: { id: true, name: true, createdAt: true }
       }),
-      PhotoService.getAlbumPhotoStats(albumId),
+      PhotoService.getAlbumPhotoStats(albumId, tenantFilter),
       prisma.photo.findMany({
-        where: { albumId },
+        where: { albumId, ...tenantFilter },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -657,7 +695,9 @@ const serveAlbumCover = async (req, res) => {
   try {
     const { albumId } = req.params;
 
-    // Get album from database to retrieve the cover image URL and updatedAt
+    // Public image proxy endpoint - no tenant filter needed
+    // The albumId is already a unique identifier providing sufficient security
+    // This allows album covers to be served publicly (like organization logos)
     const album = await prisma.album.findUnique({
       where: { id: albumId },
       select: { coverImage: true, updatedAt: true }

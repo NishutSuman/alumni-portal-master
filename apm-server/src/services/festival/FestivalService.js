@@ -4,6 +4,8 @@
 const { prisma } = require('../../config/database');
 const { NotificationService } = require('../notification.service');
 const emailManager = require('../email/EmailManager');
+const FestivalConfig = require('../../config/festivalConfig');
+const TenantEmailManager = require('../email/TenantEmailManager');
 
 class FestivalService {
   /**
@@ -116,25 +118,38 @@ class FestivalService {
   /**
    * Send festival notifications to all active users
    * Uses existing Notification table for tracking
+   * Multi-tenant: Groups users by organization and sends from their tenant email
    */
   static async sendFestivalNotifications() {
     try {
       const todaysFestivals = await this.getTodaysFestivals();
-      
+
       if (todaysFestivals.length === 0) {
         console.log('ℹ️ No festivals today');
         return { success: true, festivalsCount: 0, notificationsSent: 0 };
       }
 
       console.log(`🎊 Found ${todaysFestivals.length} festival(s) today`);
-      
-      // Get all active users for notifications
+
+      // Get all active users with their organization info for multi-tenant email isolation
       const allUsers = await prisma.user.findMany({
-        where: { 
-          isActive: true 
+        where: {
+          isActive: true,
+          role: { not: 'DEVELOPER' } // Exclude developer accounts
         },
         select: {
-          id: true
+          id: true,
+          fullName: true,
+          email: true,
+          organizationId: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              shortName: true,
+              tenantCode: true
+            }
+          }
         }
       });
 
@@ -142,27 +157,41 @@ class FestivalService {
       let totalNotificationsSent = 0;
       let totalEmailsSent = 0;
 
-      // Get organization data for emails
-      const organization = await prisma.organization.findFirst({
-        select: {
-          name: true,
-          shortName: true
+      // Group users by organization for tenant-specific emails
+      const usersByOrg = {};
+      for (const user of allUsers) {
+        const orgId = user.organizationId || 'default';
+        if (!usersByOrg[orgId]) {
+          usersByOrg[orgId] = {
+            organization: user.organization || null,
+            tenantCode: user.organization?.tenantCode || null,
+            users: []
+          };
         }
-      });
+        usersByOrg[orgId].users.push(user);
+      }
 
       // Send notifications and emails for each festival
       for (const festival of todaysFestivals) {
         try {
-          // Send push notifications
+          // Send push notifications (all users)
           const notificationResult = await this.sendFestivalNotification(festival, userIds);
-          
+
           if (notificationResult.success) {
             totalNotificationsSent++;
           }
 
-          // Send festival emails to all users
-          const emailResult = await this.sendFestivalEmails(festival, allUsers, organization);
-          totalEmailsSent += emailResult.emailsSent;
+          // Send festival emails per organization (multi-tenant isolation)
+          for (const orgId of Object.keys(usersByOrg)) {
+            const { organization, tenantCode, users } = usersByOrg[orgId];
+            const emailResult = await this.sendFestivalEmailsForTenant(
+              festival,
+              users,
+              organization,
+              tenantCode
+            );
+            totalEmailsSent += emailResult.emailsSent;
+          }
 
         } catch (error) {
           console.error(`❌ Failed to send festival notifications/emails for ${festival.name}:`, error);
@@ -184,13 +213,14 @@ class FestivalService {
               priority: f.priority
             })),
             recipientCount: userIds.length,
+            organizationsCount: Object.keys(usersByOrg).length,
             date: new Date().toISOString().split('T')[0]
           }
         }
       });
 
       console.log(`✅ Festival notifications processed: ${totalNotificationsSent}/${todaysFestivals.length} push notifications and ${totalEmailsSent} emails sent successfully`);
-      
+
       return {
         success: true,
         festivalsCount: todaysFestivals.length,
@@ -244,36 +274,51 @@ class FestivalService {
   }
 
   /**
-   * Send festival emails to all users
+   * Send festival emails for a specific tenant
+   * Uses tenant-specific email service for isolation
    */
-  static async sendFestivalEmails(festival, users, organizationData) {
+  static async sendFestivalEmailsForTenant(festival, users, organizationData, tenantCode) {
     try {
-      const emailService = emailManager.getService();
+      // Get tenant-specific email service
+      const emailService = tenantCode
+        ? await TenantEmailManager.getServiceForTenant(tenantCode)
+        : emailManager.getService();
+
       let emailsSent = 0;
+      const orgName = organizationData?.name || 'Alumni Portal';
 
-      console.log(`📧 Sending festival emails for ${festival.name} to ${users.length} users...`);
+      console.log(`📧 Sending festival emails for ${festival.name} to ${users.length} users (Tenant: ${tenantCode || 'default'})...`);
 
-      // Send festival emails to all active users
+      // Send festival emails to all users in this tenant
       for (const user of users) {
         try {
           await emailService.sendFestivalWish(user, festival, organizationData);
           emailsSent++;
         } catch (error) {
-          console.error(`❌ Failed to send festival email to ${user.fullName}:`, error);
+          console.error(`❌ Failed to send festival email to ${user.fullName} (${tenantCode}):`, error);
         }
       }
 
-      console.log(`✅ Festival emails sent for ${festival.name}: ${emailsSent}/${users.length} successful`);
-      
+      console.log(`✅ Festival emails sent for ${festival.name} (${orgName}): ${emailsSent}/${users.length} successful`);
+
       return {
         success: true,
         emailsSent: emailsSent,
-        totalUsers: users.length
+        totalUsers: users.length,
+        tenantCode: tenantCode || 'default'
       };
     } catch (error) {
-      console.error(`❌ Failed to send festival emails for ${festival.name}:`, error);
+      console.error(`❌ Failed to send festival emails for ${festival.name} (${tenantCode}):`, error);
       return { success: false, emailsSent: 0, error: error.message };
     }
+  }
+
+  /**
+   * Send festival emails to all users (legacy method - kept for backward compatibility)
+   * @deprecated Use sendFestivalEmailsForTenant for multi-tenant support
+   */
+  static async sendFestivalEmails(festival, users, organizationData) {
+    return this.sendFestivalEmailsForTenant(festival, users, organizationData, null);
   }
 
   /**
@@ -552,10 +597,11 @@ class FestivalService {
 
   /**
    * Get festival calendar for the year (month-wise breakdown)
+   * Auto-seeds from static config if database is empty
    */
   static async getFestivalCalendar(year = new Date().getFullYear()) {
     try {
-      const festivals = await prisma.festival.findMany({
+      let festivals = await prisma.festival.findMany({
         where: {
           isActive: true,
           date: {
@@ -565,6 +611,24 @@ class FestivalService {
         },
         orderBy: { date: 'asc' }
       });
+
+      // If no festivals in database, seed from static config
+      if (festivals.length === 0) {
+        console.log(`📅 No festivals found for ${year}, seeding from static config...`);
+        await this.seedFestivalsFromConfig(year);
+
+        // Fetch again after seeding
+        festivals = await prisma.festival.findMany({
+          where: {
+            isActive: true,
+            date: {
+              gte: new Date(`${year}-01-01`),
+              lte: new Date(`${year}-12-31`)
+            }
+          },
+          orderBy: { date: 'asc' }
+        });
+      }
 
       // Group by month
       const calendar = {};
@@ -586,7 +650,7 @@ class FestivalService {
       festivals.forEach(festival => {
         const monthIndex = festival.date.getMonth();
         const monthName = months[monthIndex];
-        
+
         calendar[monthName].festivals.push({
           id: festival.id,
           name: festival.name,
@@ -615,6 +679,71 @@ class FestivalService {
       };
     } catch (error) {
       console.error('❌ Error getting festival calendar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Seed festivals from static configuration
+   * Used when database is empty or for initial setup
+   */
+  static async seedFestivalsFromConfig(year = new Date().getFullYear()) {
+    try {
+      const majorFestivals = FestivalConfig.getMajorFestivals(year);
+      let seededCount = 0;
+
+      console.log(`🌱 Seeding ${majorFestivals.length} festivals for ${year}...`);
+
+      for (const festival of majorFestivals) {
+        // Skip lunar festivals without fixed dates (they need API data)
+        if (festival.isLunar && !festival.date?.iso) {
+          console.log(`⏭️ Skipping ${festival.name} (lunar calendar - needs API sync)`);
+          continue;
+        }
+
+        // Check if festival already exists
+        const existing = await prisma.festival.findFirst({
+          where: {
+            name: festival.name,
+            date: {
+              gte: new Date(`${year}-01-01`),
+              lte: new Date(`${year}-12-31`)
+            }
+          }
+        });
+
+        if (existing) {
+          console.log(`⏭️ Festival ${festival.name} already exists for ${year}`);
+          continue;
+        }
+
+        // Create festival record
+        await prisma.festival.create({
+          data: {
+            name: festival.name,
+            description: festival.description || '',
+            date: new Date(festival.date.iso),
+            festivalType: festival.festivalType || 'OTHER',
+            religion: festival.religion || null,
+            priority: festival.priority || 'MINOR',
+            greetingMessage: festival.greetingMessage || `Happy ${festival.name}!`,
+            vectorImage: festival.vectorImage || null,
+            backgroundColor: festival.backgroundColor || '#f8f9fa',
+            textColor: festival.textColor || '#333333',
+            source: 'STATIC_CONFIG',
+            enableNotifications: true,
+            isActive: true
+          }
+        });
+
+        seededCount++;
+        console.log(`✅ Seeded festival: ${festival.name}`);
+      }
+
+      console.log(`🎉 Successfully seeded ${seededCount} festivals for ${year}`);
+      return { success: true, seededCount };
+    } catch (error) {
+      console.error('❌ Error seeding festivals:', error);
       throw error;
     }
   }

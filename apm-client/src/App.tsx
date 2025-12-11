@@ -24,9 +24,6 @@ const AdminLayout = React.lazy(() => import('./components/common/Layout/AdminLay
 
 // Public pages
 const HomePage = React.lazy(() => import('./pages/public/HomePage'))
-const EventsPage = React.lazy(() => import('./pages/public/EventsPage'))
-const GalleryPage = React.lazy(() => import('./pages/public/GalleryPage'))
-const ContactPage = React.lazy(() => import('./pages/public/ContactPage'))
 
 // Auth pages
 const LoginPage = React.lazy(() => import('./pages/auth/LoginPage'))
@@ -70,6 +67,16 @@ const AdminSocial = React.lazy(() => import('./pages/admin/Social'))
 const AdminEvents = React.lazy(() => import('./pages/admin/Events'))
 const AdminTreasury = React.lazy(() => import('./pages/admin/Treasury'))
 const AdminSupport = React.lazy(() => import('./pages/admin/Support'))
+
+// Developer Portal pages and layout
+// Note: Subscriptions, Features, and Payment Requests are managed via Digikite Admin Portal
+const DeveloperLayout = React.lazy(() => import('./components/common/Layout/DeveloperLayout'))
+const DeveloperDashboard = React.lazy(() => import('./pages/developer/DeveloperDashboard'))
+const OrganizationsPage = React.lazy(() => import('./pages/developer/OrganizationsPage'))
+const AnalyticsPage = React.lazy(() => import('./pages/developer/AnalyticsPage'))
+const SystemLogsPage = React.lazy(() => import('./pages/developer/SystemLogsPage'))
+const DeveloperSettingsPage = React.lazy(() => import('./pages/developer/SettingsPage'))
+const OrganizationDetailsPage = React.lazy(() => import('./pages/developer/OrganizationDetailsPage'))
 
 // Error fallback component
 const ErrorFallback = ({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) => (
@@ -219,9 +226,6 @@ function App() {
     const titles: { [key: string]: string } = {
       '/': appName,
       '/select-organization': 'Select Organization - GUILD',
-      '/events': 'Events - GUILD',
-      '/gallery': 'Gallery - GUILD',
-      '/contact': 'Contact - GUILD',
       '/auth/login': 'Login - GUILD',
       '/auth/register': 'Register - GUILD',
       '/auth/forgot-password': 'Forgot Password - GUILD',
@@ -265,23 +269,17 @@ function App() {
       <div className={`App min-h-screen ${isDark ? 'dark' : ''}`}>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
-            {/* Public Routes */}
+            {/* Public Routes - Simple landing page */}
             <Route path="/" element={<PublicLayout />}>
               <Route index element={<HomePage />} />
-              <Route path="events" element={<EventsPage />} />
-              <Route path="gallery" element={<GalleryPage />} />
-              <Route path="contact" element={<ContactPage />} />
             </Route>
 
             {/* Organization Selection Route - First screen for multi-tenant */}
             <Route path="/select-organization" element={<OrganizationSelectPage />} />
 
-            {/* Authentication Routes - Require organization to be selected */}
-            <Route path="/auth/login" element={
-              <RequireOrganization>
-                <LoginPage />
-              </RequireOrganization>
-            } />
+            {/* Authentication Routes */}
+            {/* Login has built-in 3-step flow (email -> org -> password) so no RequireOrganization needed */}
+            <Route path="/auth/login" element={<LoginPage />} />
             <Route path="/auth/register" element={
               <RequireOrganization>
                 <RegisterPage />
@@ -422,12 +420,28 @@ function App() {
               <Route index element={<UserProfile />} />
             </Route>
 
+            {/* Developer Portal Routes - DEVELOPER role only */}
+            <Route path="/developer" element={
+              <ProtectedRoute>
+                {user?.role === 'DEVELOPER' ? <DeveloperLayout /> : <Navigate to="/dashboard" replace />}
+              </ProtectedRoute>
+            }>
+              <Route index element={<DeveloperDashboard />} />
+              <Route path="organizations" element={<OrganizationsPage />} />
+              <Route path="organizations/:orgId" element={<OrganizationDetailsPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="logs" element={<SystemLogsPage />} />
+              <Route path="settings" element={<DeveloperSettingsPage />} />
+            </Route>
+
             {/* Redirect based on auth status */}
             <Route path="/dashboard" element={
-              isAuthenticated 
-                ? (user?.role === 'SUPER_ADMIN' || user?.role === 'BATCH_ADMIN')
-                  ? <Navigate to="/admin/dashboard" replace />
-                  : <Navigate to="/user/dashboard" replace />
+              isAuthenticated
+                ? user?.role === 'DEVELOPER'
+                  ? <Navigate to="/developer" replace />
+                  : (user?.role === 'SUPER_ADMIN' || user?.role === 'BATCH_ADMIN')
+                    ? <Navigate to="/admin/dashboard" replace />
+                    : <Navigate to="/user/dashboard" replace />
                 : <Navigate to="/auth/login" replace />
             } />
 

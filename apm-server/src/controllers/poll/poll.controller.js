@@ -2,6 +2,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 const prisma = new PrismaClient();
 
@@ -110,9 +111,10 @@ const getPolls = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build where clause
-    const where = {};
-    
+    // Build where clause with tenant filtering
+    const tenantFilter = getTenantFilter(req);
+    const where = { ...tenantFilter };
+
     if (isActive !== undefined) {
       where.isActive = isActive === 'true';
     }
@@ -357,6 +359,9 @@ const createPoll = async (req, res) => {
     const { title, description, options, allowMultiple, expiresAt, isAnonymous } = req.body;
     const userId = req.user.id;
 
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
+
     // Create poll with options in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create poll
@@ -367,7 +372,8 @@ const createPoll = async (req, res) => {
           allowMultiple: allowMultiple || false,
           expiresAt: expiresAt ? new Date(expiresAt) : null,
           isAnonymous: isAnonymous || false,
-          createdBy: userId
+          createdBy: userId,
+          ...tenantData,
         }
       });
 
@@ -409,9 +415,10 @@ const createPoll = async (req, res) => {
     try {
       console.log('📢 Sending poll creation notifications to all users');
       
-      // Get all active users (excluding the poll creator)
+      // Get all active users (excluding the poll creator) with tenant filtering
       const allUsers = await prisma.user.findMany({
         where: {
+          ...tenantData,
           isActive: true,
           id: { not: userId } // Exclude the poll creator
         },
@@ -439,7 +446,8 @@ const createPoll = async (req, res) => {
           createdBy: req.user.fullName || 'Admin',
           type: 'poll_created',
           expiresAt: result.poll.expiresAt
-        }
+        },
+        ...tenantData,
       }));
 
       // Batch create in-app notifications
@@ -1125,6 +1133,8 @@ const getUserVotes = async (req, res) => {
  */
 const getPollStatistics = async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
+
     const [
       totalPolls,
       activePolls,
@@ -1134,23 +1144,30 @@ const getPollStatistics = async (req, res) => {
       mostVotedPoll,
       recentPolls
     ] = await Promise.all([
-      prisma.poll.count(),
-      prisma.poll.count({ 
-        where: { 
+      prisma.poll.count({ where: tenantFilter }),
+      prisma.poll.count({
+        where: {
+          ...tenantFilter,
           isActive: true,
           OR: [
             { expiresAt: null },
             { expiresAt: { gte: new Date() } }
           ]
-        } 
+        }
       }),
-      prisma.poll.count({ 
-        where: { 
+      prisma.poll.count({
+        where: {
+          ...tenantFilter,
           expiresAt: { lt: new Date() }
-        } 
+        }
       }),
-      prisma.pollVote.count(),
+      prisma.pollVote.count({
+        where: {
+          poll: tenantFilter
+        }
+      }),
       prisma.poll.findMany({
+        where: tenantFilter,
         select: {
           _count: {
             select: { votes: true }
@@ -1158,6 +1175,7 @@ const getPollStatistics = async (req, res) => {
         }
       }),
       prisma.poll.findFirst({
+        where: tenantFilter,
         include: {
           _count: {
             select: { votes: true }
@@ -1170,6 +1188,7 @@ const getPollStatistics = async (req, res) => {
         }
       }),
       prisma.poll.findMany({
+        where: tenantFilter,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -1365,9 +1384,11 @@ const getActivePolls = async (req, res) => {
   try {
     const now = new Date();
     const userId = req.user?.id;
-    
+    const tenantFilter = getTenantFilter(req);
+
     const polls = await prisma.poll.findMany({
       where: {
+        ...tenantFilter,
         isActive: true,
         OR: [
           { expiresAt: null },

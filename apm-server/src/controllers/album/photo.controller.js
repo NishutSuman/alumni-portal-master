@@ -4,6 +4,7 @@ const { successResponse, errorResponse, paginatedResponse, getPaginationParams }
 const PhotoService = require('../../services/PhotoService');
 const { generatePhotoUrl, cleanupUploadedFiles, extractPhotoMetadata } = require('../../middleware/upload.middleware');
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // ============================================
 // PHOTO MANAGEMENT CONTROLLERS
@@ -31,8 +32,9 @@ const getPhotos = async (req, res) => {
 
     const { skip, take } = getPaginationParams(page, limit);
 
-    // Build filters
-    const whereClause = {};
+    // Build filters with tenant support
+    const tenantFilter = getTenantFilter(req);
+    const whereClause = { ...tenantFilter };
 
     if (albumId) whereClause.albumId = albumId;
     if (uploadedBy) whereClause.uploadedBy = uploadedBy;
@@ -109,8 +111,10 @@ const getPhoto = async (req, res) => {
   try {
     const { photoId } = req.params;
 
-    const photo = await prisma.photo.findUnique({
-      where: { id: photoId },
+    // Apply tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const photo = await prisma.photo.findFirst({
+      where: { id: photoId, ...tenantFilter },
       include: {
         album: {
           select: { id: true, name: true, isArchived: true }
@@ -188,27 +192,36 @@ const uploadPhotoToAlbum = async (req, res) => {
       return errorResponse(res, 'Cannot upload photos to archived album', 400);
     }
 
-    // Validate and process tags
+    // Validate and process tags (with tenant filter to prevent tagging users from other tenants)
     let processedTags = [];
     if (tags) {
       const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : []);
-      const tagValidation = await PhotoService.validateUserTags(tagArray);
-      
+      const tenantFilter = getTenantFilter(req);
+      const tagValidation = await PhotoService.validateUserTags(tagArray, tenantFilter);
+
       if (tagValidation.invalid.length > 0) {
         cleanupUploadedFiles(req.file);
         return errorResponse(res, `Invalid user IDs in tags: ${tagValidation.invalid.join(', ')}`, 400);
       }
-      
+
       processedTags = tagValidation.valid;
     }
 
-    // Process photo upload
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
+    // Get tenant code from tenant middleware (preferred) or header (fallback)
+    const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+    console.log('📁 Uploading photo to album for tenant:', tenantCode);
+
+    // Process photo upload (with tenant isolation)
     const result = await PhotoService.processPhotoUpload(
       req.file,
       albumId,
       userId,
       caption,
-      processedTags
+      processedTags,
+      true, // includeRelations
+      { organizationId: tenantData.organizationId, tenantCode }
     );
 
     if (!result.success) {
@@ -293,12 +306,19 @@ const bulkUploadPhotos = async (req, res) => {
       return errorResponse(res, 'Cannot upload photos to archived album', 400);
     }
 
-    // Process bulk upload
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
+    // Get tenant code from tenant middleware (preferred) or header (fallback)
+    const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+    console.log('📁 Bulk uploading photos for tenant:', tenantCode);
+
+    // Process bulk upload (with tenant isolation)
     const results = await PhotoService.processBulkPhotoUpload(
       req.files,
       albumId,
       userId,
-      bulkCaption
+      bulkCaption,
+      { organizationId: tenantData.organizationId, tenantCode }
     );
 
     // Log activity (async - don't block response)
@@ -354,24 +374,35 @@ const updatePhoto = async (req, res) => {
     const { caption, tags } = req.body;
     const userId = req.user.id;
 
-    // Validate and process tags if provided
+    // Verify photo belongs to tenant BEFORE calling PhotoService
+    const tenantFilter = getTenantFilter(req);
+    const photo = await prisma.photo.findFirst({
+      where: { id: photoId, ...tenantFilter }
+    });
+
+    if (!photo) {
+      return errorResponse(res, 'Photo not found', 404);
+    }
+
+    // Validate and process tags if provided (with tenant filter)
     let processedTags;
     if (tags !== undefined) {
       const tagArray = Array.isArray(tags) ? tags : [];
-      const tagValidation = await PhotoService.validateUserTags(tagArray);
-      
+      const tagValidation = await PhotoService.validateUserTags(tagArray, tenantFilter);
+
       if (tagValidation.invalid.length > 0) {
         return errorResponse(res, `Invalid user IDs in tags: ${tagValidation.invalid.join(', ')}`, 400);
       }
-      
+
       processedTags = tagValidation.valid;
     }
 
-    // Update photo
+    // Update photo (pass tenant filter)
     const updatedPhoto = await PhotoService.updatePhoto(
       photoId,
       { caption, tags: processedTags },
-      userId
+      userId,
+      tenantFilter
     );
 
     // Get tagged users info for response
@@ -432,7 +463,17 @@ const deletePhoto = async (req, res) => {
     const { photoId } = req.params;
     const userId = req.user.id;
 
-    const result = await PhotoService.deletePhoto(photoId, userId);
+    // Verify photo belongs to tenant BEFORE calling PhotoService
+    const tenantFilter = getTenantFilter(req);
+    const photo = await prisma.photo.findFirst({
+      where: { id: photoId, ...tenantFilter }
+    });
+
+    if (!photo) {
+      return errorResponse(res, 'Photo not found', 404);
+    }
+
+    const result = await PhotoService.deletePhoto(photoId, userId, tenantFilter);
 
     if (!result.success) {
       return errorResponse(res, 'Failed to delete photo', 500);
@@ -479,7 +520,25 @@ const bulkDeletePhotos = async (req, res) => {
       return errorResponse(res, 'No photo IDs provided', 400);
     }
 
-    const results = await PhotoService.bulkDeletePhotos(photoIds, userId);
+    // Verify all photos belong to tenant BEFORE calling PhotoService
+    const tenantFilter = getTenantFilter(req);
+    const tenantPhotos = await prisma.photo.findMany({
+      where: {
+        id: { in: photoIds },
+        ...tenantFilter
+      },
+      select: { id: true }
+    });
+
+    // Only allow deletion of photos that belong to this tenant
+    const tenantPhotoIds = tenantPhotos.map(p => p.id);
+
+    if (tenantPhotoIds.length === 0) {
+      return errorResponse(res, 'No photos found for this tenant', 404);
+    }
+
+    // If some requested photos don't belong to tenant, only process the tenant's photos
+    const results = await PhotoService.bulkDeletePhotos(tenantPhotoIds, userId, tenantFilter);
 
     // Log activity (async - don't block response)
     setImmediate(async () => {
@@ -530,7 +589,40 @@ const movePhotos = async (req, res) => {
       return errorResponse(res, 'No photo IDs provided', 400);
     }
 
-    const result = await PhotoService.movePhotosToAlbum(photoIds, targetAlbumId, userId);
+    // Verify target album and all photos belong to tenant BEFORE calling PhotoService
+    const tenantFilter = getTenantFilter(req);
+
+    // Verify target album belongs to tenant
+    const targetAlbum = await prisma.album.findFirst({
+      where: {
+        id: targetAlbumId,
+        ...tenantFilter
+      },
+      select: { id: true, name: true }
+    });
+
+    if (!targetAlbum) {
+      return errorResponse(res, 'Target album not found', 404);
+    }
+
+    // Verify all photos belong to tenant
+    const tenantPhotos = await prisma.photo.findMany({
+      where: {
+        id: { in: photoIds },
+        ...tenantFilter
+      },
+      select: { id: true }
+    });
+
+    // Only allow moving photos that belong to this tenant
+    const tenantPhotoIds = tenantPhotos.map(p => p.id);
+
+    if (tenantPhotoIds.length === 0) {
+      return errorResponse(res, 'No photos found for this tenant', 404);
+    }
+
+    // If some requested photos don't belong to tenant, only process the tenant's photos
+    const result = await PhotoService.movePhotosToAlbum(tenantPhotoIds, targetAlbumId, userId, tenantFilter);
 
     // Manually invalidate cache for BOTH source and target albums
     const { CacheService } = require('../../config/redis');
@@ -583,21 +675,22 @@ const movePhotos = async (req, res) => {
  */
 const searchPhotos = async (req, res) => {
   try {
-    const { 
-      query, 
-      albumId, 
+    const {
+      query,
+      albumId,
       tags,
       uploadedBy,
-      page, 
+      page,
       limit,
       dateFrom,
-      dateTo 
+      dateTo
     } = req.query;
 
     const { skip, take } = getPaginationParams(page, limit);
 
-    // Build search filters
-    const whereClause = {};
+    // Build search filters with tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const whereClause = { ...tenantFilter };
 
     if (query) {
       whereClause.OR = [
@@ -687,7 +780,11 @@ const getRecentPhotos = async (req, res) => {
     const { limit = 20 } = req.query;
     const limitInt = Math.min(parseInt(limit) || 20, 100); // Max 100 photos
 
+    // Apply tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
     const recentPhotos = await prisma.photo.findMany({
+      where: tenantFilter,
       include: {
         album: {
           select: { id: true, name: true }
@@ -735,11 +832,57 @@ const servePhoto = async (req, res) => {
       return res.status(400).send('Filename is required');
     }
 
-    console.log('Fetching photo from R2:', filename);
+    console.log('📸 Serving photo - filename:', filename);
 
-    // Photos are stored in alumni-portal/album-photos/ directory
-    const key = `alumni-portal/album-photos/${filename}`;
-    console.log('Fetching photo with key:', key);
+    // Public image proxy endpoint - no tenant filter needed
+    // The filename is already a unique identifier providing sufficient security
+    // This allows album photos to be served publicly for viewing
+    const photo = await prisma.photo.findFirst({
+      where: {
+        metadata: {
+          path: ['filename'],
+          equals: filename
+        }
+      },
+      select: { id: true, url: true, metadata: true }
+    });
+
+    if (!photo) {
+      console.error('❌ Photo not found in database:', filename);
+      return res.status(404).send('Image not found');
+    }
+
+    console.log('✅ Photo found - ID:', photo.id);
+    console.log('   URL:', photo.url);
+    console.log('   r2Key:', photo.metadata?.r2Key);
+
+    // Extract the R2 key from the photo URL or metadata
+    // Photos are stored with tenant-aware paths: tenants/{tenantCode}/album-photos/{filename}
+    let key;
+
+    // First try to get the key from metadata (most reliable)
+    if (photo.metadata && photo.metadata.r2Key) {
+      key = photo.metadata.r2Key;
+      console.log('🔑 Using r2Key from metadata');
+    }
+    // Fallback: extract from URL
+    else if (photo.url && (photo.url.startsWith('http://') || photo.url.startsWith('https://'))) {
+      const urlParts = photo.url.split('.com/');
+      if (urlParts.length >= 2) {
+        key = urlParts[1]; // Extract everything after the domain
+        console.log('🔑 Extracted key from URL');
+      } else {
+        console.error('❌ Invalid R2 URL format:', photo.url);
+        return res.status(400).send('Invalid image URL');
+      }
+    }
+    // Last resort: assume old non-tenant path
+    else {
+      key = `alumni-portal/album-photos/${filename}`;
+      console.log('🔑 Using fallback key');
+    }
+
+    console.log('🚀 Fetching from R2:', key);
 
     // Get file from R2
     const result = await cloudflareR2Service.getFile(key);

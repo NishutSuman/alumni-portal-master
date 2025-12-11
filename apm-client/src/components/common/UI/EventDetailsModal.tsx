@@ -105,16 +105,15 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
             {event.heroImage && (
               <div className="mb-4 sm:mb-6 -mx-4 sm:mx-0 sm:rounded-lg overflow-hidden">
                 <img
-                  src={`http://localhost:3000/api/events/${event.id}/hero-image`}
+                  src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/events/${event.id}/hero-image`}
                   alt={event.title}
                   className="w-full h-48 sm:h-64 object-cover"
                   onError={(e) => {
                     console.error('Image failed to load:', event.heroImage);
-                    console.error('Proxy URL:', `http://localhost:3000/api/events/${event.id}/hero-image`);
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                   onLoad={() => {
-                    console.log('Event image loaded successfully in modal via proxy:', `http://localhost:3000/api/events/${event.id}/hero-image`);
+                    console.log('Event image loaded successfully');
                   }}
                 />
               </div>

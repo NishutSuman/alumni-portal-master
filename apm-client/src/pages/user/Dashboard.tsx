@@ -1,12 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  UserCircleIcon, 
-  AcademicCapIcon, 
-  UsersIcon, 
-  CalendarDaysIcon,
-  BellIcon,
-  Cog6ToothIcon,
+import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
@@ -16,6 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 import BirthdaysCard from '../../components/user/celebrations/BirthdaysCard';
 import FestivalsCard from '../../components/user/celebrations/FestivalsCard';
 import SocialSection from '../../components/user/SocialSection';
+import AlumniStorySection from '../../components/user/AlumniStorySection';
+import EventsComingSoon from '../../components/user/EventsComingSoon';
+import ProfileMarquee from '../../components/common/UI/ProfileMarquee';
+import AnnouncementBanner from '../../components/common/UI/AnnouncementBanner';
 
 const UserDashboard = () => {
   const { user } = useAuth();
@@ -40,6 +38,9 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Announcement Banner - Shows active announcements */}
+      <AnnouncementBanner />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header with Gradient Background */}
         <motion.div
@@ -84,6 +85,16 @@ const UserDashboard = () => {
               <circle cx="170" cy="70" r="15" fill="white" fillOpacity="0.08"/>
             </svg>
           </div>
+        </motion.div>
+
+        {/* Alumni Showcase Marquee */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <ProfileMarquee speed="medium" />
         </motion.div>
 
         {/* Verification Status Banner */}
@@ -150,30 +161,11 @@ const UserDashboard = () => {
             <SocialSection />
           </div>
 
-          {/* Right Column - Festivals & Announcements */}
+          {/* Right Column - Festivals, Alumni Story & Events */}
           <div className="space-y-6">
             <FestivalsCard />
-            
-            {/* Recent Activity or Announcements */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-            >
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Announcements</h3>
-              </div>
-              <div className="p-6">
-                <div className="text-center py-8">
-                  <BellIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">No announcements</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                    Check back later for updates
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+            <AlumniStorySection />
+            <EventsComingSoon />
           </div>
         </div>
       </div>

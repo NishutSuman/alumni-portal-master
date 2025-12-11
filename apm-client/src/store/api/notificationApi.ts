@@ -160,6 +160,72 @@ export const notificationApi = apiSlice.injectEndpoints({
       transformResponse: (response: any) => response.data,
       providesTags: ['PushToken'],
     }),
+
+    // ============================================
+    // ADMIN ANNOUNCEMENT ENDPOINTS
+    // ============================================
+
+    // Send system announcement to all users (Admin only)
+    sendAnnouncement: builder.mutation<{
+      success: boolean;
+      message: string;
+      data: {
+        sentCount: number;
+        failedCount: number;
+      };
+    }, {
+      title: string;
+      message: string;
+      priority?: 'EMERGENCY' | 'HIGH' | 'MEDIUM' | 'LOW';
+    }>({
+      query: (data) => ({
+        url: '/notifications/admin/announce',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Notification', 'Announcement'],
+    }),
+
+    // Get announcements (filtered by SYSTEM_ANNOUNCEMENT type)
+    getAnnouncements: builder.query<{
+      notifications: Notification[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    }, {
+      page?: number;
+      limit?: number;
+    }>({
+      query: (params = {}) => ({
+        url: '/notifications',
+        params: {
+          ...params,
+          type: 'SYSTEM_ANNOUNCEMENT',
+        },
+      }),
+      transformResponse: (response: any) => response.data,
+      providesTags: ['Announcement'],
+    }),
+
+    // Get notification analytics (Admin)
+    getNotificationAnalytics: builder.query<{
+      totalNotifications: number;
+      byType: Record<string, number>;
+      byStatus: Record<string, number>;
+      byPriority: Record<string, number>;
+    }, {
+      fromDate?: string;
+      toDate?: string;
+    }>({
+      query: (params = {}) => ({
+        url: '/notifications/admin/analytics',
+        params,
+      }),
+      transformResponse: (response: any) => response.data,
+    }),
   }),
   overrideExisting: false,
 });
@@ -176,6 +242,10 @@ export const {
   useUpdateNotificationPreferencesMutation,
   useRegisterPushTokenMutation,
   useGetPushTokensQuery,
+  // Announcement hooks
+  useSendAnnouncementMutation,
+  useGetAnnouncementsQuery,
+  useGetNotificationAnalyticsQuery,
 } = notificationApi;
 
 export default notificationApi;

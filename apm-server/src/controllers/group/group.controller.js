@@ -2,6 +2,7 @@
 const { PrismaClient } = require("@prisma/client");
 const { successResponse, errorResponse } = require("../../utils/response");
 const { CacheService } = require("../../config/redis");
+const { getTenantFilter, getTenantData } = require("../../utils/tenant.util");
 
 const prisma = new PrismaClient();
 
@@ -83,8 +84,9 @@ const getGroups = async (req, res) => {
 			includeMembers = "false",
 		} = req.query;
 
-		// Build where clause
-		const where = {};
+		// Build where clause with tenant filter for multi-tenant support
+		const tenantFilter = getTenantFilter(req);
+		const where = { ...tenantFilter };
 
 		if (type) {
 			where.type = type;
@@ -195,6 +197,9 @@ const getGroup = async (req, res) => {
 		const { groupId } = req.params;
 		const { includeMembers = "true" } = req.query;
 
+		// Build where clause with tenant filter for multi-tenant support
+		const tenantFilter = getTenantFilter(req);
+
 		const include = {
 			creator: {
 				select: {
@@ -202,10 +207,10 @@ const getGroup = async (req, res) => {
 					fullName: true,
 				},
 			},
-			_count: { 
-				select: { 
-					members: { where: { isActive: true } } 
-				} 
+			_count: {
+				select: {
+					members: { where: { isActive: true } }
+				}
 			},
 		};
 
@@ -232,8 +237,8 @@ const getGroup = async (req, res) => {
 			};
 		}
 
-		const group = await prisma.organizationGroup.findUnique({
-			where: { id: groupId },
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
 			include,
 		});
 
@@ -279,6 +284,9 @@ const createGroup = async (req, res) => {
 			finalDisplayOrder = (lastGroup?.displayOrder || 0) + 1;
 		}
 
+		// Get tenant data for multi-tenant support
+		const tenantData = getTenantData(req);
+
 		// Create group
 		const group = await prisma.organizationGroup.create({
 			data: {
@@ -287,6 +295,7 @@ const createGroup = async (req, res) => {
 				description: description?.trim() || null,
 				displayOrder: finalDisplayOrder,
 				createdBy: userId,
+				...tenantData,
 			},
 			include: {
 				creator: {
@@ -341,6 +350,16 @@ const updateGroup = async (req, res) => {
 		const { groupId } = req.params;
 		const { name, description, isActive, displayOrder } = req.body;
 		const userId = req.user.id;
+
+		// Verify group belongs to tenant before updating
+		const tenantFilter = getTenantFilter(req);
+		const existingGroup = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+		});
+
+		if (!existingGroup) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
 		// Build update data
 		const updateData = {};
@@ -402,9 +421,12 @@ const deleteGroup = async (req, res) => {
 		const { groupId } = req.params;
 		const userId = req.user.id;
 
+		// Verify group belongs to tenant before deleting
+		const tenantFilter = getTenantFilter(req);
+
 		// Get group details for logging
-		const group = await prisma.organizationGroup.findUnique({
-			where: { id: groupId },
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
 			select: {
 				id: true,
 				name: true,
@@ -459,10 +481,12 @@ const reorderGroups = async (req, res) => {
 		const { groups } = req.body;
 		const userId = req.user.id;
 
-		// Validate all group IDs exist
+		// Validate all group IDs exist within tenant
+		const tenantFilter = getTenantFilter(req);
 		const existingGroups = await prisma.organizationGroup.findMany({
 			where: {
 				id: { in: groups.map((g) => g.id) },
+				...tenantFilter,
 			},
 			select: { id: true, name: true },
 		});
@@ -527,6 +551,17 @@ const getGroupMembers = async (req, res) => {
 			sortBy = "createdAt",
 			sortOrder = "desc",
 		} = req.query;
+
+		// Verify group belongs to tenant
+		const tenantFilter = getTenantFilter(req);
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+			select: { id: true },
+		});
+
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
 		// Build where clause
 		const where = { groupId };
@@ -639,6 +674,17 @@ const addGroupMember = async (req, res) => {
 		const { groupId } = req.params;
 		const { userId, role } = req.body;
 		const adminId = req.user.id;
+
+		// Verify group belongs to tenant
+		const tenantFilter = getTenantFilter(req);
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+			select: { id: true },
+		});
+
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
 		// Check if member already exists (including inactive ones)
 		const existingMember = await prisma.groupMember.findUnique({
@@ -756,6 +802,17 @@ const updateGroupMember = async (req, res) => {
 		const { role, isActive } = req.body;
 		const adminId = req.user.id;
 
+		// Verify group belongs to tenant
+		const tenantFilter = getTenantFilter(req);
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+			select: { id: true },
+		});
+
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
+
 		// Build update data
 		const updateData = {};
 		if (role !== undefined) updateData.role = role;
@@ -828,6 +885,17 @@ const removeGroupMember = async (req, res) => {
 		const { groupId, userId } = req.params;
 		const adminId = req.user.id;
 
+		// Verify group belongs to tenant
+		const tenantFilter = getTenantFilter(req);
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+			select: { id: true },
+		});
+
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
+
 		// Get member details for logging
 		const member = await prisma.groupMember.findUnique({
 			where: {
@@ -897,6 +965,17 @@ const bulkMemberOperations = async (req, res) => {
 		const { groupId } = req.params;
 		const { action, members } = req.body;
 		const adminId = req.user.id;
+
+		// Verify group belongs to tenant
+		const tenantFilter = getTenantFilter(req);
+		const group = await prisma.organizationGroup.findFirst({
+			where: { id: groupId, ...tenantFilter },
+			select: { id: true },
+		});
+
+		if (!group) {
+			return errorResponse(res, "Group not found", 404);
+		}
 
 		const results = {
 			successful: [],
@@ -986,6 +1065,9 @@ const bulkMemberOperations = async (req, res) => {
  */
 const getGroupStatistics = async (req, res) => {
 	try {
+		// Get tenant filter for multi-tenant support
+		const tenantFilter = getTenantFilter(req);
+
 		const [
 			totalGroups,
 			activeGroups,
@@ -994,19 +1076,32 @@ const getGroupStatistics = async (req, res) => {
 			activeMembers,
 			membersByRole,
 		] = await Promise.all([
-			prisma.organizationGroup.count(),
-			prisma.organizationGroup.count({ where: { isActive: true } }),
+			prisma.organizationGroup.count({ where: { ...tenantFilter } }),
+			prisma.organizationGroup.count({ where: { isActive: true, ...tenantFilter } }),
 			prisma.organizationGroup.groupBy({
 				by: ["type"],
 				_count: { id: true },
-				where: { isActive: true },
+				where: { isActive: true, ...tenantFilter },
 			}),
-			prisma.groupMember.count(),
-			prisma.groupMember.count({ where: { isActive: true } }),
+			// Count members only from groups belonging to this tenant
+			prisma.groupMember.count({
+				where: {
+					group: { ...tenantFilter },
+				},
+			}),
+			prisma.groupMember.count({
+				where: {
+					isActive: true,
+					group: { ...tenantFilter },
+				},
+			}),
 			prisma.groupMember.groupBy({
 				by: ["role"],
 				_count: { id: true },
-				where: { isActive: true },
+				where: {
+					isActive: true,
+					group: { ...tenantFilter },
+				},
 			}),
 		]);
 
@@ -1055,8 +1150,11 @@ const getGroupStatistics = async (req, res) => {
  */
 const getPublicGroups = async (req, res) => {
 	try {
+		// Get tenant filter for multi-tenant support
+		const tenantFilter = getTenantFilter(req);
+
 		const groups = await prisma.organizationGroup.findMany({
-			where: { isActive: true },
+			where: { isActive: true, ...tenantFilter },
 			include: {
 				members: {
 					where: { isActive: true },

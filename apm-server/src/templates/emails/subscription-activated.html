@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subscription Activated</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background: white; }
+    .header { background: linear-gradient(135deg, #059669 0%, #10B981 100%); color: white; padding: 30px 20px; text-align: center; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .success-icon { font-size: 48px; margin-bottom: 10px; }
+    .content { padding: 30px 20px; }
+    .success-box { background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .details-box { background: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .details-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #E5E7EB; }
+    .details-row:last-child { border-bottom: none; }
+    .details-label { color: #6B7280; }
+    .details-value { font-weight: 600; color: #111827; }
+    .features-list { margin: 20px 0; }
+    .feature-item { display: flex; align-items: center; padding: 8px 0; }
+    .feature-check { color: #10B981; margin-right: 10px; font-weight: bold; }
+    .btn { display: inline-block; background: #059669; color: white !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; }
+    .btn-container { text-align: center; margin: 30px 0; }
+    .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 12px; }
+    .highlight { color: #059669; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="success-icon">&#10003;</div>
+      <h1>Subscription Activated!</h1>
+      <p style="margin: 10px 0 0;">Welcome to {{planName}}</p>
+    </div>
+
+    <div class="content">
+      <p>Hello {{adminName}},</p>
+
+      <div class="success-box">
+        <strong>Congratulations!</strong> Your organization's subscription has been successfully activated.
+      </div>
+
+      <div class="details-box">
+        <div class="details-row">
+          <span class="details-label">Organization</span>
+          <span class="details-value">{{organizationName}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Plan</span>
+          <span class="details-value highlight">{{planName}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Billing Cycle</span>
+          <span class="details-value">{{billingCycle}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Amount Paid</span>
+          <span class="details-value">{{currency}} {{amount}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Transaction ID</span>
+          <span class="details-value">{{transactionId}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Activated On</span>
+          <span class="details-value">{{activationDate}}</span>
+        </div>
+        <div class="details-row">
+          <span class="details-label">Valid Until</span>
+          <span class="details-value">{{expiryDate}}</span>
+        </div>
+      </div>
+
+      {{#if enabledFeatures}}
+      <h3>Your Enabled Features</h3>
+      <div class="features-list">
+        {{#each enabledFeatures}}
+        <div class="feature-item">
+          <span class="feature-check">&#10003;</span>
+          <span>{{this}}</span>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <div class="btn-container">
+        <a href="{{dashboardUrl}}" class="btn">Go to Dashboard</a>
+      </div>
+
+      <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+        <strong>What's Next?</strong><br>
+        - Explore your new features in the admin dashboard<br>
+        - Configure your organization settings<br>
+        - Invite team members to join<br>
+        - Set up your alumni portal
+      </p>
+
+      <p>If you have any questions, our support team is here to help.</p>
+    </div>
+
+    <div class="footer">
+      <p>This is an automated confirmation from {{organizationName}}.</p>
+      <p>&copy; {{year}} {{organizationName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

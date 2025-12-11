@@ -16,8 +16,9 @@ class PhotoService {
 
   /**
    * Process and save photo with metadata
+   * @param {Object} options - Optional parameters including organizationId for multi-tenant support
    */
-  static async processPhotoUpload(file, albumId, uploadedBy, caption = null, tags = [], includeRelations = true) {
+  static async processPhotoUpload(file, albumId, uploadedBy, caption = null, tags = [], includeRelations = true, options = {}) {
     try {
       if (!file) {
         throw new Error('No file provided');
@@ -34,8 +35,8 @@ class PhotoService {
         throw new Error(validation.error);
       }
 
-      // Upload to R2
-      const uploadResult = await cloudflareR2Service.uploadAlbumPhoto(file);
+      // Upload to R2 (with tenant isolation)
+      const uploadResult = await cloudflareR2Service.uploadAlbumPhoto(file, options.tenantCode || null);
       const photoUrl = uploadResult.url;
 
       // Extract metadata
@@ -59,7 +60,9 @@ class PhotoService {
           tags: Array.isArray(tags) ? tags : (tags ? [tags] : []),
           metadata,
           albumId,
-          uploadedBy
+          uploadedBy,
+          // Multi-tenant support
+          ...(options.organizationId ? { organizationId: options.organizationId } : {}),
         },
         include: includeRelations ? {
           album: {
@@ -87,8 +90,9 @@ class PhotoService {
 
   /**
    * Process bulk photo uploads
+   * @param {Object} options - Optional parameters including organizationId for multi-tenant support
    */
-  static async processBulkPhotoUpload(files, albumId, uploadedBy, bulkCaption = null) {
+  static async processBulkPhotoUpload(files, albumId, uploadedBy, bulkCaption = null, options = {}) {
     try {
       if (!files || files.length === 0) {
         throw new Error('No files provided');
@@ -105,7 +109,7 @@ class PhotoService {
       // Skip database includes to speed up bulk operations
       const uploadPromises = files.map((file, index) => {
         const caption = bulkCaption ? `${bulkCaption} (${index + 1}/${files.length})` : null;
-        return this.processPhotoUpload(file, albumId, uploadedBy, caption, [], false)
+        return this.processPhotoUpload(file, albumId, uploadedBy, caption, [], false, options)
           .then(result => ({ ...result, filename: file.originalname }));
       });
 
@@ -139,12 +143,13 @@ class PhotoService {
 
   /**
    * Update photo information
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async updatePhoto(photoId, updates, userId) {
+  static async updatePhoto(photoId, updates, userId, tenantFilter = {}) {
     try {
-      // Validate photo exists and user has permission
-      const existingPhoto = await prisma.photo.findUnique({
-        where: { id: photoId },
+      // Validate photo exists and user has permission (with tenant filter)
+      const existingPhoto = await prisma.photo.findFirst({
+        where: { id: photoId, ...tenantFilter },
         include: {
           album: {
             select: { createdBy: true }
@@ -157,20 +162,20 @@ class PhotoService {
       }
 
       // Check permissions (only album creator or photo uploader can edit)
-      const canEdit = existingPhoto.uploadedBy === userId || 
+      const canEdit = existingPhoto.uploadedBy === userId ||
                      existingPhoto.album?.createdBy === userId;
-                     
+
       if (!canEdit) {
         throw new Error('Insufficient permissions to edit this photo');
       }
 
       // Prepare update data
       const updateData = {};
-      
+
       if (updates.caption !== undefined) {
         updateData.caption = updates.caption?.trim() || null;
       }
-      
+
       if (updates.tags !== undefined) {
         updateData.tags = Array.isArray(updates.tags) ? updates.tags : [];
       }
@@ -198,12 +203,13 @@ class PhotoService {
 
   /**
    * Delete photo and cleanup file
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async deletePhoto(photoId, userId) {
+  static async deletePhoto(photoId, userId, tenantFilter = {}) {
     try {
-      // Get photo with permissions check
-      const photo = await prisma.photo.findUnique({
-        where: { id: photoId },
+      // Get photo with permissions check (with tenant filter)
+      const photo = await prisma.photo.findFirst({
+        where: { id: photoId, ...tenantFilter },
         include: {
           album: {
             select: { createdBy: true }
@@ -216,9 +222,9 @@ class PhotoService {
       }
 
       // Check permissions
-      const canDelete = photo.uploadedBy === userId || 
+      const canDelete = photo.uploadedBy === userId ||
                        photo.album?.createdBy === userId;
-                       
+
       if (!canDelete) {
         throw new Error('Insufficient permissions to delete this photo');
       }
@@ -258,8 +264,9 @@ class PhotoService {
 
   /**
    * Bulk delete photos
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async bulkDeletePhotos(photoIds, userId) {
+  static async bulkDeletePhotos(photoIds, userId, tenantFilter = {}) {
     try {
       const results = {
         deleted: [],
@@ -268,10 +275,11 @@ class PhotoService {
         totalFailed: 0
       };
 
-      // Fetch all photos at once with permissions check
+      // Fetch all photos at once with permissions check (with tenant filter)
       const photos = await prisma.photo.findMany({
         where: {
-          id: { in: photoIds }
+          id: { in: photoIds },
+          ...tenantFilter
         },
         include: {
           album: {
@@ -354,12 +362,13 @@ class PhotoService {
 
   /**
    * Set album cover image
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async setAlbumCover(albumId, photoId, userId) {
+  static async setAlbumCover(albumId, photoId, userId, tenantFilter = {}) {
     try {
-      // Verify album ownership
-      const album = await prisma.album.findUnique({
-        where: { id: albumId },
+      // Verify album ownership (with tenant filter)
+      const album = await prisma.album.findFirst({
+        where: { id: albumId, ...tenantFilter },
         select: { createdBy: true }
       });
 
@@ -371,11 +380,12 @@ class PhotoService {
         throw new Error('Insufficient permissions to modify this album');
       }
 
-      // Verify photo belongs to this album
+      // Verify photo belongs to this album (with tenant filter)
       const photo = await prisma.photo.findFirst({
         where: {
           id: photoId,
-          albumId: albumId
+          albumId: albumId,
+          ...tenantFilter
         }
       });
 
@@ -403,12 +413,13 @@ class PhotoService {
 
   /**
    * Move photos between albums
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async movePhotosToAlbum(photoIds, targetAlbumId, userId) {
+  static async movePhotosToAlbum(photoIds, targetAlbumId, userId, tenantFilter = {}) {
     try {
-      // Verify target album exists and user has permission
-      const targetAlbum = await prisma.album.findUnique({
-        where: { id: targetAlbumId },
+      // Verify target album exists and user has permission (with tenant filter)
+      const targetAlbum = await prisma.album.findFirst({
+        where: { id: targetAlbumId, ...tenantFilter },
         select: { createdBy: true, name: true }
       });
 
@@ -420,10 +431,11 @@ class PhotoService {
         throw new Error('Insufficient permissions to modify target album');
       }
 
-      // Verify all photos exist and user has permission
+      // Verify all photos exist and user has permission (with tenant filter)
       const photos = await prisma.photo.findMany({
         where: {
-          id: { in: photoIds }
+          id: { in: photoIds },
+          ...tenantFilter
         },
         include: {
           album: {
@@ -501,8 +513,9 @@ class PhotoService {
 
   /**
    * Validate user mentions in tags
+   * @param {Object} tenantFilter - Tenant filter to prevent tagging users from other tenants
    */
-  static async validateUserTags(tags) {
+  static async validateUserTags(tags, tenantFilter = {}) {
     if (!Array.isArray(tags) || tags.length === 0) {
       return { valid: [], invalid: [] };
     }
@@ -510,7 +523,8 @@ class PhotoService {
     const users = await prisma.user.findMany({
       where: {
         id: { in: tags },
-        isActive: true
+        isActive: true,
+        ...tenantFilter
       },
       select: { id: true, fullName: true }
     });
@@ -527,21 +541,34 @@ class PhotoService {
 
   /**
    * Get photo statistics for album
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    */
-  static async getAlbumPhotoStats(albumId) {
+  static async getAlbumPhotoStats(albumId, tenantFilter = {}) {
     try {
       const stats = await prisma.photo.aggregate({
-        where: { albumId },
+        where: { albumId, ...tenantFilter },
         _count: true
       });
 
       // Get total file size with raw query
-      const sizeResult = await prisma.$queryRaw`
-        SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
-        FROM "public"."photos"
-        WHERE "albumId" = ${albumId}
-          AND metadata->>'size' IS NOT NULL
-      `;
+      // If tenant filter is present, add organizationId to WHERE clause
+      let sizeResult;
+      if (tenantFilter.organizationId) {
+        sizeResult = await prisma.$queryRaw`
+          SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+          FROM "public"."photos"
+          WHERE "albumId" = ${albumId}
+            AND "organizationId" = ${tenantFilter.organizationId}
+            AND metadata->>'size' IS NOT NULL
+        `;
+      } else {
+        sizeResult = await prisma.$queryRaw`
+          SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+          FROM "public"."photos"
+          WHERE "albumId" = ${albumId}
+            AND metadata->>'size' IS NOT NULL
+        `;
+      }
 
       const totalSize = Number(sizeResult[0]?.total_size || 0);
 

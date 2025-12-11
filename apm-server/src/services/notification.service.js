@@ -1,8 +1,10 @@
 // src/services/notification.service.js
 // Generic Notification Service - Universal system for all app features
+// Multi-Tenant Aware Implementation
 
 const { PrismaClient } = require('@prisma/client');
 const PushNotificationService = require('../utils/push-notification.util');
+const TenantPushNotificationService = require('./TenantPushNotificationService');
 const { CacheService } = require('../config/redis');
 
 const prisma = new PrismaClient();
@@ -77,7 +79,7 @@ const CHANNELS = {
 class NotificationService {
 
   /**
-   * Create and send notification
+   * Create and send notification (Multi-Tenant Aware)
    * @param {Object} notificationData - Notification details
    * @returns {Promise<Object>} Created notification
    */
@@ -94,7 +96,9 @@ class NotificationService {
         scheduleAt = null,
         expiresAt = null,
         relatedEntityType = null,
-        relatedEntityId = null
+        relatedEntityId = null,
+        tenantCode = null,        // Multi-tenant support
+        organizationId = null     // Multi-tenant support
       } = notificationData;
 
       // Validate recipients
@@ -114,17 +118,18 @@ class NotificationService {
         scheduleAt,
         expiresAt,
         relatedEntityType,
-        relatedEntityId
+        relatedEntityId,
+        organizationId  // Multi-tenant support
       });
 
-      // Send push notifications if not scheduled
+      // Send push notifications if not scheduled (Multi-tenant aware)
       if (!scheduleAt && channels.includes(CHANNELS.PUSH)) {
-        await this.sendPushNotifications(notifications);
+        await this.sendPushNotifications(notifications, tenantCode);
       }
 
-      // Send email notifications if enabled
+      // Send email notifications if enabled (Multi-tenant aware)
       if (!scheduleAt && channels.includes(CHANNELS.EMAIL)) {
-        await this.sendEmailNotifications(notifications);
+        await this.sendEmailNotifications(notifications, tenantCode);
       }
 
       return {
@@ -145,7 +150,7 @@ class NotificationService {
   }
 
   /**
-   * Create notifications in database
+   * Create notifications in database (Multi-Tenant Aware)
    * @param {Object} data - Notification data
    * @returns {Promise<Array>} Created notifications
    */
@@ -161,7 +166,8 @@ class NotificationService {
       scheduleAt,
       expiresAt,
       relatedEntityType,
-      relatedEntityId
+      relatedEntityId,
+      organizationId = null  // Multi-tenant support
     } = data;
 
     try {
@@ -175,7 +181,8 @@ class NotificationService {
               type,
               title,
               message,
-              payload: notificationData
+              payload: notificationData,
+              organizationId  // Multi-tenant support
             }
           });
 
@@ -185,9 +192,10 @@ class NotificationService {
         return createdNotifications;
       });
 
-      // Clear user notification caches
+      // Clear user notification caches (tenant-aware)
+      const tenantPrefix = organizationId ? `${organizationId}:` : '';
       for (const recipientId of recipientIds) {
-        await CacheService.delPattern(`notifications:user:${recipientId}*`);
+        await CacheService.delPattern(`${tenantPrefix}notifications:user:${recipientId}*`);
       }
 
       return notifications;
@@ -204,50 +212,97 @@ class NotificationService {
   }
 
   /**
-   * Send push notifications
+   * Send push notifications (Multi-Tenant Aware)
    * @param {Array} notifications - Array of notification objects
+   * @param {string} tenantCode - Tenant code for multi-tenant push
    * @returns {Promise<void>}
    */
-  static async sendPushNotifications(notifications) {
+  static async sendPushNotifications(notifications, tenantCode = null) {
     try {
       for (const notification of notifications) {
-        // Get user's push tokens
+        // Get user's push tokens from the device tokens table
         const user = await prisma.user.findUnique({
           where: { id: notification.userId },
           select: {
             id: true,
-            fullName: true
+            fullName: true,
+            organizationId: true,
+            deviceTokens: {
+              where: { isActive: true },
+              select: { token: true, platform: true },
+              orderBy: { lastUsedAt: 'desc' },
+              take: 5 // Limit to 5 most recent active tokens
+            }
           }
         });
 
-        // Send push notification using FCM (production ready)
-        try {
-          const pushResult = await PushNotificationService.sendToToken({
-            token: 'mock-device-token', // In production, fetch actual device token from user
-            title: notification.title,
-            body: notification.message,
-            data: {
-              notificationId: notification.id,
-              type: notification.type,
-              userId: user.id,
-              ...notification.payload
-            },
-            priority: 'normal'
+        if (!user) continue;
+
+        // Get tenant code from user's organization if not provided
+        let effectiveTenantCode = tenantCode;
+        if (!effectiveTenantCode && user.organizationId) {
+          const org = await prisma.organization.findUnique({
+            where: { id: user.organizationId },
+            select: { tenantCode: true }
           });
+          effectiveTenantCode = org?.tenantCode;
+        }
+
+        // Get device tokens to send to
+        const deviceTokens = user.deviceTokens?.map(dt => dt.token) || [];
+
+        // Send push notification using tenant-aware service
+        try {
+          let pushResult;
+
+          if (deviceTokens.length > 0) {
+            // Send to actual device tokens using tenant-aware service
+            pushResult = await TenantPushNotificationService.sendToTokens(
+              effectiveTenantCode,
+              {
+                tokens: deviceTokens,
+                title: notification.title,
+                body: notification.message,
+                data: {
+                  notificationId: notification.id,
+                  type: notification.type,
+                  userId: user.id,
+                  ...notification.payload
+                },
+                priority: 'normal'
+              }
+            );
+          } else {
+            // Fallback to mock token for development
+            pushResult = await TenantPushNotificationService.sendToToken(
+              effectiveTenantCode,
+              {
+                token: 'mock-device-token',
+                title: notification.title,
+                body: notification.message,
+                data: {
+                  notificationId: notification.id,
+                  type: notification.type,
+                  userId: user.id,
+                  ...notification.payload
+                },
+                priority: 'normal'
+              }
+            );
+          }
 
           // Update notification status based on result
           await prisma.notification.update({
             where: { id: notification.id },
-            data: { 
-              isRead: false,
-              // Add any additional status tracking if needed
+            data: {
+              isRead: false
             }
           });
 
           console.log(`✅ Push notification sent to ${user.fullName}: ${notification.title}`);
         } catch (pushError) {
           console.error(`❌ Failed to send push notification to ${user.fullName}:`, pushError);
-          
+
           // Update notification to mark delivery failure
           await prisma.notification.update({
             where: { id: notification.id },
@@ -262,14 +317,16 @@ class NotificationService {
   }
 
   /**
-   * Send email notifications
+   * Send email notifications (Multi-Tenant Aware)
    * @param {Array} notifications - Array of notification objects
+   * @param {string} tenantCode - Tenant code for multi-tenant email
    * @returns {Promise<void>}
    */
-  static async sendEmailNotifications(notifications) {
+  static async sendEmailNotifications(notifications, tenantCode = null) {
     try {
-      const emailManager = require('./email/EmailManager');
-      
+      const TenantEmailManager = require('./email/TenantEmailManager');
+      const defaultEmailManager = require('./email/EmailManager');
+
       for (const notification of notifications) {
         try {
           // Get user details for email
@@ -279,7 +336,8 @@ class NotificationService {
               id: true,
               fullName: true,
               email: true,
-              batch: true
+              batch: true,
+              organizationId: true
             }
           });
 
@@ -295,18 +353,34 @@ class NotificationService {
             continue;
           }
 
-          // Get email service
-          const emailService = emailManager.getService();
-          
-          // Send notification email (generic notification email)
+          // Get tenant code from user's organization if not provided
+          let effectiveTenantCode = tenantCode;
+          if (!effectiveTenantCode && user.organizationId) {
+            const org = await prisma.organization.findUnique({
+              where: { id: user.organizationId },
+              select: { tenantCode: true }
+            });
+            effectiveTenantCode = org?.tenantCode;
+          }
+
+          // Get email service (tenant-aware or default)
+          let emailService;
+          try {
+            emailService = await TenantEmailManager.getServiceForTenant(effectiveTenantCode);
+          } catch (tenantError) {
+            console.log(`Using default email service for notification (tenant error): ${tenantError.message}`);
+            emailService = defaultEmailManager.getService();
+          }
+
+          // Send notification email
           const emailOptions = {
             to: user.email,
             subject: notification.title,
-            html: this.generateNotificationEmailHTML(notification, user)
+            html: this.generateNotificationEmailHTML(notification, user, emailService.tenantConfig)
           };
 
           const result = await emailService.provider.sendEmail(emailOptions);
-          
+
           // Update notification status based on email result
           await prisma.notification.update({
             where: { id: notification.id },
@@ -320,7 +394,7 @@ class NotificationService {
 
         } catch (notificationError) {
           console.error(`Failed to send email notification ${notification.id}:`, notificationError);
-          
+
           // Update notification as failed
           await prisma.notification.update({
             where: { id: notification.id },
@@ -339,35 +413,91 @@ class NotificationService {
   }
 
   /**
-   * Generate HTML for notification email
+   * Generate HTML for notification email (Multi-Tenant Aware)
+   * @param {Object} notification - Notification object
+   * @param {Object} user - User object
+   * @param {Object} tenantConfig - Tenant branding configuration (optional)
+   * @returns {string} HTML email content
    */
-  static generateNotificationEmailHTML(notification, user) {
+  static generateNotificationEmailHTML(notification, user, tenantConfig = null) {
+    // Default branding
+    const defaultBranding = {
+      primaryColor: '#667eea',
+      secondaryColor: '#764ba2',
+      logoUrl: null,
+      organizationName: 'Alumni Portal',
+      fromName: 'Alumni Portal Team'
+    };
+
+    // Merge tenant config with defaults
+    const branding = {
+      ...defaultBranding,
+      ...(tenantConfig || {})
+    };
+
+    const logoHtml = branding.logoUrl
+      ? `<img src="${branding.logoUrl}" alt="${branding.organizationName}" style="max-width: 150px; max-height: 60px; margin-bottom: 15px;" />`
+      : '';
+
+    const currentYear = new Date().getFullYear();
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${notification.title}</title>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow: hidden; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .header { background: linear-gradient(135deg, ${branding.primaryColor} 0%, ${branding.secondaryColor} 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
           .content { padding: 30px; }
-          .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
+          .content p { margin: 0 0 15px 0; }
+          .notification-badge {
+            display: inline-block;
+            background: ${branding.primaryColor};
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 15px;
+          }
+          .action-button {
+            display: inline-block;
+            background: ${branding.primaryColor};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 15px;
+          }
+          .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #eee; }
+          .footer a { color: ${branding.primaryColor}; text-decoration: none; }
+          @media only screen and (max-width: 600px) {
+            body { padding: 10px; }
+            .container { border-radius: 5px; }
+            .header, .content { padding: 20px; }
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
+            ${logoHtml}
             <h1>${notification.title}</h1>
           </div>
           <div class="content">
+            <span class="notification-badge">${notification.type?.replace(/_/g, ' ') || 'Notification'}</span>
             <p>Dear ${user.fullName},</p>
             <p>${notification.message}</p>
-            <p>Best regards,<br>Alumni Portal Team</p>
+            <p style="margin-top: 25px;">Best regards,<br><strong>${branding.fromName}</strong></p>
           </div>
           <div class="footer">
-            <p>© 2024 Alumni Portal. This is an automated notification.</p>
+            <p>&copy; ${currentYear} ${branding.organizationName}. All rights reserved.</p>
+            <p style="margin-top: 10px; font-size: 12px; color: #999;">This is an automated notification. Please do not reply directly to this email.</p>
           </div>
         </div>
       </body>

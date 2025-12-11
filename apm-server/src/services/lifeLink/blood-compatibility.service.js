@@ -132,21 +132,23 @@ class BloodCompatibilityService {
    * @param {string} requiredBloodGroup - Required blood group
    * @param {string} location - Search location (city/area)
    * @param {number} limit - Maximum donors to return
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    * @returns {Promise<Array>} Available donors with eligibility info
    */
-  static async findAvailableDonors(requiredBloodGroup, location, limit = 50) {
+  static async findAvailableDonors(requiredBloodGroup, location, limit = 50, tenantFilter = {}) {
     try {
       // Get compatible donor blood groups
       const compatibleBloodGroups = this.getCompatibleDonors(requiredBloodGroup);
-      
+
       // Debug: Check total blood donors first
       const totalBloodDonors = await prisma.user.count({
         where: {
           isBloodDonor: true,
-          isActive: true
+          isActive: true,
+          ...tenantFilter
         }
       });
-      
+
       console.log(`🩸 Total blood donors in database: ${totalBloodDonors}`);
       console.log(`🩸 Searching for blood groups: ${compatibleBloodGroups.join(', ')}`);
       console.log(`🩸 Searching in location: ${location}`);
@@ -159,6 +161,7 @@ class BloodCompatibilityService {
           bloodGroup: {
             in: compatibleBloodGroups
           },
+          ...tenantFilter,
           // Broader location search including both current and permanent addresses
           OR: [
             // Address-based search
@@ -207,7 +210,8 @@ class BloodCompatibilityService {
             isActive: true,
             bloodGroup: {
               in: compatibleBloodGroups
-            }
+            },
+            ...tenantFilter
           },
           select: {
             id: true,
@@ -250,9 +254,10 @@ class BloodCompatibilityService {
    * Add donation record and update donor stats
    * @param {string} donorId - Donor user ID
    * @param {Object} donationData - Donation details
+   * @param {Object} tenantData - Tenant data for multi-tenant isolation
    * @returns {Promise<Object>} Created donation record
    */
-  static async recordDonation(donorId, donationData) {
+  static async recordDonation(donorId, donationData, tenantData = {}) {
     try {
       return await prisma.$transaction(async (tx) => {
         // Create donation record
@@ -262,7 +267,8 @@ class BloodCompatibilityService {
             donationDate: donationData.donationDate || new Date(),
             location: donationData.location,
             units: donationData.units || 1,
-            notes: donationData.notes
+            notes: donationData.notes,
+            ...tenantData
           }
         });
 
@@ -346,16 +352,18 @@ class BloodCompatibilityService {
 
   /**
    * Get blood group statistics
+   * @param {Object} tenantFilter - Tenant filter for multi-tenant isolation
    * @returns {Promise<Object>} Blood group distribution stats
    */
-  static async getBloodGroupStats() {
+  static async getBloodGroupStats(tenantFilter = {}) {
     try {
       const stats = await prisma.user.groupBy({
         by: ['bloodGroup'],
         where: {
           isBloodDonor: true,
           isActive: true,
-          bloodGroup: { not: null }
+          bloodGroup: { not: null },
+          ...tenantFilter
         },
         _count: {
           bloodGroup: true

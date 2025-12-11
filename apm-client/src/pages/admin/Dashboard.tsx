@@ -1,13 +1,7 @@
 // pages/admin/Dashboard.tsx
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  UserCircleIcon, 
-  AcademicCapIcon, 
-  UsersIcon, 
-  CalendarDaysIcon,
-  BellIcon,
-  Cog6ToothIcon,
+import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
@@ -17,6 +11,10 @@ import { useAuth } from '@/hooks/useAuth';
 import BirthdaysCard from '../../components/user/celebrations/BirthdaysCard';
 import FestivalsCard from '../../components/user/celebrations/FestivalsCard';
 import SocialSection from '../../components/user/SocialSection';
+import AlumniStorySection from '../../components/user/AlumniStorySection';
+import EventsComingSoon from '../../components/user/EventsComingSoon';
+import ProfileMarquee from '../../components/common/UI/ProfileMarquee';
+import AnnouncementBanner from '../../components/common/UI/AnnouncementBanner';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -48,6 +46,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Announcement Banner - Shows active announcements */}
+      <AnnouncementBanner />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header with Gradient Background */}
         <motion.div
@@ -94,6 +95,16 @@ const AdminDashboard = () => {
               <circle cx="170" cy="70" r="15" fill="white" fillOpacity="0.08"/>
             </svg>
           </div>
+        </motion.div>
+
+        {/* Alumni Showcase Marquee */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <ProfileMarquee speed="medium" />
         </motion.div>
 
         {/* Verification Status Banner - Only show if admin is not verified */}
@@ -150,110 +161,11 @@ const AdminDashboard = () => {
             <SocialSection />
           </div>
 
-          {/* Right Column - Festivals & Admin Actions */}
+          {/* Right Column - Festivals, Alumni Story & Events */}
           <div className="space-y-6">
             <FestivalsCard />
-            
-            {/* Admin Actions or Announcements */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-            >
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {user?.role === 'SUPER_ADMIN' ? 'Admin Actions' : user?.role === 'BATCH_ADMIN' ? 'Batch Management' : 'Quick Actions'}
-                </h3>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {/* Quick admin actions */}
-                  {user?.role === 'SUPER_ADMIN' && (
-                    <>
-                      <a
-                        href="/admin/users"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <UsersIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-                        <span className="text-sm font-medium">User Management</span>
-                      </a>
-                      <a
-                        href="/admin/verification"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <ShieldCheckIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
-                        <span className="text-sm font-medium">Verifications</span>
-                      </a>
-                      <a
-                        href="/admin/organization"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <Cog6ToothIcon className="h-5 w-5 text-purple-600 dark:text-purple-400 mr-2" />
-                        <span className="text-sm font-medium">Organization</span>
-                      </a>
-                    </>
-                  )}
-                  {user?.role === 'BATCH_ADMIN' && (
-                    <>
-                      <a
-                        href="/admin/batch-users"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <AcademicCapIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-                        <span className="text-sm font-medium">Batch Users</span>
-                      </a>
-                      <a
-                        href="/admin/batch-verification"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <ShieldCheckIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
-                        <span className="text-sm font-medium">Verify Alumni</span>
-                      </a>
-                      <a
-                        href="/admin/batch-events"
-                        className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <CalendarDaysIcon className="h-5 w-5 text-purple-600 dark:text-purple-400 mr-2" />
-                        <span className="text-sm font-medium">Batch Events</span>
-                      </a>
-                    </>
-                  )}
-                </div>
-                
-                {/* Common user actions for all admin types */}
-                <a
-                  href="/user/alumni"
-                  className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <UsersIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                  <span className="text-sm font-medium">Alumni Directory</span>
-                </a>
-                <a
-                  href="/user/profile"
-                  className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <UserCircleIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
-                  <span className="text-sm font-medium">My Profile</span>
-                </a>
-                <a
-                  href="/user/settings"
-                  className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <Cog6ToothIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
-                  <span className="text-sm font-medium">Settings</span>
-                </a>
-                
-                {/* Fallback message for other admin types */}
-                {!user?.role || (user?.role !== 'SUPER_ADMIN' && user?.role !== 'BATCH_ADMIN') && (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-gray-400 dark:text-gray-500">
-                      Contact system administrator for additional access
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
+            <AlumniStorySection />
+            <EventsComingSoon />
           </div>
         </div>
       </div>

@@ -8,6 +8,8 @@ export interface Organization {
   shortName: string
   apiUrl: string
   logo?: string // Static logo URL (optional)
+  logoUrl?: string // Logo URL from API
+  logoProxyUrl?: string // Logo proxy URL for R2 files
   description?: string
 }
 
@@ -18,6 +20,17 @@ export const getOrgLogoUrl = (org: Organization): string | null => {
   // If static logo is provided in config, use it
   if (org.logo) {
     return org.logo
+  }
+  // If logoProxyUrl is available (for R2 files), use the full proxy URL
+  if (org.logoProxyUrl) {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+    // Remove /api from baseUrl if present to construct correct proxy URL
+    const serverUrl = baseUrl.replace(/\/api$/, '')
+    return `${serverUrl}${org.logoProxyUrl}`
+  }
+  // If logoUrl is available from API response, use it
+  if (org.logoUrl) {
+    return org.logoUrl
   }
   // Return null - logo will be fetched dynamically from org API
   return null
@@ -39,47 +52,38 @@ export const fetchOrgDetails = async (org: Organization): Promise<{
   }
 }
 
+// Fetch all organizations from the public API endpoint
+export const fetchAllOrganizations = async (): Promise<Organization[]> => {
+  try {
+    // Use relative URL to leverage Vite's proxy in development
+    // In production, this will be served from the same origin
+    const response = await fetch('/api/public/organizations')
+    if (!response.ok) {
+      console.error('Failed to fetch organizations:', response.statusText)
+      return []
+    }
+    const data = await response.json()
+    return data?.data?.organizations || []
+  } catch (error) {
+    console.error('Error fetching organizations:', error)
+    return []
+  }
+}
+
 // Local development organization - not shown in list, only accessible via code
 const LOCAL_DEV_ORG: Organization = {
   code: 'LOCAL-DEV',
   name: 'Local Development',
   shortName: 'LOCAL',
-  apiUrl: 'http://localhost:3000/api',
+  apiUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
   description: 'Local development server - use for testing',
 }
 
-// Organization registry - Add new organizations here
-// When deploying a new school, add their entry to this list
+// Static organization registry (fallback if API is unavailable)
+// For local development, use code 'LOCAL-DEV' to connect to localhost:3000
 export const ORGANIZATIONS: Organization[] = [
-  {
-    code: 'GUILD-DEMO',
-    name: 'GUILD Alumni Portal Demo',
-    shortName: 'GUILD DEMO',
-    apiUrl: 'https://guild-alumni-portal-demo.up.railway.app/api',
-    description: 'Demo instance for GUILD Alumni Portal testing',
-  },
-  {
-    code: 'JNAAB',
-    name: 'Jawahar Navodaya Alumni Association Belpada',
-    shortName: 'JNAAB',
-    apiUrl: 'https://jnaab-bolangir.railway.app/api',
-    description: 'An association of proud alumni of JNV Bagudi, Balasore',
-  },
-  {
-    code: 'ASJNVBB',
-    name: 'ALUMNI SOCIETY OF JNV BAGUDI, BALASORE',
-    shortName: 'ASJNVBB',
-    apiUrl: 'https://asjnvbb-balasore.railway.app/api',
-    description: 'An association of proud alumni of JNV Belpada, Bolangir',
-  },
-  // Add more organizations as needed
-  // {
-  //   code: 'SCHOOLXYZ',
-  //   name: 'XYZ School Alumni',
-  //   shortName: 'XYZ',
-  //   apiUrl: 'https://xyz-alumni-api.railway.app/api',
-  //   description: 'XYZ School Alumni Network',
-  // },
+  // Static organizations can be added here as fallback
+  // Dynamic organizations are fetched from /api/public/organizations
 ]
 
 // localStorage keys for organization data

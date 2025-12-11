@@ -1,78 +1,90 @@
 // src/middleware/lifelink.cache.middleware.js
-// LifeLink Network Cache Middleware - Following established patterns
+// LifeLink Network Cache Middleware - Tenant-Aware Implementation
 
 const { CacheService } = require('../../config/redis');
 const { successResponse } = require('../../utils/response');
 
 // ============================================
-// CACHE KEY GENERATORS
+// TENANT CODE HELPER
 // ============================================
 
-const generateDashboardCacheKey = (filters = {}) => {
-  const { 
-    bloodGroup, 
+/**
+ * Get tenant code from request for cache key namespacing
+ */
+function getTenantCode(req) {
+  return req.headers['x-tenant-code'] || 'default';
+}
+
+// ============================================
+// TENANT-AWARE CACHE KEY GENERATORS
+// ============================================
+
+const generateDashboardCacheKey = (tenantCode, filters = {}) => {
+  const {
+    bloodGroup,
     eligibleOnly = 'false',
-    page = 1, 
+    page = 1,
     limit = 20,
     city
   } = filters;
-  
-  return `lifelink:dashboard:${bloodGroup || 'all'}:eligible:${eligibleOnly}:page:${page}:limit:${limit}:city:${city || 'all'}`;
+
+  return `${tenantCode}:lifelink:dashboard:${bloodGroup || 'all'}:eligible:${eligibleOnly}:page:${page}:limit:${limit}:city:${city || 'all'}`;
 };
 
-const generateUserBloodProfileCacheKey = (userId) => {
-  return `lifelink:profile:${userId}`;
+const generateUserBloodProfileCacheKey = (tenantCode, userId) => {
+  return `${tenantCode}:lifelink:profile:${userId}`;
 };
 
-const generateUserDonationsCacheKey = (userId, filters = {}) => {
+const generateUserDonationsCacheKey = (tenantCode, userId, filters = {}) => {
   const { page = 1, limit = 10 } = filters;
-  return `lifelink:donations:user:${userId}:page:${page}:limit:${limit}`;
+  return `${tenantCode}:lifelink:donations:user:${userId}:page:${page}:limit:${limit}`;
 };
 
-const generateDonationStatusCacheKey = (userId) => {
-  return `lifelink:status:${userId}`;
+const generateDonationStatusCacheKey = (tenantCode, userId) => {
+  return `${tenantCode}:lifelink:status:${userId}`;
 };
 
-const generateAvailableDonorsCacheKey = (bloodGroup, location, limit = 50) => {
+const generateAvailableDonorsCacheKey = (tenantCode, bloodGroup, location, limit = 50) => {
   const sanitizedLocation = location.toLowerCase().replace(/\s+/g, '-');
-  return `lifelink:search:${bloodGroup}:${sanitizedLocation}:limit:${limit}`;
+  return `${tenantCode}:lifelink:search:${bloodGroup}:${sanitizedLocation}:limit:${limit}`;
 };
 
-const generateDiscoverRequisitionsCacheKey = (userId, filters = {}) => {
+const generateDiscoverRequisitionsCacheKey = (tenantCode, userId, filters = {}) => {
   const { urgencyLevel, maxDistance, page = 1, limit = 20 } = filters;
-  return `lifelink:discover:${userId}:urgency:${urgencyLevel || 'all'}:distance:${maxDistance || 'all'}:page:${page}:limit:${limit}`;
+  return `${tenantCode}:lifelink:discover:${userId}:urgency:${urgencyLevel || 'all'}:distance:${maxDistance || 'all'}:page:${page}:limit:${limit}`;
 };
 
-const generateBloodGroupStatsCacheKey = () => {
-  return 'lifelink:stats:bloodgroups';
+const generateBloodGroupStatsCacheKey = (tenantCode) => {
+  return `${tenantCode}:lifelink:stats:bloodgroups`;
 };
 
-const generateRequisitionCacheKey = (requisitionId) => {
-  return `lifelink:requisition:${requisitionId}`;
+const generateRequisitionCacheKey = (tenantCode, requisitionId) => {
+  return `${tenantCode}:lifelink:requisition:${requisitionId}`;
 };
 
-const generateUserRequisitionsCacheKey = (userId, filters = {}) => {
+const generateUserRequisitionsCacheKey = (tenantCode, userId, filters = {}) => {
   const { status, page = 1, limit = 10 } = filters;
-  return `lifelink:requisitions:user:${userId}:status:${status || 'all'}:page:${page}:limit:${limit}`;
+  return `${tenantCode}:lifelink:requisitions:user:${userId}:status:${status || 'all'}:page:${page}:limit:${limit}`;
 };
 
-const generateUserNotificationsCacheKey = (userId, filters = {}) => {
+const generateUserNotificationsCacheKey = (tenantCode, userId, filters = {}) => {
   const { status, page = 1, limit = 20 } = filters;
-  return `lifelink:notifications:user:${userId}:status:${status || 'all'}:page:${page}:limit:${limit}`;
+  return `${tenantCode}:lifelink:notifications:user:${userId}:status:${status || 'all'}:page:${page}:limit:${limit}`;
 };
 
-const generateWillingDonorsCacheKey = (requisitionId) => {
-  return `lifelink:willing:${requisitionId}`;
+const generateWillingDonorsCacheKey = (tenantCode, requisitionId) => {
+  return `${tenantCode}:lifelink:willing:${requisitionId}`;
 };
 
 // ============================================
 // CACHING MIDDLEWARE FUNCTIONS
 // ============================================
 
-// Cache LifeLink dashboard
+// Cache LifeLink dashboard (tenant-aware)
 const cacheLifeLinkDashboard = async (req, res, next) => {
   try {
-    const cacheKey = generateDashboardCacheKey(req.query);
+    const tenantCode = getTenantCode(req);
+    const cacheKey = generateDashboardCacheKey(tenantCode, req.query);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -94,11 +106,12 @@ const cacheLifeLinkDashboard = async (req, res, next) => {
   }
 };
 
-// Cache user blood profile
+// Cache user blood profile (tenant-aware)
 const cacheUserBloodProfile = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateUserBloodProfileCacheKey(userId);
+    const cacheKey = generateUserBloodProfileCacheKey(tenantCode, userId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -120,11 +133,12 @@ const cacheUserBloodProfile = async (req, res, next) => {
   }
 };
 
-// Cache user donations
+// Cache user donations (tenant-aware)
 const cacheUserDonations = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateUserDonationsCacheKey(userId, req.query);
+    const cacheKey = generateUserDonationsCacheKey(tenantCode, userId, req.query);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -146,11 +160,12 @@ const cacheUserDonations = async (req, res, next) => {
   }
 };
 
-// Cache donation status
+// Cache donation status (tenant-aware)
 const cacheDonationStatus = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateDonationStatusCacheKey(userId);
+    const cacheKey = generateDonationStatusCacheKey(tenantCode, userId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -172,11 +187,12 @@ const cacheDonationStatus = async (req, res, next) => {
   }
 };
 
-// Cache available donors search
+// Cache available donors search (tenant-aware)
 const cacheAvailableDonors = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const { requiredBloodGroup, location, limit = 50 } = req.body;
-    const cacheKey = generateAvailableDonorsCacheKey(requiredBloodGroup, location, limit);
+    const cacheKey = generateAvailableDonorsCacheKey(tenantCode, requiredBloodGroup, location, limit);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -198,11 +214,12 @@ const cacheAvailableDonors = async (req, res, next) => {
   }
 };
 
-// Cache requisition discovery for donors
+// Cache requisition discovery for donors (tenant-aware)
 const cacheDiscoverRequisitions = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateDiscoverRequisitionsCacheKey(userId, req.query);
+    const cacheKey = generateDiscoverRequisitionsCacheKey(tenantCode, userId, req.query);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -224,10 +241,11 @@ const cacheDiscoverRequisitions = async (req, res, next) => {
   }
 };
 
-// Cache blood group statistics
+// Cache blood group statistics (tenant-aware)
 const cacheBloodGroupStats = async (req, res, next) => {
   try {
-    const cacheKey = generateBloodGroupStatsCacheKey();
+    const tenantCode = getTenantCode(req);
+    const cacheKey = generateBloodGroupStatsCacheKey(tenantCode);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -249,11 +267,12 @@ const cacheBloodGroupStats = async (req, res, next) => {
   }
 };
 
-// Cache requisition details
+// Cache requisition details (tenant-aware)
 const cacheRequisitionDetails = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const { requisitionId } = req.params;
-    const cacheKey = generateRequisitionCacheKey(requisitionId);
+    const cacheKey = generateRequisitionCacheKey(tenantCode, requisitionId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -275,11 +294,12 @@ const cacheRequisitionDetails = async (req, res, next) => {
   }
 };
 
-// Cache user requisitions
+// Cache user requisitions (tenant-aware)
 const cacheUserRequisitions = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateUserRequisitionsCacheKey(userId, req.query);
+    const cacheKey = generateUserRequisitionsCacheKey(tenantCode, userId, req.query);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -301,11 +321,12 @@ const cacheUserRequisitions = async (req, res, next) => {
   }
 };
 
-// Cache user notifications
+// Cache user notifications (tenant-aware)
 const cacheUserNotifications = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const userId = req.user.id;
-    const cacheKey = generateUserNotificationsCacheKey(userId, req.query);
+    const cacheKey = generateUserNotificationsCacheKey(tenantCode, userId, req.query);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -327,11 +348,12 @@ const cacheUserNotifications = async (req, res, next) => {
   }
 };
 
-// Cache willing donors for requisition
+// Cache willing donors for requisition (tenant-aware)
 const cacheWillingDonors = async (req, res, next) => {
   try {
+    const tenantCode = getTenantCode(req);
     const { requisitionId } = req.params;
-    const cacheKey = generateWillingDonorsCacheKey(requisitionId);
+    const cacheKey = generateWillingDonorsCacheKey(tenantCode, requisitionId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -357,13 +379,13 @@ const cacheWillingDonors = async (req, res, next) => {
 // CACHE INVALIDATION FUNCTIONS
 // ============================================
 
-// Auto-invalidate LifeLink caches after modifications
+// Auto-invalidate LifeLink caches after modifications (tenant-aware)
 const autoInvalidateLifeLinkCaches = async (req, res, next) => {
   const originalJson = res.json;
-  
+
   res.json = function(data) {
     originalJson.call(this, data);
-    
+
     // Perform cache invalidation asynchronously
     setImmediate(async () => {
       try {
@@ -377,32 +399,33 @@ const autoInvalidateLifeLinkCaches = async (req, res, next) => {
   next();
 };
 
-// Invalidate all LifeLink-related caches
+// Invalidate all LifeLink-related caches (tenant-aware)
 const invalidateLifeLinkCaches = async (req) => {
   try {
+    const tenantCode = getTenantCode(req);
     const { requisitionId } = req.params || {};
     const userId = req.user?.id;
-    
-    // General patterns to invalidate
+
+    // General patterns to invalidate (tenant-specific)
     const patterns = [
-      'lifelink:dashboard*',
-      'lifelink:stats*',
-      'lifelink:search*'
+      `${tenantCode}:lifelink:dashboard*`,
+      `${tenantCode}:lifelink:stats*`,
+      `${tenantCode}:lifelink:search*`
     ];
 
     // User-specific patterns
     if (userId) {
-      patterns.push(`lifelink:profile:${userId}`);
-      patterns.push(`lifelink:donations:user:${userId}*`);
-      patterns.push(`lifelink:status:${userId}`);
-      patterns.push(`lifelink:requisitions:user:${userId}*`);
-      patterns.push(`lifelink:notifications:user:${userId}*`);
+      patterns.push(`${tenantCode}:lifelink:profile:${userId}`);
+      patterns.push(`${tenantCode}:lifelink:donations:user:${userId}*`);
+      patterns.push(`${tenantCode}:lifelink:status:${userId}`);
+      patterns.push(`${tenantCode}:lifelink:requisitions:user:${userId}*`);
+      patterns.push(`${tenantCode}:lifelink:notifications:user:${userId}*`);
     }
 
     // Requisition-specific patterns
     if (requisitionId) {
-      patterns.push(`lifelink:requisition:${requisitionId}`);
-      patterns.push(`lifelink:willing:${requisitionId}`);
+      patterns.push(`${tenantCode}:lifelink:requisition:${requisitionId}`);
+      patterns.push(`${tenantCode}:lifelink:willing:${requisitionId}`);
     }
 
     // Delete cache keys by pattern
@@ -410,49 +433,49 @@ const invalidateLifeLinkCaches = async (req) => {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated LifeLink caches for patterns:`, patterns);
+    console.log(`Invalidated LifeLink caches for tenant ${tenantCode}:`, patterns);
   } catch (error) {
     console.error('LifeLink cache invalidation error:', error);
   }
 };
 
-// Invalidate user-specific caches only
-const invalidateUserLifeLinkCaches = async (userId) => {
+// Invalidate user-specific caches only (tenant-aware)
+const invalidateUserLifeLinkCaches = async (tenantCode, userId) => {
   try {
     const patterns = [
-      `lifelink:profile:${userId}`,
-      `lifelink:donations:user:${userId}*`,
-      `lifelink:status:${userId}`,
-      `lifelink:requisitions:user:${userId}*`,
-      `lifelink:notifications:user:${userId}*`,
-      'lifelink:dashboard*', // Dashboard shows all donors, so invalidate when user changes
-      'lifelink:stats*' // Stats may change when user updates profile
+      `${tenantCode}:lifelink:profile:${userId}`,
+      `${tenantCode}:lifelink:donations:user:${userId}*`,
+      `${tenantCode}:lifelink:status:${userId}`,
+      `${tenantCode}:lifelink:requisitions:user:${userId}*`,
+      `${tenantCode}:lifelink:notifications:user:${userId}*`,
+      `${tenantCode}:lifelink:dashboard*`, // Dashboard shows all donors, so invalidate when user changes
+      `${tenantCode}:lifelink:stats*` // Stats may change when user updates profile
     ];
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated user LifeLink caches for user: ${userId}`);
+    console.log(`Invalidated user LifeLink caches for user ${userId} in tenant ${tenantCode}`);
   } catch (error) {
     console.error('User LifeLink cache invalidation error:', error);
   }
 };
 
-// Invalidate requisition-related caches
-const invalidateRequisitionCaches = async (requisitionId) => {
+// Invalidate requisition-related caches (tenant-aware)
+const invalidateRequisitionCaches = async (tenantCode, requisitionId) => {
   try {
     const patterns = [
-      `lifelink:requisition:${requisitionId}`,
-      `lifelink:willing:${requisitionId}`,
-      'lifelink:search*' // New requisition may affect search results
+      `${tenantCode}:lifelink:requisition:${requisitionId}`,
+      `${tenantCode}:lifelink:willing:${requisitionId}`,
+      `${tenantCode}:lifelink:search*` // New requisition may affect search results
     ];
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated requisition caches for requisition: ${requisitionId}`);
+    console.log(`Invalidated requisition caches for requisition ${requisitionId} in tenant ${tenantCode}`);
   } catch (error) {
     console.error('Requisition cache invalidation error:', error);
   }
@@ -484,7 +507,7 @@ module.exports = {
   invalidateUserLifeLinkCaches,
   invalidateRequisitionCaches,
 
-  // Cache key generators (for controller use)
+  // Cache key generators (for controller use - tenant-aware)
   generateDiscoverRequisitionsCacheKey,
   generateUserBloodProfileCacheKey,
   generateUserDonationsCacheKey,
@@ -494,5 +517,8 @@ module.exports = {
   generateRequisitionCacheKey,
   generateUserRequisitionsCacheKey,
   generateUserNotificationsCacheKey,
-  generateWillingDonorsCacheKey
+  generateWillingDonorsCacheKey,
+
+  // Utility
+  getTenantCode
 };

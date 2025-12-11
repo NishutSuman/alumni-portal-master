@@ -7,6 +7,7 @@ const { successResponse, errorResponse } = require('../../utils/response');
 const NotificationService = require('../../services/notification.service');
 const emailManager = require('../../services/email/EmailManager');
 const SerialIdService = require('../../services/serialID.service');
+const { getOrganizationName } = require('../../utils/tenant.util');
 
 /**
  * Get pending verification users
@@ -257,37 +258,45 @@ const verifyAlumniUser = async (req, res) => {
       // Send email notification (if email service is available)
       if (emailManager && emailManager.isInitialized) {
         const emailService = emailManager.getService();
+        const organizationName = getOrganizationName(req);
         await emailService.sendEmail({
           to: updated.email,
-          subject: 'Alumni Account Activated - Welcome to the Portal!',
+          subject: `Alumni Account Activated - Welcome to ${organizationName}!`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #10b981;">🎉 Welcome to Alumni Portal!</h2>
-              
-              <p>Dear ${updated.fullName},</p>
-              
-              <p>Congratulations! Your alumni status has been verified and your account is now active.</p>
-              
-              <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0;">
-                <strong>Your account is now activated!</strong>
-                <p>You can now access all portal features and connect with your fellow alumni.</p>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
+              <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="color: #10b981; margin: 0;">🎉 Welcome to ${organizationName}!</h2>
               </div>
-              
+
+              <p>Dear ${updated.fullName},</p>
+
+              <p>Congratulations! Your alumni status has been verified and your account is now active at <strong>${organizationName}</strong>.</p>
+
+              <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0; border-radius: 5px;">
+                <strong>Your account is now activated!</strong>
+                <p style="margin: 10px 0 0 0;">You can now access all portal features and connect with your fellow alumni.</p>
+              </div>
+
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/login" 
-                   style="display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/login"
+                   style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
                    Login to Portal
                 </a>
               </div>
-              
+
               <p>Welcome to the community!</p>
-              
+
               <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
                 <h4 style="margin-top: 0;">Need Help?</h4>
                 <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
               </div>
-              
-              <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Please do not reply directly to this email.</p>
+
+              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+                <p style="margin: 10px 0 0 0;">
+                  <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
+                </p>
+              </div>
             </div>
           `
         });
@@ -366,35 +375,44 @@ const rejectAlumniUser = async (req, res) => {
 
       if (emailManager && emailManager.isInitialized) {
         const emailService = emailManager.getService();
-        
-        // Send simple rejection email with HTML content
+        const organizationName = getOrganizationName(req);
+
+        // Send rejection email with organization branding
         await emailService.sendEmail({
           to: user.email,
-          subject: 'Registration Application - Unable to Proceed',
+          subject: `Registration Application Update - ${organizationName}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #dc3545;">Registration Review Update</h2>
-              
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
+              <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="color: #dc3545; margin: 0;">Registration Review Update</h2>
+                <p style="color: #6b7280; margin-top: 10px;">${organizationName}</p>
+              </div>
+
               <p>Dear ${user.fullName},</p>
-              
-              <p>Thank you for your interest in joining our alumni portal. After reviewing your registration application, we are unable to proceed with your registration at this time.</p>
-              
-              <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0;">
+
+              <p>Thank you for your interest in joining <strong>${organizationName}</strong>. After reviewing your registration application, we are unable to proceed with your registration at this time.</p>
+
+              <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 5px;">
                 <strong>Reason:</strong> ${reason || 'Unable to verify your alumni status with our records'}
               </div>
-              
-              <p>Your registration has been rejected. Please contact support for more details. Currently, we will not be able to proceed with your registration with us.</p>
-              
-              <div style="margin: 30px 0; padding: 15px; background-color: #e9ecef; border-radius: 5px;">
+
+              <p>If you believe this decision was made in error, please contact our support team with any additional documentation that may help verify your alumni status.</p>
+
+              <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
                 <h4 style="margin-top: 0;">Need Help?</h4>
                 <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
               </div>
-              
-              <p style="color: #6c757d; font-size: 12px; margin-top: 30px;">This is an automated message. Please do not reply directly to this email.</p>
+
+              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+                <p style="margin: 10px 0 0 0;">
+                  <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
+                </p>
+              </div>
             </div>
           `
         });
-        
+
         console.log(`✅ Rejection email sent to ${user.email}`);
       } else {
         console.warn('⚠️ Email service not initialized - rejection email not sent');

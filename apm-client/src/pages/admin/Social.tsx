@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import {
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
@@ -7,9 +8,20 @@ import {
 } from '@heroicons/react/24/outline';
 import Posts from '../user/Posts';
 import Polls from '../user/Polls';
+import AdminAnnouncements from './Announcements';
 
 const AdminSocial: React.FC = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'posts' | 'polls' | 'announcements'>('posts');
+
+  // Handle navigation state to open specific tab
+  useEffect(() => {
+    if (location.state?.tab === 'announcements') {
+      setActiveTab('announcements');
+      // Clear the state to prevent reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const tabs = [
     {
@@ -29,7 +41,6 @@ const AdminSocial: React.FC = () => {
       name: 'Announcements',
       icon: MegaphoneIcon,
       description: 'Create and manage important announcements',
-      comingSoon: true,
     },
   ];
 
@@ -40,17 +51,7 @@ const AdminSocial: React.FC = () => {
       case 'polls':
         return <Polls />;
       case 'announcements':
-        return (
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-            <div className="text-center">
-              <MegaphoneIcon className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Announcement Management Coming Soon</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Create, schedule, and manage important announcements for your organization.
-              </p>
-            </div>
-          </div>
-        );
+        return <AdminAnnouncements />;
       default:
         return null;
     }
@@ -70,22 +71,17 @@ const AdminSocial: React.FC = () => {
                 <motion.button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  className={`relative flex items-center space-x-2 py-4 px-1 font-medium text-sm whitespace-nowrap transition-colors ${
                     isActive
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                   whileHover={{ y: -1 }}
                   whileTap={{ y: 0 }}
                 >
                   <Icon className="h-5 w-5" />
                   <span>{tab.name}</span>
-                  {tab.comingSoon && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300">
-                      Soon
-                    </span>
-                  )}
-                  
+
                   {isActive && (
                     <motion.div
                       layoutId="adminActiveTab"

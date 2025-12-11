@@ -1,6 +1,7 @@
 // src/controllers/eventSection.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // Add section to event (Super Admin only)
 const addEventSection = async (req, res) => {
@@ -20,11 +21,11 @@ const addEventSection = async (req, res) => {
   
   try {
     // Check if event exists
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
       select: { id: true, title: true, status: true },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -108,16 +109,16 @@ const getEventSections = async (req, res) => {
   
   try {
     // Check if event exists and is visible
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
         status: true,
-        createdBy: true 
+        createdBy: true
       },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -171,6 +172,7 @@ const updateEventSection = async (req, res) => {
       where: {
         id: sectionId,
         eventId,
+        event: { ...getTenantFilter(req) }
       },
       select: {
         id: true,
@@ -184,7 +186,7 @@ const updateEventSection = async (req, res) => {
         },
       },
     });
-    
+
     if (!existingSection) {
       return errorResponse(res, 'Event section not found', 404);
     }
@@ -290,6 +292,7 @@ const deleteEventSection = async (req, res) => {
       where: {
         id: sectionId,
         eventId,
+        event: { ...getTenantFilter(req) }
       },
       select: {
         id: true,
@@ -303,7 +306,7 @@ const deleteEventSection = async (req, res) => {
         },
       },
     });
-    
+
     if (!section) {
       return errorResponse(res, 'Event section not found', 404);
     }
@@ -349,11 +352,11 @@ const reorderEventSections = async (req, res) => {
   
   try {
     // Check if event exists
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
       select: { id: true, title: true },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -428,6 +431,7 @@ const getSectionById = async (req, res) => {
       where: {
         id: sectionId,
         eventId,
+        event: { ...getTenantFilter(req) }
       },
       select: {
         id: true,
@@ -448,7 +452,7 @@ const getSectionById = async (req, res) => {
         },
       },
     });
-    
+
     if (!section) {
       return errorResponse(res, 'Event section not found', 404);
     }

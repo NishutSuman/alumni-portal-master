@@ -14,9 +14,22 @@ class CloudflareR2Service {
         secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
       },
     });
-    
+
     this.bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME;
     this.publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL;
+  }
+
+  /**
+   * Get tenant-prefixed folder path for multi-tenant isolation
+   * @param {string} folder - Base folder path
+   * @param {string} tenantCode - Tenant code for namespace (optional)
+   * @returns {string} - Tenant-prefixed folder path
+   */
+  getTenantFolder(folder, tenantCode = null) {
+    if (tenantCode && tenantCode !== 'default') {
+      return `tenants/${tenantCode}/${folder}`;
+    }
+    return folder;
   }
 
   /**
@@ -33,16 +46,22 @@ class CloudflareR2Service {
   }
 
   /**
-   * Upload file to Cloudflare R2
+   * Upload file to Cloudflare R2 (tenant-aware)
+   * @param {Object} file - File object with buffer
+   * @param {string} folder - Base folder path
+   * @param {string} filename - Optional filename
+   * @param {string} tenantCode - Optional tenant code for multi-tenant isolation
    */
-  async uploadFile(file, folder = 'organization', filename = null) {
+  async uploadFile(file, folder = 'organization', filename = null, tenantCode = null) {
     try {
       if (!file || !file.buffer) {
         throw new Error('Invalid file object. Buffer is required.');
       }
 
-      const key = `${folder}/${filename || this.generateUniqueFilename(file.originalname)}`;
-      
+      // Apply tenant prefix to folder path
+      const tenantFolder = this.getTenantFolder(folder, tenantCode);
+      const key = `${tenantFolder}/${filename || this.generateUniqueFilename(file.originalname)}`;
+
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
@@ -52,11 +71,12 @@ class CloudflareR2Service {
         Metadata: {
           'original-name': file.originalname,
           'upload-timestamp': Date.now().toString(),
+          'tenant-code': tenantCode || 'default',
         },
       });
 
       const response = await this.client.send(command);
-      
+
       return {
         success: true,
         key,
@@ -66,6 +86,7 @@ class CloudflareR2Service {
         originalName: file.originalname,
         size: file.size,
         mimetype: file.mimetype,
+        tenantCode: tenantCode || 'default',
       };
     } catch (error) {
       console.error('Cloudflare R2 upload error:', error);
@@ -74,35 +95,35 @@ class CloudflareR2Service {
   }
 
   /**
-   * Upload organization logo
+   * Upload organization logo (tenant-aware)
    */
-  async uploadOrganizationLogo(file) {
+  async uploadOrganizationLogo(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'logo');
-    return this.uploadFile(file, 'organization/logos', filename);
+    return this.uploadFile(file, 'organization/logos', filename, tenantCode);
   }
 
   /**
-   * Upload organization bylaw document
+   * Upload organization bylaw document (tenant-aware)
    */
-  async uploadOrganizationBylaw(file) {
+  async uploadOrganizationBylaw(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'bylaw');
-    return this.uploadFile(file, 'organization/bylaws', filename);
+    return this.uploadFile(file, 'organization/bylaws', filename, tenantCode);
   }
 
   /**
-   * Upload organization registration certificate
+   * Upload organization registration certificate (tenant-aware)
    */
-  async uploadOrganizationCertificate(file) {
+  async uploadOrganizationCertificate(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'cert');
-    return this.uploadFile(file, 'organization/certificates', filename);
+    return this.uploadFile(file, 'organization/certificates', filename, tenantCode);
   }
 
   /**
-   * Upload user profile picture
+   * Upload user profile picture (tenant-aware)
    */
-  async uploadProfilePicture(file) {
+  async uploadProfilePicture(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'profile');
-    return this.uploadFile(file, 'alumni-portal/profile-pictures', filename);
+    return this.uploadFile(file, 'profile-pictures', filename, tenantCode);
   }
 
   /**
@@ -132,21 +153,21 @@ class CloudflareR2Service {
   }
 
   /**
-   * Upload post image (hero or gallery)
+   * Upload post image (hero or gallery) (tenant-aware)
    */
-  async uploadPostImage(file, type = 'gallery') {
+  async uploadPostImage(file, type = 'gallery', tenantCode = null) {
     const prefix = type === 'hero' ? 'hero' : 'post';
     const filename = this.generateUniqueFilename(file.originalname, prefix);
-    return this.uploadFile(file, 'alumni-portal/post-images', filename);
+    return this.uploadFile(file, 'post-images', filename, tenantCode);
   }
 
   /**
-   * Upload event image (hero or gallery)
+   * Upload event image (hero or gallery) (tenant-aware)
    */
-  async uploadEventImage(file, type = 'hero') {
+  async uploadEventImage(file, type = 'hero', tenantCode = null) {
     const prefix = type === 'hero' ? 'hero' : 'event';
     const filename = this.generateUniqueFilename(file.originalname, prefix);
-    return this.uploadFile(file, 'alumni-portal/event-images', filename);
+    return this.uploadFile(file, 'event-images', filename, tenantCode);
   }
 
   /**
@@ -179,19 +200,19 @@ class CloudflareR2Service {
   }
 
   /**
-   * Upload album cover image
+   * Upload album cover image (tenant-aware)
    */
-  async uploadAlbumCover(file) {
+  async uploadAlbumCover(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'album_cover');
-    return this.uploadFile(file, 'alumni-portal/album-covers', filename);
+    return this.uploadFile(file, 'album-covers', filename, tenantCode);
   }
 
   /**
-   * Upload album photo
+   * Upload album photo (tenant-aware)
    */
-  async uploadAlbumPhoto(file) {
+  async uploadAlbumPhoto(file, tenantCode = null) {
     const filename = this.generateUniqueFilename(file.originalname, 'photo');
-    return this.uploadFile(file, 'alumni-portal/album-photos', filename);
+    return this.uploadFile(file, 'album-photos', filename, tenantCode);
   }
 
   /**

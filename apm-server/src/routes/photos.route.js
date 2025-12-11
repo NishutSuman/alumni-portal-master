@@ -5,11 +5,12 @@ const router = express.Router();
 // ============================================
 // MIDDLEWARE IMPORTS
 // ============================================
-const { 
-  authenticateToken, 
-  requireRole 
+const {
+  authenticateToken,
+  requireRole
 } = require('../middleware/auth/auth.middleware');
 const { asyncHandler } = require('../utils/response');
+const { getTenantFilter, getTenantId } = require('../utils/tenant.util');
 
 // Photo-specific middleware
 const {
@@ -40,6 +41,8 @@ const {
 // CONTROLLER IMPORTS
 // ============================================
 const photoController = require('../controllers/album/photo.controller');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 // ============================================
 // ADMIN-ONLY MIDDLEWARE
@@ -171,6 +174,10 @@ router.get('/stats',
   ],
   asyncHandler(async (req, res) => {
     try {
+      // Apply tenant filter for multi-tenant isolation
+      const tenantFilter = getTenantFilter(req);
+      const tenantId = getTenantId(req);
+
       const [
         totalPhotos,
         totalAlbums,
@@ -178,36 +185,53 @@ router.get('/stats',
         recentUploads,
         tagStats
       ] = await Promise.all([
-        // Total photos count
-        prisma.photo.count(),
-        
-        // Total albums count
-        prisma.album.count({ where: { isArchived: false } }),
-        
-        // Total size calculation
-        prisma.$queryRaw`
-          SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
-          FROM photos 
-          WHERE metadata->>'size' IS NOT NULL
-        `,
-        
-        // Recent uploads (last 7 days)
+        // Total photos count (tenant-filtered)
+        prisma.photo.count({ where: tenantFilter }),
+
+        // Total albums count (tenant-filtered)
+        prisma.album.count({ where: { isArchived: false, ...tenantFilter } }),
+
+        // Total size calculation (tenant-filtered)
+        tenantId
+          ? prisma.$queryRaw`
+              SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+              FROM photos
+              WHERE metadata->>'size' IS NOT NULL
+              AND "organizationId" = ${tenantId}
+            `
+          : prisma.$queryRaw`
+              SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+              FROM photos
+              WHERE metadata->>'size' IS NOT NULL
+            `,
+
+        // Recent uploads (last 7 days, tenant-filtered)
         prisma.photo.count({
           where: {
             createdAt: {
               gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-            }
+            },
+            ...tenantFilter
           }
         }),
-        
-        // Tag usage statistics
-        prisma.$queryRaw`
-          SELECT 
-            COUNT(*) as photos_with_tags,
-            AVG(array_length(tags, 1)) as avg_tags_per_photo
-          FROM photos 
-          WHERE array_length(tags, 1) > 0
-        `
+
+        // Tag usage statistics (tenant-filtered)
+        tenantId
+          ? prisma.$queryRaw`
+              SELECT
+                COUNT(*) as photos_with_tags,
+                AVG(array_length(tags, 1)) as avg_tags_per_photo
+              FROM photos
+              WHERE array_length(tags, 1) > 0
+              AND "organizationId" = ${tenantId}
+            `
+          : prisma.$queryRaw`
+              SELECT
+                COUNT(*) as photos_with_tags,
+                AVG(array_length(tags, 1)) as avg_tags_per_photo
+              FROM photos
+              WHERE array_length(tags, 1) > 0
+            `
       ]);
 
       const stats = {
@@ -264,9 +288,13 @@ router.get('/stats/user/:userId',
     try {
       const { userId } = req.params;
 
-      // Verify user exists
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
+      // Apply tenant filter for multi-tenant isolation
+      const tenantFilter = getTenantFilter(req);
+      const tenantId = getTenantId(req);
+
+      // Verify user exists and belongs to tenant
+      const user = await prisma.user.findFirst({
+        where: { id: userId, ...tenantFilter },
         select: { id: true, fullName: true }
       });
 
@@ -283,29 +311,37 @@ router.get('/stats/user/:userId',
         totalSize,
         taggedInPhotos
       ] = await Promise.all([
-        // Photos uploaded by user
+        // Photos uploaded by user (tenant-filtered)
         prisma.photo.count({
-          where: { uploadedBy: userId }
+          where: { uploadedBy: userId, ...tenantFilter }
         }),
-        
-        // Albums created by user
+
+        // Albums created by user (tenant-filtered)
         prisma.album.count({
-          where: { createdBy: userId, isArchived: false }
+          where: { createdBy: userId, isArchived: false, ...tenantFilter }
         }),
-        
-        // Total size of user's photos
-        prisma.$queryRaw`
-          SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
-          FROM photos 
-          WHERE uploaded_by = ${userId} AND metadata->>'size' IS NOT NULL
-        `,
-        
-        // Photos where user is tagged
+
+        // Total size of user's photos (tenant-filtered)
+        tenantId
+          ? prisma.$queryRaw`
+              SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+              FROM photos
+              WHERE uploaded_by = ${userId} AND metadata->>'size' IS NOT NULL
+              AND "organizationId" = ${tenantId}
+            `
+          : prisma.$queryRaw`
+              SELECT COALESCE(SUM(CAST(metadata->>'size' AS INTEGER)), 0) as total_size
+              FROM photos
+              WHERE uploaded_by = ${userId} AND metadata->>'size' IS NOT NULL
+            `,
+
+        // Photos where user is tagged (tenant-filtered)
         prisma.photo.count({
           where: {
             tags: {
               has: userId
-            }
+            },
+            ...tenantFilter
           }
         })
       ]);
@@ -361,18 +397,34 @@ router.get('/metadata/analysis',
   ],
   asyncHandler(async (req, res) => {
     try {
-      // Get metadata analysis
-      const metadataStats = await prisma.$queryRaw`
-        SELECT 
-          metadata->>'format' as format,
-          COUNT(*) as count,
-          AVG(CAST(metadata->>'size' AS INTEGER)) as avg_size,
-          SUM(CAST(metadata->>'size' AS INTEGER)) as total_size
-        FROM photos 
-        WHERE metadata IS NOT NULL
-        GROUP BY metadata->>'format'
-        ORDER BY count DESC
-      `;
+      // Apply tenant filter for multi-tenant isolation
+      const tenantId = getTenantId(req);
+
+      // Get metadata analysis (tenant-filtered)
+      const metadataStats = tenantId
+        ? await prisma.$queryRaw`
+            SELECT
+              metadata->>'format' as format,
+              COUNT(*) as count,
+              AVG(CAST(metadata->>'size' AS INTEGER)) as avg_size,
+              SUM(CAST(metadata->>'size' AS INTEGER)) as total_size
+            FROM photos
+            WHERE metadata IS NOT NULL
+            AND "organizationId" = ${tenantId}
+            GROUP BY metadata->>'format'
+            ORDER BY count DESC
+          `
+        : await prisma.$queryRaw`
+            SELECT
+              metadata->>'format' as format,
+              COUNT(*) as count,
+              AVG(CAST(metadata->>'size' AS INTEGER)) as avg_size,
+              SUM(CAST(metadata->>'size' AS INTEGER)) as total_size
+            FROM photos
+            WHERE metadata IS NOT NULL
+            GROUP BY metadata->>'format'
+            ORDER BY count DESC
+          `;
 
       const analysis = {
         formatBreakdown: metadataStats.map(stat => ({

@@ -1,32 +1,63 @@
 // src/services/celebrations/BirthdayService.js
 // Uses existing Notification table for tracking instead of custom logs
+// Multi-tenant: Birthday emails are sent from user's own tenant email service
 
 const { prisma } = require('../../config/database');
 const { NotificationService } = require('../notification.service');
 const emailManager = require('../email/EmailManager');
+const TenantEmailManager = require('../email/TenantEmailManager');
 
 class BirthdayService {
   /**
    * Get today's birthdays
+   * Includes organization info for multi-tenant email support
    */
   static async getTodaysBirthdays() {
     try {
       const today = new Date();
       const todayMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
       const todayDate = today.getDate();
-      
-      const birthdays = await prisma.$queryRaw`
-        SELECT id, "fullName", email, "dateOfBirth", batch, "profileImage", "isProfilePublic"
-        FROM "users" 
-        WHERE "isActive" = true 
-        AND "dateOfBirth" IS NOT NULL
-        AND EXTRACT(MONTH FROM "dateOfBirth") = ${todayMonth}
-        AND EXTRACT(DAY FROM "dateOfBirth") = ${todayDate}
-        ORDER BY "fullName" ASC
-      `;
+
+      // Use Prisma query to get users with their organization data
+      const birthdays = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          dateOfBirth: { not: null },
+          role: { not: 'DEVELOPER' }, // Exclude developer accounts
+          AND: [
+            { dateOfBirth: { not: null } }
+          ]
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          dateOfBirth: true,
+          batch: true,
+          profileImage: true,
+          isProfilePublic: true,
+          organizationId: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              shortName: true,
+              tenantCode: true
+            }
+          }
+        },
+        orderBy: { fullName: 'asc' }
+      });
+
+      // Filter for today's birthdays (month and day match)
+      const todaysBirthdays = birthdays.filter(user => {
+        if (!user.dateOfBirth) return false;
+        const dob = new Date(user.dateOfBirth);
+        return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDate;
+      });
 
       // Calculate ages and format data
-      const birthdaysWithAge = birthdays.map(user => {
+      const birthdaysWithAge = todaysBirthdays.map(user => {
         const age = this.calculateAge(user.dateOfBirth);
         return {
           ...user,
@@ -160,52 +191,67 @@ class BirthdayService {
 
   /**
    * Send birthday wish emails to birthday people at midnight
+   * Multi-tenant: Each birthday person receives email from their own tenant's email service
    */
   static async sendBirthdayEmails() {
     try {
       const todaysBirthdays = await this.getTodaysBirthdays();
-      
+
       if (todaysBirthdays.length === 0) {
         console.log('ℹ️ No birthday emails to send today');
         return { success: true, birthdaysCount: 0, emailsSent: 0 };
       }
 
-      console.log(`🎂 Found ${todaysBirthdays.length} birthday(s) today - sending email wishes`);
-      
-      // Get organization data
-      const organization = await prisma.organization.findFirst({
-        select: {
-          name: true,
-          shortName: true
-        }
-      });
+      console.log(`🎂 Found ${todaysBirthdays.length} birthday(s) today - sending email wishes with multi-tenant isolation`);
 
       let totalEmailsSent = 0;
-      
-      // Send birthday emails to each birthday person
+      const emailsByTenant = {};
+
+      // Send birthday emails to each birthday person using their tenant's email service
       for (const birthdayUser of todaysBirthdays) {
         try {
-          await this.sendBirthdayEmail(birthdayUser, organization);
+          const tenantCode = birthdayUser.organization?.tenantCode || null;
+          const organizationData = birthdayUser.organization || null;
+
+          await this.sendBirthdayEmailForTenant(birthdayUser, organizationData, tenantCode);
           totalEmailsSent++;
+
+          // Track emails by tenant for logging
+          const tenantKey = tenantCode || 'default';
+          emailsByTenant[tenantKey] = (emailsByTenant[tenantKey] || 0) + 1;
         } catch (error) {
           console.error(`❌ Failed to send birthday email to ${birthdayUser.fullName}:`, error);
         }
       }
 
-      // TODO: Log birthday email completion (requires valid userId)
-      // Skip activity logging for system jobs
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: 'system',
+          action: 'birthday_emails_sent',
+          details: {
+            birthdaysCount: todaysBirthdays.length,
+            emailsSent: totalEmailsSent,
+            emailsByTenant,
+            date: new Date().toISOString().split('T')[0]
+          }
+        }
+      });
 
       console.log(`✅ Birthday emails processed: ${totalEmailsSent}/${todaysBirthdays.length} sent successfully`);
-      
+      console.log(`📊 Emails by tenant:`, emailsByTenant);
+
       return {
         success: true,
         birthdaysCount: todaysBirthdays.length,
         emailsSent: totalEmailsSent,
+        emailsByTenant,
         birthdays: todaysBirthdays.map(user => ({
           name: user.fullName,
           age: user.age,
           batch: user.batch,
-          email: user.email
+          email: user.email,
+          tenant: user.organization?.tenantCode || 'default'
         }))
       };
     } catch (error) {
@@ -215,20 +261,35 @@ class BirthdayService {
   }
 
   /**
-   * Send birthday wish email to specific birthday person
+   * Send birthday wish email to specific birthday person using tenant-specific email service
+   * Multi-tenant: Uses the birthday person's organization email configuration
    */
-  static async sendBirthdayEmail(birthdayUser, organizationData) {
+  static async sendBirthdayEmailForTenant(birthdayUser, organizationData, tenantCode) {
     try {
-      const emailService = emailManager.getService();
-      
+      // Get tenant-specific email service
+      const emailService = tenantCode
+        ? await TenantEmailManager.getServiceForTenant(tenantCode)
+        : emailManager.getService();
+
+      const orgName = organizationData?.name || 'Alumni Portal';
+
       await emailService.sendBirthdayWish(birthdayUser, organizationData);
-      console.log(`✅ Birthday email sent to ${birthdayUser.fullName} (${birthdayUser.email})`);
-      
-      return { success: true };
+      console.log(`✅ Birthday email sent to ${birthdayUser.fullName} (${birthdayUser.email}) from ${orgName}`);
+
+      return { success: true, tenantCode: tenantCode || 'default' };
     } catch (error) {
-      console.error(`❌ Failed to send birthday email to ${birthdayUser.fullName}:`, error);
+      console.error(`❌ Failed to send birthday email to ${birthdayUser.fullName} (${tenantCode}):`, error);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Send birthday wish email to specific birthday person (legacy method)
+   * @deprecated Use sendBirthdayEmailForTenant for multi-tenant support
+   */
+  static async sendBirthdayEmail(birthdayUser, organizationData) {
+    const tenantCode = birthdayUser.organization?.tenantCode || null;
+    return this.sendBirthdayEmailForTenant(birthdayUser, organizationData, tenantCode);
   }
 
   /**

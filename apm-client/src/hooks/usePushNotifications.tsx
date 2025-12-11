@@ -139,7 +139,6 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
 
     // Registration success - get FCM token
     const registrationListener = PushNotifications.addListener('registration', (token: Token) => {
-      console.log('Push registration success, token:', token.value);
       setState(prev => ({ ...prev, token: token.value, isRegistered: true }));
 
       // TODO: Send token to backend to store for user

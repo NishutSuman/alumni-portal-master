@@ -31,7 +31,7 @@ export interface User {
   }
 }
 
-export type UserRole = 'USER' | 'BATCH_ADMIN' | 'SUPER_ADMIN'
+export type UserRole = 'USER' | 'TEACHER' | 'BATCH_ADMIN' | 'SUPER_ADMIN' | 'DEVELOPER'
 
 export type EmploymentStatus = 
   | 'STUDENT' 

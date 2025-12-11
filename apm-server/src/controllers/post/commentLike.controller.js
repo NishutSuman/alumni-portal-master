@@ -1,6 +1,7 @@
 // src/controllers/commentLike.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
+const { getTenantFilter } = require('../../utils/tenant.util');
 
 // Toggle reaction on a comment
 const toggleCommentReaction = async (req, res) => {
@@ -15,7 +16,10 @@ const toggleCommentReaction = async (req, res) => {
   }
   
   try {
-    // Check if comment exists
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if comment exists and verify the post belongs to this tenant
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       select: {
@@ -36,15 +40,21 @@ const toggleCommentReaction = async (req, res) => {
             allowComments: true,
             isPublished: true,
             isArchived: true,
+            organizationId: true, // For tenant verification
           },
         },
       },
     });
-    
+
     if (!comment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
+    // Verify post belongs to the tenant (multi-tenant isolation)
+    if (tenantFilter.organizationId && comment.post.organizationId !== tenantFilter.organizationId) {
+      return errorResponse(res, 'Comment not found', 404);
+    }
+
     if (!comment.post.isPublished || comment.post.isArchived || !comment.post.allowComments) {
       return errorResponse(res, 'Cannot react to this comment', 400);
     }
@@ -236,26 +246,35 @@ const toggleCommentReaction = async (req, res) => {
 const getCommentReactions = async (req, res) => {
   const { commentId } = req.params;
   const userId = req.user?.id;
-  
+
   try {
-    // Check if comment exists
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if comment exists with tenant verification
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
-      select: { 
+      select: {
         id: true,
         post: {
           select: {
             isPublished: true,
             isArchived: true,
+            organizationId: true, // For tenant verification
           },
         },
       },
     });
-    
+
     if (!comment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
+    // Verify post belongs to the tenant (multi-tenant isolation)
+    if (tenantFilter.organizationId && comment.post.organizationId !== tenantFilter.organizationId) {
+      return errorResponse(res, 'Comment not found', 404);
+    }
+
     if (!comment.post.isPublished || comment.post.isArchived) {
       return errorResponse(res, 'Cannot view reactions for this comment', 400);
     }
@@ -319,26 +338,35 @@ const getCommentReactions = async (req, res) => {
 const getCommentReactionUsers = async (req, res) => {
   const { commentId } = req.params;
   const { reactionType, page = 1, limit = 20 } = req.query;
-  
+
   try {
-    // Check if comment exists
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Check if comment exists with tenant verification
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
-      select: { 
+      select: {
         id: true,
         post: {
           select: {
             isPublished: true,
             isArchived: true,
+            organizationId: true, // For tenant verification
           },
         },
       },
     });
-    
+
     if (!comment) {
       return errorResponse(res, 'Comment not found', 404);
     }
-    
+
+    // Verify post belongs to the tenant (multi-tenant isolation)
+    if (tenantFilter.organizationId && comment.post.organizationId !== tenantFilter.organizationId) {
+      return errorResponse(res, 'Comment not found', 404);
+    }
+
     if (!comment.post.isPublished || comment.post.isArchived) {
       return errorResponse(res, 'Cannot view reactions for this comment', 400);
     }

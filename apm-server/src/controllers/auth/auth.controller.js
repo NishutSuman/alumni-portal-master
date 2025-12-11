@@ -11,7 +11,8 @@ const config = require('../../config');
 const { successResponse, errorResponse } = require('../../utils/response');
 const SerialIdService = require('../../services/serialID.service');
 const NotificationService = require('../../services/notification.service');
-const emailManager = require('../../services/email/EmailManager');
+const tenantEmailManager = require('../../services/email/TenantEmailManager');
+const { getTenantId, getTenantCode, getOrganizationName, getRequiredTenantId } = require('../../utils/tenant.util');
 
 // Generate JWT tokens (UNCHANGED)
 const generateTokens = (userId) => {
@@ -115,13 +116,28 @@ const register = async (req, res) => {
       );
     }
     
-    // Check if user already exists (same as before)
+    // ==========================================
+    // MULTI-ORG: Get required tenant ID for registration
+    // ==========================================
+    let tenantId;
+    try {
+      tenantId = getRequiredTenantId(req);
+    } catch (tenantError) {
+      return errorResponse(res, tenantError.message, tenantError.status || 400);
+    }
+
+    // Check if user already exists in THIS organization (composite unique)
     const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: {
+        user_email_org_unique: {
+          email: email.toLowerCase(),
+          organizationId: tenantId
+        }
+      },
     });
-    
+
     if (existingUser) {
-      return errorResponse(res, 'User with this email already exists', 409);
+      return errorResponse(res, 'User with this email already exists in this organization', 409);
     }
     
     // Hash password and generate email verification token (same as before)
@@ -161,7 +177,7 @@ const register = async (req, res) => {
       // ==========================================
       // CREATE USER WITH ENHANCED VERIFICATION FIELDS
       // ==========================================
-      
+
       const user = await prismaTransaction.user.create({
         data: {
           // Basic information (same as before)
@@ -170,22 +186,25 @@ const register = async (req, res) => {
           fullName,
           emailVerifyToken,
           role: 'USER',
-          
+
           // Enhanced batch information
-          batch: finalPassoutYear,           // Keep for backward compatibility  
+          batch: finalPassoutYear,           // Keep for backward compatibility
           admissionYear: finalAdmissionYear, // User's actual admission year
           passoutYear: finalPassoutYear,     // User's actual passout year
-          
+
           // ==========================================
           // NEW: ALUMNI VERIFICATION FIELDS
           // ==========================================
           isAlumniVerified: false,      // Not verified yet
           pendingVerification: true,    // Awaiting admin approval
           isRejected: false,           // Not rejected
-          
+
           // Serial ID generated immediately during registration
           serialId: serialId,
-          serialCounter: counter
+          serialCounter: counter,
+
+          // Multi-tenant support: associate user with organization (required)
+          organizationId: tenantId,
         },
         select: {
           id: true,
@@ -214,23 +233,26 @@ const register = async (req, res) => {
     await sendNewRegistrationNotifications(result);
     
     // ==========================================
-    // SEND VERIFICATION EMAIL
+    // SEND VERIFICATION EMAIL (TENANT-AWARE)
     // ==========================================
-    
+
     try {
       const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/verify-email?token=${emailVerifyToken}&email=${encodeURIComponent(result.email)}`;
-      
-      if (emailManager.isInitialized) {
-        const emailService = emailManager.getService();
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
+
+      // Use tenant-aware email service
+      const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+      if (emailService) {
         await emailService.sendVerificationEmail({
           to: result.email,
           name: result.fullName,
-          verificationLink: verificationLink
+          verificationLink: verificationLink,
+          organizationName: organizationName
         });
-        console.log('✅ Registration verification email sent to:', result.email);
+        // Email sent successfully
       } else {
-        console.log('📧 Email system not initialized. Verification token:', emailVerifyToken);
-        console.log('🔗 Verification link would be:', verificationLink);
+        // Email system not initialized - token available in database
       }
     } catch (emailError) {
       console.error('Registration email sending error:', emailError);
@@ -293,16 +315,64 @@ const register = async (req, res) => {
 // ==========================================
 
 const login = async (req, res) => {
-  const { email, password } = req.body;
-  
+  const { email, password, organizationId: requestedOrgId } = req.body;
+
   if (!email || !password) {
     return errorResponse(res, 'Email and password are required', 400);
   }
-  
+
   try {
-    // Find user with enhanced verification fields
-    const user = await prisma.user.findUnique({
+    // ==========================================
+    // MULTI-ORG: Check which organizations have this email
+    // ==========================================
+    const usersWithEmail = await prisma.user.findMany({
       where: { email: email.toLowerCase() },
+      select: {
+        id: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
+      }
+    });
+
+    // If no users found with this email
+    if (usersWithEmail.length === 0) {
+      return errorResponse(res, 'Invalid email or password', 401);
+    }
+
+    // If multiple organizations and no org specified, return org list
+    if (usersWithEmail.length > 1 && !requestedOrgId && !getTenantId(req)) {
+      return successResponse(res, {
+        multipleOrganizations: true,
+        organizations: usersWithEmail.map(u => ({
+          id: u.organization.id,
+          name: u.organization.name,
+          tenantCode: u.organization.tenantCode,
+          logoUrl: u.organization.logoUrl,
+          // Add proxy URL for logo since R2 URLs are not publicly accessible
+          logoProxyUrl: u.organization.logoUrl ? `/api/organizations/${u.organization.id}/files/logo` : null
+        })),
+        message: 'Please select an organization to continue'
+      }, 'Multiple organizations found', 200);
+    }
+
+    // Determine which organization to use
+    const targetOrgId = requestedOrgId || getTenantId(req) || usersWithEmail[0].organizationId;
+
+    // Find user in the specific organization (composite unique)
+    const user = await prisma.user.findUnique({
+      where: {
+        user_email_org_unique: {
+          email: email.toLowerCase(),
+          organizationId: targetOrgId
+        }
+      },
       select: {
         id: true,
         email: true,
@@ -317,19 +387,31 @@ const login = async (req, res) => {
         isActive: true,
         isEmailVerified: true,
         emailVerifyToken: true, // Added for auto-sending verification emails
-        
+
         // NEW: Alumni verification fields
         isAlumniVerified: true,
         pendingVerification: true,
         isRejected: true,
         rejectionReason: true,
-        
+
         serialId: true,
         deactivatedAt: true,
+
+        // MULTI-ORG: Include organization info
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
       },
     });
-    
+
     if (!user) {
+      // User not found in this specific organization
       return errorResponse(res, 'Invalid email or password', 401);
     }
     
@@ -406,16 +488,19 @@ const login = async (req, res) => {
         
         // Create verification link
         const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
-        
-        // Send verification email with correct parameters
-        const emailService = emailManager.getService();
+        const tenantCode = getTenantCode(req);
+        const organizationName = getOrganizationName(req);
+
+        // Send verification email with tenant-aware service
+        const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
         await emailService.sendVerificationEmail({
           to: user.email,
           name: user.fullName,
-          verificationLink: verificationLink
+          verificationLink: verificationLink,
+          organizationName: organizationName
         });
-        
-        console.log(`✅ Auto-sent verification email to ${user.email} during login attempt`);
+
+        console.log(`✅ Auto-sent verification email to ${user.email} during login attempt (Tenant: ${tenantCode || 'default'})`);
         
         // Log the auto-send activity
         await prisma.activityLog.create({
@@ -956,18 +1041,69 @@ const changePassword = async (req, res) => {
 };
 
 const forgotPassword = async (req, res) => {
-  const { email } = req.body;
-  
+  const { email, organizationId: requestedOrgId } = req.body;
+
   if (!email) {
     return errorResponse(res, 'Email is required', 400);
   }
-  
+
   try {
-    const user = await prisma.user.findUnique({
+    // ==========================================
+    // MULTI-ORG: Check which organizations have this email
+    // ==========================================
+    const usersWithEmail = await prisma.user.findMany({
       where: { email: email.toLowerCase() },
-      select: { id: true, email: true, fullName: true, isActive: true }
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
+      }
     });
-    
+
+    // If no users found with this email - don't reveal for security
+    if (usersWithEmail.length === 0) {
+      return successResponse(res, null, 'If an account with that email exists, a password reset link has been sent.');
+    }
+
+    // If multiple organizations and no org specified, return org list
+    if (usersWithEmail.length > 1 && !requestedOrgId && !getTenantId(req)) {
+      return successResponse(res, {
+        multipleOrganizations: true,
+        organizations: usersWithEmail.filter(u => u.isActive).map(u => ({
+          id: u.organization.id,
+          name: u.organization.name,
+          tenantCode: u.organization.tenantCode,
+          logoUrl: u.organization.logoUrl,
+          logoProxyUrl: u.organization.logoUrl ? `/api/organizations/${u.organization.id}/files/logo` : null
+        })),
+        message: 'Please select an organization to reset password'
+      }, 'Multiple organizations found', 200);
+    }
+
+    // Determine which organization to use
+    const targetOrgId = requestedOrgId || getTenantId(req) || usersWithEmail[0].organizationId;
+
+    // Find user in the specific organization
+    const user = await prisma.user.findUnique({
+      where: {
+        user_email_org_unique: {
+          email: email.toLowerCase(),
+          organizationId: targetOrgId
+        }
+      },
+      select: { id: true, email: true, fullName: true, isActive: true, organizationId: true }
+    });
+
     if (!user || !user.isActive) {
       // Don't reveal if email exists or not for security
       return successResponse(res, null, 'If an account with that email exists, a password reset link has been sent.');
@@ -1000,22 +1136,24 @@ const forgotPassword = async (req, res) => {
       },
     });
     
-    // Send password reset email
+    // Send password reset email (TENANT-AWARE)
     try {
       const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
-      
-      if (emailManager.isInitialized) {
-        const emailService = emailManager.getService();
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
+
+      const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+      if (emailService) {
         await emailService.sendPasswordResetEmail({
           to: user.email,
           name: user.fullName,
           resetLink: resetLink,
-          expiryHours: 1
+          expiryHours: 1,
+          organizationName: organizationName
         });
-        console.log('✅ Password reset email sent to:', user.email);
+        // Password reset email sent successfully
       } else {
-        console.log('📧 Email system not initialized. Reset token:', resetToken);
-        console.log('🔗 Reset link would be:', resetLink);
+        // Email system not initialized - token available in database
       }
     } catch (emailError) {
       console.error('Email sending error:', emailError);
@@ -1199,14 +1337,17 @@ const verifyEmail = async (req, res) => {
 };
 
 const resendVerificationEmail = async (req, res) => {
-  const { email } = req.body;
-  
+  const { email, organizationId: requestedOrgId } = req.body;
+
   if (!email) {
     return errorResponse(res, 'Email is required', 400);
   }
-  
+
   try {
-    const user = await prisma.user.findUnique({
+    // ==========================================
+    // MULTI-ORG: Check which organizations have this email
+    // ==========================================
+    const usersWithEmail = await prisma.user.findMany({
       where: { email: email.toLowerCase() },
       select: {
         id: true,
@@ -1214,15 +1355,66 @@ const resendVerificationEmail = async (req, res) => {
         fullName: true,
         isActive: true,
         isEmailVerified: true,
-        emailVerifyToken: true
+        emailVerifyToken: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
       }
     });
-    
+
+    // If no users found - don't reveal for security
+    if (usersWithEmail.length === 0) {
+      return successResponse(res, null, 'If an account with that email exists, a verification email has been sent.');
+    }
+
+    // If multiple organizations and no org specified, return org list
+    if (usersWithEmail.length > 1 && !requestedOrgId && !getTenantId(req)) {
+      return successResponse(res, {
+        multipleOrganizations: true,
+        organizations: usersWithEmail.filter(u => u.isActive && !u.isEmailVerified).map(u => ({
+          id: u.organization.id,
+          name: u.organization.name,
+          tenantCode: u.organization.tenantCode,
+          logoUrl: u.organization.logoUrl,
+          logoProxyUrl: u.organization.logoUrl ? `/api/organizations/${u.organization.id}/files/logo` : null
+        })),
+        message: 'Please select an organization to resend verification'
+      }, 'Multiple organizations found', 200);
+    }
+
+    // Determine which organization to use
+    const targetOrgId = requestedOrgId || getTenantId(req) || usersWithEmail[0].organizationId;
+
+    // Find user in the specific organization
+    const user = await prisma.user.findUnique({
+      where: {
+        user_email_org_unique: {
+          email: email.toLowerCase(),
+          organizationId: targetOrgId
+        }
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        isEmailVerified: true,
+        emailVerifyToken: true,
+        organizationId: true
+      }
+    });
+
     if (!user || !user.isActive) {
       // Don't reveal if email exists for security
       return successResponse(res, null, 'If an account with that email exists, a verification email has been sent.');
     }
-    
+
     if (user.isEmailVerified) {
       return successResponse(res, null, 'Email is already verified.');
     }
@@ -1237,27 +1429,29 @@ const resendVerificationEmail = async (req, res) => {
       });
     }
     
-    // Send verification email
+    // Send verification email (TENANT-AWARE)
     try {
       const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
-      
-      if (emailManager.isInitialized) {
-        const emailService = emailManager.getService();
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
+
+      const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+      if (emailService) {
         await emailService.sendVerificationEmail({
           to: user.email,
           name: user.fullName,
-          verificationLink: verificationLink
+          verificationLink: verificationLink,
+          organizationName: organizationName
         });
-        console.log('✅ Verification email sent to:', user.email);
+        // Verification email sent successfully
       } else {
-        console.log('📧 Email system not initialized. Verification token:', verificationToken);
-        console.log('🔗 Verification link would be:', verificationLink);
+        // Email system not initialized - token available in database
       }
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       // Don't fail the request if email fails
     }
-    
+
     // Log the resend request
     await prisma.activityLog.create({
       data: {
@@ -1282,38 +1476,43 @@ const resendVerificationEmail = async (req, res) => {
 
 const testEmail = async (req, res) => {
   const { email } = req.body;
-  
+
   if (!email) {
     return errorResponse(res, 'Email is required for testing', 400);
   }
-  
+
   try {
     console.log('🧪 Testing email system...');
-    
-    // Check if email manager is initialized
-    if (!emailManager.isInitialized) {
-      console.log('❌ Email manager not initialized');
+    const tenantCode = getTenantCode(req);
+    const organizationName = getOrganizationName(req);
+
+    // Get tenant-aware email service
+    const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+
+    if (!emailService) {
+      console.log('❌ Email service not available');
       return errorResponse(res, 'Email system not initialized', 500, {
         initialized: false,
+        tenant: tenantCode || 'default',
         suggestions: [
-          'Check Gmail credentials in .env file',
+          'Check email credentials in .env file or tenant config',
           'Ensure GMAIL_USER and GMAIL_APP_PASSWORD are set',
           'Verify app password is correct (no spaces)',
           'Check server logs for initialization errors'
         ]
       });
     }
-    
-    console.log('✅ Email manager is initialized');
-    
+
+    console.log(`✅ Email service initialized for tenant: ${tenantCode || 'default'}`);
+
     // Test connection
-    const emailService = emailManager.getService();
     const testResult = await emailService.testEmailConfig();
-    
+
     if (!testResult.success) {
       console.log('❌ Email connection test failed:', testResult.error);
       return errorResponse(res, 'Email connection test failed', 500, {
         connectionTest: testResult,
+        tenant: tenantCode || 'default',
         suggestions: [
           'Check Gmail app password',
           'Enable 2-factor authentication on Gmail',
@@ -1321,22 +1520,24 @@ const testEmail = async (req, res) => {
         ]
       });
     }
-    
+
     console.log('✅ Email connection test passed');
-    
+
     // Send test verification email
     const testResult2 = await emailService.sendVerificationEmail({
       to: email,
       name: 'Test User',
-      verificationLink: 'https://example.com/test-verification-link'
+      verificationLink: 'https://example.com/test-verification-link',
+      organizationName: organizationName
     });
-    
+
     if (testResult2.success) {
       console.log('✅ Test email sent successfully');
       return successResponse(res, {
         emailSent: true,
         testResult: testResult2,
-        connectionTest: testResult
+        connectionTest: testResult,
+        tenant: tenantCode || 'default'
       }, 'Test email sent successfully! Check your inbox.');
     } else {
       console.log('❌ Test email failed:', testResult2.error);
@@ -1345,7 +1546,7 @@ const testEmail = async (req, res) => {
         connectionTest: testResult
       });
     }
-    
+
   } catch (error) {
     console.error('❌ Email test error:', error);
     return errorResponse(res, 'Email test failed', 500, {
@@ -1356,12 +1557,494 @@ const testEmail = async (req, res) => {
 };
 
 // ==========================================
+// ACCOUNT DEACTIVATION
+// ==========================================
+
+/**
+ * Deactivate user's own account
+ * POST /api/auth/deactivate-account
+ * Access: Authenticated user
+ */
+const deactivateAccount = async (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return errorResponse(res, 'Password is required to confirm deactivation', 400);
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, email: true, fullName: true, passwordHash: true }
+    });
+
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      return errorResponse(res, 'Incorrect password', 401);
+    }
+
+    // Deactivate the account
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: false,
+        deactivatedAt: new Date()
+      }
+    });
+
+    // Log the deactivation
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'account_deactivated_by_user',
+        details: {
+          email: user.email,
+          deactivatedAt: new Date().toISOString(),
+          selfDeactivated: true
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+    });
+
+    return successResponse(res, null, 'Account deactivated successfully. You can reactivate anytime.');
+
+  } catch (error) {
+    console.error('Deactivate account error:', error);
+    return errorResponse(res, 'Failed to deactivate account', 500);
+  }
+};
+
+/**
+ * Request reactivation OTP
+ * POST /api/auth/request-reactivation
+ * Access: Public (for deactivated users)
+ */
+const requestReactivation = async (req, res) => {
+  const { email, organizationId: requestedOrgId } = req.body;
+
+  if (!email) {
+    return errorResponse(res, 'Email is required', 400);
+  }
+
+  try {
+    // ==========================================
+    // MULTI-ORG: Check which organizations have this email
+    // ==========================================
+    const usersWithEmail = await prisma.user.findMany({
+      where: { email: email.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        deactivatedAt: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
+      }
+    });
+
+    // If no users found - don't reveal
+    if (usersWithEmail.length === 0) {
+      return successResponse(res, null, 'If your account exists, a reactivation code has been sent to your email.');
+    }
+
+    // Filter only deactivated users for org selection
+    const deactivatedUsers = usersWithEmail.filter(u => !u.isActive);
+
+    // If multiple organizations with deactivated accounts and no org specified, return org list
+    if (deactivatedUsers.length > 1 && !requestedOrgId && !getTenantId(req)) {
+      return successResponse(res, {
+        multipleOrganizations: true,
+        organizations: deactivatedUsers.map(u => ({
+          id: u.organization.id,
+          name: u.organization.name,
+          tenantCode: u.organization.tenantCode,
+          logoUrl: u.organization.logoUrl,
+          logoProxyUrl: u.organization.logoUrl ? `/api/organizations/${u.organization.id}/files/logo` : null
+        })),
+        message: 'Please select an organization to reactivate account'
+      }, 'Multiple organizations found', 200);
+    }
+
+    // Determine which organization to use
+    const targetOrgId = requestedOrgId || getTenantId(req) || (deactivatedUsers.length > 0 ? deactivatedUsers[0].organizationId : usersWithEmail[0].organizationId);
+
+    // Find user in the specific organization
+    const user = await prisma.user.findUnique({
+      where: {
+        user_email_org_unique: {
+          email: email.toLowerCase(),
+          organizationId: targetOrgId
+        }
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        deactivatedAt: true,
+        organizationId: true
+      }
+    });
+
+    if (!user) {
+      // Don't reveal if email exists
+      return successResponse(res, null, 'If your account exists, a reactivation code has been sent to your email.');
+    }
+
+    // Check if account is actually deactivated
+    if (user.isActive) {
+      return errorResponse(res, 'This account is already active. You can login normally.', 400);
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Store OTP in database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: otp, // Reusing this field for OTP
+        passwordResetExpires: otpExpiry
+      }
+    });
+
+    // Send OTP email
+    try {
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
+      const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+
+      if (emailService) {
+        await emailService.sendReactivationOtpEmail({
+          to: user.email,
+          name: user.fullName,
+          otp: otp,
+          expiryMinutes: 15,
+          organizationName: organizationName
+        });
+        console.log(`✅ Reactivation OTP sent to: ${user.email}`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send reactivation OTP email:', emailError);
+    }
+
+    // Log the request
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'reactivation_otp_requested',
+        details: {
+          email: user.email,
+          requestedAt: new Date().toISOString()
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+    });
+
+    return successResponse(res, null, 'If your account exists, a reactivation code has been sent to your email.');
+
+  } catch (error) {
+    console.error('Request reactivation error:', error);
+    return errorResponse(res, 'Failed to process reactivation request', 500);
+  }
+};
+
+/**
+ * Verify reactivation OTP and reactivate account
+ * POST /api/auth/verify-reactivation
+ * Access: Public
+ */
+const verifyReactivation = async (req, res) => {
+  const { email, otp, organizationId: requestedOrgId } = req.body;
+
+  if (!email || !otp) {
+    return errorResponse(res, 'Email and OTP are required', 400);
+  }
+
+  try {
+    // Build where clause - include organizationId if provided
+    const whereClause = {
+      email: email.toLowerCase(),
+      passwordResetToken: otp,
+      passwordResetExpires: {
+        gt: new Date()
+      }
+    };
+
+    // If org specified, add to filter
+    const targetOrgId = requestedOrgId || getTenantId(req);
+    if (targetOrgId) {
+      whereClause.organizationId = targetOrgId;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: whereClause,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        role: true,
+        batch: true,
+        isAlumniVerified: true,
+        pendingVerification: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return errorResponse(res, 'Invalid or expired OTP', 400);
+    }
+
+    // Reactivate the account
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: true,
+        deactivatedAt: null,
+        passwordResetToken: null,
+        passwordResetExpires: null
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        batch: true,
+        isAlumniVerified: true,
+        pendingVerification: true,
+        isActive: true
+      }
+    });
+
+    // Generate tokens for auto-login
+    const { accessToken, refreshToken } = generateTokens(updatedUser.id);
+
+    // Log the reactivation
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'account_reactivated',
+        details: {
+          email: user.email,
+          reactivatedAt: new Date().toISOString()
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+    });
+
+    return successResponse(res, {
+      user: updatedUser,
+      tokens: { accessToken, refreshToken }
+    }, 'Account reactivated successfully! Welcome back.');
+
+  } catch (error) {
+    console.error('Verify reactivation error:', error);
+    return errorResponse(res, 'Failed to verify reactivation', 500);
+  }
+};
+
+// ==========================================
+// MULTI-ORG: Get organizations by email
+// ==========================================
+
+/**
+ * Get organizations associated with an email address
+ * POST /api/auth/organizations-by-email
+ * Access: Public
+ * Used by frontend to show org selector when user has accounts in multiple orgs
+ */
+const getOrganizationsByEmail = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return errorResponse(res, 'Email is required', 400);
+  }
+
+  try {
+    const usersWithEmail = await prisma.user.findMany({
+      where: {
+        email: email.toLowerCase(),
+        isActive: true
+      },
+      select: {
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            tenantCode: true,
+            logoUrl: true
+          }
+        }
+      }
+    });
+
+    if (usersWithEmail.length === 0) {
+      // For security, return empty list instead of error
+      return successResponse(res, {
+        organizations: [],
+        multipleOrganizations: false
+      }, 'No organizations found');
+    }
+
+    // Remove duplicates (in case of data issues) and add proxy URL for logos
+    const uniqueOrgs = usersWithEmail.reduce((acc, user) => {
+      if (!acc.find(o => o.id === user.organization.id)) {
+        acc.push({
+          ...user.organization,
+          // Add proxy URL for logo since R2 URLs are not publicly accessible
+          logoProxyUrl: user.organization.logoUrl ? `/api/organizations/${user.organization.id}/files/logo` : null
+        });
+      }
+      return acc;
+    }, []);
+
+    return successResponse(res, {
+      organizations: uniqueOrgs,
+      multipleOrganizations: uniqueOrgs.length > 1
+    }, uniqueOrgs.length > 1 ? 'Multiple organizations found' : 'Organization found');
+
+  } catch (error) {
+    console.error('Get organizations by email error:', error);
+    return errorResponse(res, 'Failed to fetch organizations', 500);
+  }
+};
+
+// ==========================================
+// MULTI-ORG: Get all organizations (for new users)
+// ==========================================
+
+/**
+ * Get all active organizations
+ * GET /api/auth/organizations
+ * Access: Public
+ * Used by frontend when email doesn't exist in any org (new user needs to pick org for registration)
+ */
+const getAllOrganizations = async (req, res) => {
+  try {
+    const organizations = await prisma.organization.findMany({
+      where: {
+        isActive: true,
+        // Filter out developer/internal organizations from public list
+        // These orgs are for platform management and should not appear in signup flow
+        NOT: {
+          tenantCode: { in: ['LOCAL-DEV', 'DEVELOPER', 'INTERNAL'] }
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        tenantCode: true,
+        logoUrl: true,
+        description: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    // Add proxy URL for logos since R2 URLs are not publicly accessible
+    const orgsWithProxyUrls = organizations.map(org => ({
+      ...org,
+      logoProxyUrl: org.logoUrl ? `/api/organizations/${org.id}/files/logo` : null
+    }));
+
+    return successResponse(res, {
+      organizations: orgsWithProxyUrls,
+      count: organizations.length
+    }, 'Organizations retrieved successfully');
+
+  } catch (error) {
+    console.error('Get all organizations error:', error);
+    return errorResponse(res, 'Failed to fetch organizations', 500);
+  }
+};
+
+/**
+ * Get organization by tenant code
+ * GET /api/auth/organization-by-code/:code
+ * Access: Public
+ * Used by frontend for manual org code entry (e.g., LOCAL-DEV for developers)
+ */
+const getOrganizationByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    if (!code) {
+      return errorResponse(res, 'Organization code is required', 400);
+    }
+
+    const organization = await prisma.organization.findFirst({
+      where: {
+        tenantCode: {
+          equals: code.toUpperCase(),
+          mode: 'insensitive'
+        },
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        shortName: true,
+        tenantCode: true,
+        logoUrl: true,
+        description: true,
+        isActive: true
+      }
+    });
+
+    if (!organization) {
+      return errorResponse(res, 'Organization not found', 404);
+    }
+
+    // Add proxy URL for logo since R2 URLs are not publicly accessible
+    const orgWithProxyUrl = {
+      ...organization,
+      logoProxyUrl: organization.logoUrl ? `/api/organizations/${organization.id}/files/logo` : null
+    };
+
+    return successResponse(res, {
+      organization: orgWithProxyUrl
+    }, 'Organization retrieved successfully');
+
+  } catch (error) {
+    console.error('Get organization by code error:', error);
+    return errorResponse(res, 'Failed to fetch organization', 500);
+  }
+};
+
+// ==========================================
 // EXPORTS
 // ==========================================
 
 module.exports = {
   register,                    // ✅ UPDATED
-  login,                       // ✅ UPDATED  
+  login,                       // ✅ UPDATED
   getCurrentUser,              // ✅ UPDATED
   refreshToken,                // ✅ IMPLEMENTED
   logout,                      // ✅ IMPLEMENTED
@@ -1372,7 +2055,17 @@ module.exports = {
   verifyEmail,                 // ✅ IMPLEMENTED
   resendVerificationEmail,     // ✅ NEW
   testEmail,                   // ✅ TEST FUNCTION
-  
-  // NEW EXPORTS
+
+  // Account management
+  deactivateAccount,           // ✅ NEW
+  requestReactivation,         // ✅ NEW
+  verifyReactivation,          // ✅ NEW
+
+  // Multi-org support
+  getOrganizationsByEmail,     // ✅ NEW - For org selector
+  getAllOrganizations,         // ✅ NEW - For new user registration
+  getOrganizationByCode,       // ✅ NEW - For manual org code entry
+
+  // Helper exports
   sendVerificationNotifications // ✅ NEW (will be used by verification controller)
 };

@@ -35,6 +35,12 @@ class EmailService {
 				"merchandise-confirmation.html",
 				"birthday-wish.html",
 				"festival-wish.html",
+				// Subscription templates
+				"subscription-payment-request.html",
+				"subscription-activated.html",
+				"subscription-renewed.html",
+				"subscription-expiring.html",
+				"subscription-expired.html",
 			];
 
 			for (const fileName of templateFiles) {
@@ -513,9 +519,9 @@ class EmailService {
 	/**
 	 * Send email verification email
 	 */
-	async sendVerificationEmail({ to, name, verificationLink }) {
+	async sendVerificationEmail({ to, name, verificationLink, organizationName = 'Alumni Portal' }) {
 		try {
-			const subject = 'Verify Your Email - Alumni Portal';
+			const subject = `Verify Your Email - ${organizationName}`;
 			const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -535,31 +541,34 @@ class EmailService {
         .button:active { color: #ffffff !important; }
         .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
         .warning { background: #fef3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+        .brand-footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+        .brand-footer a { color: #6b7280; text-decoration: none; font-size: 11px; }
+        .brand-footer a:hover { color: #3b82f6; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎓 Welcome to Alumni Portal!</h1>
+            <h1>🎓 Welcome to ${organizationName}!</h1>
         </div>
-        
+
         <div class="content">
             <h2>Hello ${name}!</h2>
-            <p>Thank you for registering with Alumni Portal. To complete your registration and start connecting with your fellow alumni, please verify your email address.</p>
-            
+            <p>Thank you for registering with <strong>${organizationName}</strong>. To complete your registration and start connecting with your fellow alumni, please verify your email address.</p>
+
             <div style="text-align: center; margin: 30px 0;">
                 <a href="${verificationLink}" class="button" style="display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0;">Verify My Email</a>
             </div>
-            
+
             <div class="warning">
                 <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons. If the link doesn't work, you can request a new one from the login page.
             </div>
-            
+
             <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
             <p style="word-break: break-all; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;">
                 ${verificationLink}
             </p>
-            
+
             <p><strong>What happens next?</strong></p>
             <ul>
                 <li>✅ Verify your email address (you're here!)</li>
@@ -567,11 +576,16 @@ class EmailService {
                 <li>🎉 Start connecting with your batch mates and alumni</li>
             </ul>
         </div>
-        
+
         <div class="footer">
-            <p>This email was sent to ${to} because you registered for Alumni Portal.</p>
+            <p>This email was sent to ${to} because you registered for ${organizationName}.</p>
             <p>If you didn't sign up for this account, you can safely ignore this email.</p>
-            <p>© ${new Date().getFullYear()} Alumni Portal. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+            <div class="brand-footer">
+                <p style="margin: 10px 0 0 0;">
+                    <a href="https://digikite.in" target="_blank">Powered by Guild by Digikite</a>
+                </p>
+            </div>
         </div>
     </div>
 </body>
@@ -596,9 +610,9 @@ class EmailService {
 	/**
 	 * Send password reset email
 	 */
-	async sendPasswordResetEmail({ to, name, resetLink, expiryHours = 1 }) {
+	async sendPasswordResetEmail({ to, name, resetLink, expiryHours = 1, organizationName = 'Alumni Portal' }) {
 		try {
-			const subject = 'Reset Your Password - Alumni Portal';
+			const subject = `Reset Your Password - ${organizationName}`;
 			const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -617,36 +631,40 @@ class EmailService {
         .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
         .warning { background: #fee2e2; padding: 15px; border-radius: 5px; border-left: 4px solid #ef4444; margin: 20px 0; }
         .security-notice { background: #f0f9ff; padding: 15px; border-radius: 5px; border-left: 4px solid #3b82f6; margin: 20px 0; }
+        .brand-footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+        .brand-footer a { color: #6b7280; text-decoration: none; font-size: 11px; }
+        .brand-footer a:hover { color: #3b82f6; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🔐 Password Reset Request</h1>
+            <p style="color: #6b7280; margin-top: 10px;">${organizationName}</p>
         </div>
-        
+
         <div class="content">
             <h2>Hello ${name},</h2>
-            <p>We received a request to reset your password for your Alumni Portal account. If you made this request, click the button below to reset your password.</p>
-            
+            <p>We received a request to reset your password for your <strong>${organizationName}</strong> account. If you made this request, click the button below to reset your password.</p>
+
             <div style="text-align: center; margin: 30px 0;">
-                <a href="${resetLink}" class="button">Reset My Password</a>
+                <a href="${resetLink}" class="button" style="display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #1e40af, #3b82f6); color: white !important; text-decoration: none; border-radius: 8px; font-weight: bold;">Reset My Password</a>
             </div>
-            
+
             <div class="warning">
                 <strong>⚠️ Security Notice:</strong> This password reset link will expire in ${expiryHours} hour${expiryHours > 1 ? 's' : ''} for your security. You'll need to request a new link if it expires.
             </div>
-            
+
             <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
             <p style="word-break: break-all; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;">
                 ${resetLink}
             </p>
-            
+
             <div class="security-notice">
                 <strong>🛡️ Didn't request this?</strong>
                 <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged, and no action is needed.</p>
             </div>
-            
+
             <p><strong>Security Tips:</strong></p>
             <ul>
                 <li>🔒 Choose a strong, unique password</li>
@@ -655,11 +673,16 @@ class EmailService {
                 <li>🔄 Log out of shared devices after use</li>
             </ul>
         </div>
-        
+
         <div class="footer">
             <p>This email was sent to ${to} because a password reset was requested.</p>
             <p>If you're having trouble, please contact our support team.</p>
-            <p>© ${new Date().getFullYear()} Alumni Portal. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+            <div class="brand-footer">
+                <p style="margin: 10px 0 0 0;">
+                    <a href="https://digikite.in" target="_blank">Powered by Guild by Digikite</a>
+                </p>
+            </div>
         </div>
     </div>
 </body>
@@ -678,6 +701,93 @@ class EmailService {
 			return result;
 		} catch (error) {
 			console.error('Password reset email error:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send reactivation OTP email
+	 */
+	async sendReactivationOtpEmail({ to, name, otp, expiryMinutes = 15, organizationName = 'Alumni Portal' }) {
+		try {
+			const subject = `${otp} - Your Account Reactivation Code - ${organizationName}`;
+			const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reactivate Your Account</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #10b981; margin: 0; font-size: 28px; }
+        .content { margin-bottom: 30px; }
+        .otp-box { text-align: center; margin: 30px 0; }
+        .otp-code { display: inline-block; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e40af; background: linear-gradient(135deg, #dbeafe, #e0e7ff); padding: 20px 40px; border-radius: 12px; border: 2px dashed #3b82f6; }
+        .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        .info-box { background: #f0fdf4; padding: 15px; border-radius: 5px; border-left: 4px solid #10b981; margin: 20px 0; }
+        .warning-box { background: #fef3c7; padding: 15px; border-radius: 5px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+        .brand-footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+        .brand-footer a { color: #6b7280; text-decoration: none; font-size: 11px; }
+        .brand-footer a:hover { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔓 Reactivate Your Account</h1>
+            <p style="color: #6b7280; margin-top: 10px;">${organizationName}</p>
+        </div>
+
+        <div class="content">
+            <h2>Welcome back, ${name}!</h2>
+            <p>We received a request to reactivate your <strong>${organizationName}</strong> account. Use the code below to complete the reactivation process.</p>
+
+            <div class="otp-box">
+                <div class="otp-code">${otp}</div>
+            </div>
+
+            <div class="info-box">
+                <strong>✨ What happens next?</strong>
+                <p style="margin: 10px 0 0 0;">Once you enter this code, your account will be reactivated and you'll be logged in automatically.</p>
+            </div>
+
+            <div class="warning-box">
+                <strong>⏰ Code expires in ${expiryMinutes} minutes</strong>
+                <p style="margin: 10px 0 0 0;">For security reasons, this code will expire soon. If it expires, you can request a new one.</p>
+            </div>
+
+            <p>If you didn't request this, you can safely ignore this email. Your account will remain deactivated.</p>
+        </div>
+
+        <div class="footer">
+            <p>This email was sent to ${to}</p>
+            <p>© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+            <div class="brand-footer">
+                <p style="margin: 10px 0 0 0;">
+                    <a href="https://digikite.in" target="_blank">Powered by Guild by Digikite</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+
+			const result = await this.provider.sendEmail(to, subject, htmlContent, { name, otp });
+
+			// Log email activity
+			await this.logEmailActivity('system', 'reactivation_otp_email', {
+				recipientEmail: to,
+				recipientName: name,
+				expiryMinutes,
+				emailResult: result,
+			});
+
+			return result;
+		} catch (error) {
+			console.error('Reactivation OTP email error:', error);
 			throw error;
 		}
 	}
@@ -1044,17 +1154,245 @@ class EmailService {
 	lightenColor(color, percent) {
 		// Remove # if present
 		color = color.replace('#', '');
-		
+
 		// Convert to RGB
 		const num = parseInt(color, 16);
 		const amt = Math.round(2.55 * percent);
 		const R = (num >> 16) + amt;
 		const G = (num >> 8 & 0x00FF) + amt;
 		const B = (num & 0x0000FF) + amt;
-		
-		return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + 
-			(G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + 
+
+		return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+			(G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
 			(B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+	}
+
+	// ==========================================
+	// SUBSCRIPTION EMAIL METHODS
+	// ==========================================
+
+	/**
+	 * Send subscription payment request email to Super Admins
+	 */
+	async sendSubscriptionPaymentRequest(adminEmail, adminName, paymentRequestData) {
+		try {
+			const template = this.compiledTemplates.get("subscription-payment-request");
+			if (!template) {
+				console.error("Subscription payment request template not found");
+				return null;
+			}
+
+			const templateData = {
+				adminName,
+				organizationName: paymentRequestData.organizationName,
+				requestType: paymentRequestData.requestType === 'PLAN_UPGRADE' ? 'Plan Upgrade' :
+				             paymentRequestData.requestType === 'RENEWAL' ? 'Subscription Renewal' : paymentRequestData.requestType,
+				currentPlan: paymentRequestData.currentPlan,
+				newPlan: paymentRequestData.newPlan || null,
+				billingCycle: paymentRequestData.billingCycle,
+				amount: paymentRequestData.amount.toLocaleString('en-IN'),
+				currency: '₹',
+				requestDate: new Date().toLocaleDateString('en-IN'),
+				dueDate: paymentRequestData.dueDate ? new Date(paymentRequestData.dueDate).toLocaleDateString('en-IN') : null,
+				requestNote: paymentRequestData.note,
+				dashboardUrl: `${process.env.FRONTEND_URL}/admin/subscription`,
+				year: new Date().getFullYear()
+			};
+
+			const htmlContent = template(templateData);
+			const subject = `💳 Subscription Payment Request - ${paymentRequestData.organizationName}`;
+
+			const result = await this.provider.sendEmail(adminEmail, subject, htmlContent, templateData);
+
+			await this.logEmailActivity('system', 'subscription_payment_request', {
+				recipientEmail: adminEmail,
+				organizationName: paymentRequestData.organizationName,
+				requestType: paymentRequestData.requestType,
+				amount: paymentRequestData.amount
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Subscription payment request email error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send subscription activated email
+	 */
+	async sendSubscriptionActivated(adminEmail, adminName, subscriptionData) {
+		try {
+			const template = this.compiledTemplates.get("subscription-activated");
+			if (!template) {
+				console.error("Subscription activated template not found");
+				return null;
+			}
+
+			const templateData = {
+				adminName,
+				organizationName: subscriptionData.organizationName,
+				planName: subscriptionData.planName,
+				billingCycle: subscriptionData.billingCycle,
+				amount: subscriptionData.amount.toLocaleString('en-IN'),
+				currency: '₹',
+				transactionId: subscriptionData.transactionId,
+				activationDate: new Date().toLocaleDateString('en-IN'),
+				expiryDate: new Date(subscriptionData.expiryDate).toLocaleDateString('en-IN'),
+				enabledFeatures: subscriptionData.enabledFeatures || [],
+				dashboardUrl: `${process.env.FRONTEND_URL}/admin/dashboard`,
+				year: new Date().getFullYear()
+			};
+
+			const htmlContent = template(templateData);
+			const subject = `🎉 Subscription Activated - ${subscriptionData.planName}`;
+
+			const result = await this.provider.sendEmail(adminEmail, subject, htmlContent, templateData);
+
+			await this.logEmailActivity('system', 'subscription_activated', {
+				recipientEmail: adminEmail,
+				organizationName: subscriptionData.organizationName,
+				planName: subscriptionData.planName
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Subscription activated email error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send subscription renewed email
+	 */
+	async sendSubscriptionRenewed(adminEmail, adminName, renewalData) {
+		try {
+			const template = this.compiledTemplates.get("subscription-renewed");
+			if (!template) {
+				console.error("Subscription renewed template not found");
+				return null;
+			}
+
+			const templateData = {
+				adminName,
+				organizationName: renewalData.organizationName,
+				planName: renewalData.planName,
+				billingCycle: renewalData.billingCycle,
+				amount: renewalData.amount.toLocaleString('en-IN'),
+				currency: '₹',
+				transactionId: renewalData.transactionId,
+				paymentDate: new Date().toLocaleDateString('en-IN'),
+				newExpiryDate: new Date(renewalData.newExpiryDate).toLocaleDateString('en-IN'),
+				invoiceUrl: renewalData.invoiceUrl || null,
+				dashboardUrl: `${process.env.FRONTEND_URL}/admin/subscription`,
+				year: new Date().getFullYear()
+			};
+
+			const htmlContent = template(templateData);
+			const subject = `✅ Subscription Renewed - ${renewalData.organizationName}`;
+
+			const result = await this.provider.sendEmail(adminEmail, subject, htmlContent, templateData);
+
+			await this.logEmailActivity('system', 'subscription_renewed', {
+				recipientEmail: adminEmail,
+				organizationName: renewalData.organizationName,
+				amount: renewalData.amount
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Subscription renewed email error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send subscription expiring soon email
+	 */
+	async sendSubscriptionExpiring(adminEmail, adminName, expiryData) {
+		try {
+			const template = this.compiledTemplates.get("subscription-expiring");
+			if (!template) {
+				console.error("Subscription expiring template not found");
+				return null;
+			}
+
+			const templateData = {
+				adminName,
+				organizationName: expiryData.organizationName,
+				planName: expiryData.planName,
+				daysRemaining: expiryData.daysRemaining,
+				expiryDate: new Date(expiryData.expiryDate).toLocaleDateString('en-IN'),
+				renewalAmount: expiryData.renewalAmount.toLocaleString('en-IN'),
+				currency: '₹',
+				renewUrl: `${process.env.FRONTEND_URL}/admin/subscription/renew`,
+				year: new Date().getFullYear()
+			};
+
+			const htmlContent = template(templateData);
+			const subject = `⚠️ Subscription Expiring in ${expiryData.daysRemaining} Days - ${expiryData.organizationName}`;
+
+			const result = await this.provider.sendEmail(adminEmail, subject, htmlContent, templateData);
+
+			await this.logEmailActivity('system', 'subscription_expiring', {
+				recipientEmail: adminEmail,
+				organizationName: expiryData.organizationName,
+				daysRemaining: expiryData.daysRemaining
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Subscription expiring email error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Send subscription expired email
+	 */
+	async sendSubscriptionExpired(adminEmail, adminName, expiredData) {
+		try {
+			const template = this.compiledTemplates.get("subscription-expired");
+			if (!template) {
+				console.error("Subscription expired template not found");
+				return null;
+			}
+
+			const templateData = {
+				adminName,
+				organizationName: expiredData.organizationName,
+				planName: expiredData.planName,
+				expiryDate: new Date(expiredData.expiryDate).toLocaleDateString('en-IN'),
+				gracePeriodDays: expiredData.gracePeriodDays || null,
+				gracePeriodEndDate: expiredData.gracePeriodEndDate ?
+					new Date(expiredData.gracePeriodEndDate).toLocaleDateString('en-IN') : null,
+				renewalAmount: expiredData.renewalAmount.toLocaleString('en-IN'),
+				currency: '₹',
+				restrictedFeatures: expiredData.restrictedFeatures || [
+					'Premium features',
+					'Advanced analytics',
+					'Extended storage',
+					'Priority support'
+				],
+				renewUrl: `${process.env.FRONTEND_URL}/admin/subscription/renew`,
+				year: new Date().getFullYear()
+			};
+
+			const htmlContent = template(templateData);
+			const subject = `🚨 Subscription Expired - ${expiredData.organizationName}`;
+
+			const result = await this.provider.sendEmail(adminEmail, subject, htmlContent, templateData);
+
+			await this.logEmailActivity('system', 'subscription_expired', {
+				recipientEmail: adminEmail,
+				organizationName: expiredData.organizationName
+			});
+
+			return result;
+		} catch (error) {
+			console.error("Subscription expired email error:", error);
+			throw error;
+		}
 	}
 }
 

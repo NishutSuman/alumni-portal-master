@@ -8,6 +8,7 @@ const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
 const SerialIdService = require('../../services/serialID.service');
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
+const { getTenantFilter, getOrganizationFilter } = require('../../utils/tenant.util');
 
 /**
  * Get organization details
@@ -15,12 +16,15 @@ const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
  */
 const getOrganizationDetails = async (req, res) => {
   try {
-    const cacheKey = 'public:organization:details';
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
+    const tenantCode = req.headers['x-tenant-code'] || 'default';
+    const cacheKey = `public:organization:details:${tenantCode}`;
     let organization = await CacheService.get(cacheKey);
-    
+
     if (!organization) {
       organization = await prisma.organization.findFirst({
-        where: { isActive: true },
+        where: { ...orgFilter, isActive: true },
         select: {
           id: true,
           name: true,
@@ -39,6 +43,13 @@ const getOrganizationDetails = async (req, res) => {
           twitterUrl: true,
           linkedinUrl: true,
           foundingMembers: true,
+          // About Organization fields
+          description: true,
+          mission: true,
+          vision: true,
+          presidentMessage: true,
+          secretaryMessage: true,
+          treasurerMessage: true,
           createdAt: true,
           updatedAt: true
         }
@@ -79,23 +90,29 @@ const getOrganizationDetails = async (req, res) => {
  */
 const getOrganizationDetailsAdmin = async (req, res) => {
   try {
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
+    // For User/Batch queries, use getTenantFilter which returns { organizationId: ... }
+    const tenantFilter = getTenantFilter(req);
+
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true },
+      where: { ...orgFilter, isActive: true },
       include: {
         lastUpdatedAdmin: {
-          select: { 
-            fullName: true, 
-            role: true 
+          select: {
+            fullName: true,
+            role: true
           }
         }
       }
     });
-    
+
     if (!organization) {
       // Get basic statistics even if no organization exists
+      // Note: Batch model is global (not tenant-scoped), so count all batches
       const [totalUsers, totalVerified, totalBatches] = await Promise.all([
-        prisma.user.count({ where: { isActive: true, role: 'USER' } }),
-        prisma.user.count({ where: { isActive: true, isAlumniVerified: true } }),
+        prisma.user.count({ where: { ...tenantFilter, isActive: true, role: 'USER' } }),
+        prisma.user.count({ where: { ...tenantFilter, isActive: true, isAlumniVerified: true } }),
         prisma.batch.count()
       ]);
       
@@ -113,9 +130,10 @@ const getOrganizationDetailsAdmin = async (req, res) => {
     }
     
     // Get additional statistics
+    // Note: Batch model is global (not tenant-scoped), so count all batches
     const [totalUsers, totalVerified, totalBatches] = await Promise.all([
-      prisma.user.count({ where: { isActive: true, role: 'USER' } }),
-      prisma.user.count({ where: { isActive: true, isAlumniVerified: true } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, role: 'USER' } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, isAlumniVerified: true } }),
       prisma.batch.count()
     ]);
     
@@ -159,7 +177,14 @@ const upsertOrganizationDetails = async (req, res) => {
       youtubeUrl,
       twitterUrl,
       linkedinUrl,
-      foundingMembers
+      foundingMembers,
+      // About Organization fields
+      description,
+      mission,
+      vision,
+      presidentMessage,
+      secretaryMessage,
+      treasurerMessage
     } = req.body;
     
     const { id: adminId, fullName: adminName } = req.user;
@@ -208,12 +233,14 @@ const upsertOrganizationDetails = async (req, res) => {
         return errorResponse(res, 'Invalid founding members format', 400);
       }
     }
-    
-    // Check if organization already exists
+
+    // Check if organization already exists for this tenant
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const existingOrg = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     const organization = await prisma.$transaction(async (tx) => {
       let result;
       
@@ -238,6 +265,13 @@ const upsertOrganizationDetails = async (req, res) => {
             twitterUrl: twitterUrl?.trim(),
             linkedinUrl: linkedinUrl?.trim(),
             foundingMembers: parsedFoundingMembers,
+            // About Organization fields
+            description: description?.trim(),
+            mission: mission?.trim(),
+            vision: vision?.trim(),
+            presidentMessage: presidentMessage?.trim(),
+            secretaryMessage: secretaryMessage?.trim(),
+            treasurerMessage: treasurerMessage?.trim(),
             lastUpdatedBy: adminId
           }
         });
@@ -279,6 +313,13 @@ const upsertOrganizationDetails = async (req, res) => {
             twitterUrl: twitterUrl?.trim(),
             linkedinUrl: linkedinUrl?.trim(),
             foundingMembers: parsedFoundingMembers,
+            // About Organization fields
+            description: description?.trim(),
+            mission: mission?.trim(),
+            vision: vision?.trim(),
+            presidentMessage: presidentMessage?.trim(),
+            secretaryMessage: secretaryMessage?.trim(),
+            treasurerMessage: treasurerMessage?.trim(),
             lastUpdatedBy: adminId,
             serialCounter: 0 // Start serial counter at 0
           }
@@ -347,12 +388,17 @@ const upsertOrganizationDetails = async (req, res) => {
  */
 const getOrganizationStats = async (req, res) => {
   try {
-    const cacheKey = 'admin:organization:stats';
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
+    // getTenantFilter for User/Batch queries (uses 'organizationId')
+    const tenantFilter = getTenantFilter(req);
+    const tenantCode = req.headers['x-tenant-code'] || 'default';
+    const cacheKey = `admin:organization:stats:${tenantCode}`;
     let stats = await CacheService.get(cacheKey);
-    
+
     if (!stats) {
       const organization = await prisma.organization.findFirst({
-        where: { isActive: true },
+        where: { ...orgFilter, isActive: true },
         select: {
           id: true,
           name: true,
@@ -382,46 +428,49 @@ const getOrganizationStats = async (req, res) => {
         newestBatch
       ] = await Promise.all([
         // User statistics
-        prisma.user.count({ 
-          where: { isActive: true, role: 'USER' } 
+        prisma.user.count({
+          where: { ...tenantFilter, isActive: true, role: 'USER' }
         }),
-        
-        prisma.user.count({ 
-          where: { isActive: true, isAlumniVerified: true } 
+
+        prisma.user.count({
+          where: { ...tenantFilter, isActive: true, isAlumniVerified: true }
         }),
-        
-        prisma.user.count({ 
-          where: { isActive: true, pendingVerification: true } 
+
+        prisma.user.count({
+          where: { ...tenantFilter, isActive: true, pendingVerification: true }
         }),
-        
-        prisma.user.count({ 
-          where: { isActive: true, isRejected: true } 
+
+        prisma.user.count({
+          where: { ...tenantFilter, isActive: true, isRejected: true }
         }),
-        
+
         // Batch statistics
-        prisma.batch.count(),
-        
-        prisma.batch.count({ 
-          where: { totalMembers: { gt: 0 } } 
+        prisma.batch.count({ where: tenantFilter }),
+
+        prisma.batch.count({
+          where: { ...tenantFilter, totalMembers: { gt: 0 } }
         }),
-        
+
         // Recent activity
         prisma.user.count({
           where: {
-            createdAt: { 
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+            ...tenantFilter,
+            createdAt: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             },
             role: 'USER'
           }
         }),
-        
+
         // Batch range
         prisma.batch.findFirst({
+          where: tenantFilter,
           orderBy: { year: 'asc' },
           select: { year: true, name: true }
         }),
-        
+
         prisma.batch.findFirst({
+          where: tenantFilter,
           orderBy: { year: 'desc' },
           select: { year: true, name: true }
         })
@@ -488,12 +537,14 @@ const initializeOrganization = async (req, res) => {
     } = req.body;
     
     const { id: adminId, fullName: adminName } = req.user;
-    
-    // Check if organization already exists
+
+    // Check if organization already exists for this tenant
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const existingOrg = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (existingOrg) {
       return errorResponse(res, 'Organization is already configured. Use update endpoint instead.', 409);
     }
@@ -574,15 +625,17 @@ const updateSocialLinks = async (req, res) => {
     } = req.body;
     
     const { id: adminId } = req.user;
-    
+
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (!organization) {
       return errorResponse(res, 'Organization not configured', 404);
     }
-    
+
     // URL validation helper
     const validateUrl = (url, platform) => {
       if (!url) return null;
@@ -677,12 +730,14 @@ const resetSerialCounter = async (req, res) => {
     if (newCounter < 0 || newCounter > 999999) {
       return errorResponse(res, 'New counter must be between 0 and 999999', 400);
     }
-    
+
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true },
+      where: { ...orgFilter, isActive: true },
       select: { id: true, serialCounter: true, name: true }
     });
-    
+
     if (!organization) {
       return errorResponse(res, 'Organization not configured', 404);
     }
@@ -765,16 +820,18 @@ const uploadOrganizationFiles = async (req, res) => {
     if (!cloudflareR2Service.isConfigured()) {
       return errorResponse(res, 'File storage (Cloudflare R2) is not configured. Please set up R2 environment variables: CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET_NAME, CLOUDFLARE_R2_PUBLIC_URL', 500);
     }
-    
-    // Get existing organization
+
+    // Get existing organization for this tenant
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const existingOrg = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (!existingOrg) {
       return errorResponse(res, 'Organization not found. Please initialize first.', 404);
     }
-    
+
     const uploadResults = {};
     const updateData = {};
     const oldFiles = {}; // For cleanup if upload fails
@@ -930,12 +987,14 @@ const uploadOrganizationLogo = async (req, res) => {
     if (!validation.isValid) {
       return errorResponse(res, `Logo validation failed: ${validation.errors.join(', ')}`, 400);
     }
-    
-    // Get existing organization
+
+    // Get existing organization for this tenant
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const existingOrg = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (!existingOrg) {
       return errorResponse(res, 'Organization not found. Please initialize first.', 404);
     }
@@ -1014,12 +1073,14 @@ const viewOrganizationFile = async (req, res) => {
     if (!fileUrl || !fileType) {
       return errorResponse(res, 'File URL and file type are required', 400);
     }
-    
-    // Verify the file belongs to this organization
+
+    // Verify the file belongs to this organization (with tenant filtering)
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (!organization) {
       return errorResponse(res, 'Organization not found', 404);
     }
@@ -1084,12 +1145,14 @@ const deleteOrganizationFile = async (req, res) => {
     if (!fileType || !['logo', 'bylaw', 'certificate'].includes(fileType)) {
       return errorResponse(res, 'Invalid file type. Must be logo, bylaw, or certificate', 400);
     }
-    
-    // Get current organization
+
+    // Get current organization for this tenant
+    // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
+    const orgFilter = getOrganizationFilter(req);
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...orgFilter, isActive: true }
     });
-    
+
     if (!organization) {
       return errorResponse(res, 'Organization not found', 404);
     }

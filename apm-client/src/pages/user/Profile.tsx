@@ -1712,15 +1712,9 @@ const Profile: React.FC = () => {
       const formData = new FormData()
       formData.append('profileImage', file)
 
-      console.log('🔍 Uploading file:', file.name, file.type, file.size)
-      console.log('🔍 Using plain fetch (like organization logo upload)')
-
       // Use plain fetch instead of RTK Query (like organization logo upload)
-      console.log('🔍 Making fetch request with FormData')
-      console.log('🔍 Auth token exists:', !!auth?.token)
-
       const response = await fetch(
-        'http://localhost:3000/api/users/profile-picture',
+        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture`,
         {
           method: 'PUT',
           headers: {
@@ -1730,16 +1724,12 @@ const Profile: React.FC = () => {
         }
       )
 
-      console.log('🔍 Response status:', response.status)
-      console.log('🔍 Response headers:', [...response.headers.entries()])
-
       const result = await response.json()
 
       if (!response.ok) {
         throw new Error(result.message || 'Upload failed')
       }
 
-      console.log('✅ Profile picture uploaded successfully:', result)
       alert(
         profile.profileImage
           ? 'Profile picture replaced successfully!'
@@ -2055,17 +2045,17 @@ const Profile: React.FC = () => {
       {/* Header Section - Similar to Keka Design */}
       <div className="relative">
         {/* Background Banner */}
-        <div className="min-h-[400px] sm:min-h-0 sm:h-56 md:h-64 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 relative flex items-end justify-center sm:justify-start">
+        <div className="sm:h-48 md:h-56 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 relative flex items-center sm:items-end justify-center sm:justify-start">
           <div className="absolute inset-0 bg-black bg-opacity-20"></div>
 
           {/* Profile Info Overlay */}
-          <div className="relative w-full pb-6 px-4 sm:px-6 md:px-8 flex flex-col sm:flex-row items-center sm:items-end space-y-4 sm:space-y-0 sm:space-x-6 md:space-x-8 z-10">
+          <div className="relative w-full py-6 sm:pb-6 sm:pt-0 px-4 sm:px-6 md:px-8 flex flex-col sm:flex-row items-center sm:items-end space-y-4 sm:space-y-0 sm:space-x-6 md:space-x-8 z-10">
             {/* Profile Picture with Upload/Delete Menu */}
             <div className="relative flex-shrink-0 self-center sm:self-auto">
               <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full overflow-hidden bg-white shadow-xl border-4 border-white">
                 {profile.profileImage ? (
                   <img
-                    src={`http://localhost:3000/api/users/profile-picture/${profile.id}?t=${imageTimestamp}`}
+                    src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${profile.id}?t=${imageTimestamp}`}
                     alt={profile.fullName}
                     className="w-full h-full object-cover"
                     onError={(e) => {

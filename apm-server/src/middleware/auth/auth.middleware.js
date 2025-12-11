@@ -8,17 +8,17 @@ const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
         message: 'Access token required',
       });
     }
-    
+
     const decoded = jwt.verify(token, config.jwt.secret);
-    
-    // Get user from database
+
+    // Get user from database with organization info
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -28,23 +28,48 @@ const authenticateToken = async (req, res, next) => {
         role: true,
         isActive: true,
         deactivatedAt: true,
+        organizationId: true, // Multi-tenant support
       },
     });
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'User not found',
       });
     }
-    
+
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
         message: 'Account is deactivated',
       });
     }
-    
+
+    // Multi-tenant validation
+    // DEVELOPER role can access any tenant (cross-tenant access)
+    if (user.role !== 'DEVELOPER' && req.tenant) {
+      // Validate user belongs to the requested tenant
+      if (user.organizationId && user.organizationId !== req.tenant.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. User does not belong to this organization.',
+          code: 'TENANT_MISMATCH',
+        });
+      }
+    }
+
+    // Check maintenance mode - allow SUPER_ADMIN and DEVELOPER to bypass
+    if (req.tenantMaintenanceMode &&
+        user.role !== 'SUPER_ADMIN' &&
+        user.role !== 'DEVELOPER') {
+      return res.status(503).json({
+        success: false,
+        message: req.tenantMaintenanceMessage || 'System is under maintenance. Please try again later.',
+        code: 'MAINTENANCE_MODE',
+      });
+    }
+
     req.user = user;
     next();
   } catch (error) {
@@ -54,14 +79,14 @@ const authenticateToken = async (req, res, next) => {
         message: 'Invalid token',
       });
     }
-    
+
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
         message: 'Token expired',
       });
     }
-    
+
     console.error('Auth middleware error:', error);
     return res.status(500).json({
       success: false,

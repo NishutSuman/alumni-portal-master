@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
 const BloodCompatibilityService = require('../../services/lifeLink/blood-compatibility.service');
+const { getTenantFilter, getTenantData, withTenant } = require('../../utils/tenant.util');
 
 const prisma = new PrismaClient();
 
@@ -160,8 +161,10 @@ const getLifeLinkDashboard = async (req, res) => {
     const { bloodGroup, eligibleOnly = 'false', limit = 20, page = 1, city } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Build where clause
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
     const where = {
+      ...tenantFilter,
       isBloodDonor: true,
       isActive: true,
       bloodGroup: { not: null }
@@ -224,8 +227,8 @@ const getLifeLinkDashboard = async (req, res) => {
       donorCards = donorCards.filter(donor => donor.eligibility.isEligible);
     }
 
-    // Get blood group statistics
-    const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats();
+    // Get blood group statistics with tenant filter
+    const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats(getTenantFilter(req));
 
 
     const responseData = {
@@ -268,8 +271,8 @@ const getLifeLinkDashboard = async (req, res) => {
  */
 const getBloodGroupStats = async (req, res) => {
   try {
-    // Get blood group statistics from the service
-    const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats();
+    // Get blood group statistics from the service with tenant filter
+    const bloodGroupStats = await BloodCompatibilityService.getBloodGroupStats(getTenantFilter(req));
 
     const responseData = {
       stats: bloodGroupStats,
@@ -304,7 +307,10 @@ const getMyDonations = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const donations = await prisma.bloodDonation.findMany({
-      where: { donorId: userId },
+      where: {
+        donorId: userId,
+        ...getTenantFilter(req)
+      },
       select: {
         id: true,
         donationDate: true,
@@ -319,7 +325,10 @@ const getMyDonations = async (req, res) => {
     });
 
     const totalCount = await prisma.bloodDonation.count({
-      where: { donorId: userId }
+      where: {
+        donorId: userId,
+        ...getTenantFilter(req)
+      }
     });
 
     const user = await prisma.user.findUnique({
@@ -492,7 +501,7 @@ const createRequisition = async (req, res) => {
     const requiredBy = new Date(requiredByDate);
     const expiresAt = requiredBy < defaultExpiry ? requiredBy : defaultExpiry;
 
-    // Create requisition in transaction
+    // Create requisition in transaction with tenant data
     const result = await prisma.$transaction(async (tx) => {
       const requisition = await tx.bloodRequisition.create({
         data: {
@@ -509,7 +518,8 @@ const createRequisition = async (req, res) => {
           additionalNotes,
           requiredByDate: requiredBy,
           expiresAt,
-          allowContactReveal: allowContactReveal !== false
+          allowContactReveal: allowContactReveal !== false,
+          ...getTenantData(req)
         }
       });
 
@@ -566,7 +576,8 @@ const searchDonors = async (req, res) => {
     const availableDonors = await BloodCompatibilityService.findAvailableDonors(
       requiredBloodGroup,
       location,
-      parseInt(limit)
+      parseInt(limit),
+      getTenantFilter(req)
     );
 
     // Cache the result
@@ -604,9 +615,12 @@ const notifySelectedDonors = async (req, res) => {
     const userId = req.user.id;
     const { donorIds, requisitionId, customMessage } = req.body;
 
-    // Get requisition details
-    const requisition = await prisma.bloodRequisition.findUnique({
-      where: { id: requisitionId },
+    // Get requisition details with tenant verification
+    const requisition = await prisma.bloodRequisition.findFirst({
+      where: {
+        id: requisitionId,
+        ...getTenantFilter(req)
+      },
       include: {
         requester: {
           select: {
@@ -629,12 +643,13 @@ const notifySelectedDonors = async (req, res) => {
       return errorResponse(res, 'Can only notify donors for active requisitions', 400);
     }
 
-    // Verify donor IDs exist and are eligible
+    // Verify donor IDs exist and are eligible with tenant filter
     const donorUsers = await prisma.user.findMany({
       where: {
         id: { in: donorIds },
         isBloodDonor: true,
-        isActive: true
+        isActive: true,
+        ...getTenantFilter(req)
       },
       select: {
         id: true,
@@ -699,9 +714,12 @@ const notifyAllDonors = async (req, res) => {
     const userId = req.user.id;
     const { requisitionId, customMessage } = req.body;
 
-    // Get requisition details
-    const requisition = await prisma.bloodRequisition.findUnique({
-      where: { id: requisitionId }
+    // Get requisition details with tenant verification
+    const requisition = await prisma.bloodRequisition.findFirst({
+      where: {
+        id: requisitionId,
+        ...getTenantFilter(req)
+      }
     });
 
     if (!requisition) {
@@ -716,11 +734,12 @@ const notifyAllDonors = async (req, res) => {
       return errorResponse(res, 'Can only broadcast for active requisitions', 400);
     }
 
-    // Find all available donors in the area
+    // Find all available donors in the area with tenant filter
     const availableDonors = await BloodCompatibilityService.findAvailableDonors(
       requisition.requiredBloodGroup,
       requisition.location,
-      200 // Increased limit for broadcast
+      200, // Increased limit for broadcast
+      getTenantFilter(req)
     );
 
     if (availableDonors.length === 0) {
@@ -804,10 +823,11 @@ const discoverRequisitions = async (req, res) => {
       ? BloodCompatibilityService.getCompatibleRecipients(donor.bloodGroup)
       : [];
 
-    // Build where clause - show ALL active requisitions to ALL users
+    // Build where clause - show active requisitions with tenant filter
     const where = {
       status: 'ACTIVE',
-      expiresAt: { gte: new Date() }
+      expiresAt: { gte: new Date() },
+      ...getTenantFilter(req)
     };
 
     if (urgencyLevel) where.urgencyLevel = urgencyLevel;
@@ -1122,6 +1142,7 @@ const markNotificationRead = async (req, res) => {
     const { notificationId } = req.params;
     const userId = req.user.id;
 
+    // Note: donorNotification doesn't have organizationId, verified through donorId check
     const notification = await prisma.donorNotification.findUnique({
       where: { id: notificationId },
       select: { donorId: true, readAt: true }
@@ -1173,7 +1194,10 @@ const getMyRequisitions = async (req, res) => {
     const { status, page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = { requesterId: userId };
+    const where = {
+      requesterId: userId,
+      ...getTenantFilter(req)
+    };
     if (status) where.status = status;
 
     const requisitions = await prisma.bloodRequisition.findMany({
@@ -1252,8 +1276,11 @@ const getRequisition = async (req, res) => {
   try {
     const { requisitionId } = req.params;
 
-    const requisition = await prisma.bloodRequisition.findUnique({
-      where: { id: requisitionId },
+    const requisition = await prisma.bloodRequisition.findFirst({
+      where: {
+        id: requisitionId,
+        ...getTenantFilter(req)
+      },
       include: {
         requester: {
           select: {
@@ -1364,6 +1391,18 @@ const updateRequisitionStatus = async (req, res) => {
       return errorResponse(res, 'Invalid status. Must be one of: ' + validStatuses.join(', '), 400);
     }
 
+    // Verify requisition belongs to tenant before update
+    const existingRequisition = await prisma.bloodRequisition.findFirst({
+      where: {
+        id: requisitionId,
+        ...getTenantFilter(req)
+      }
+    });
+
+    if (!existingRequisition) {
+      return errorResponse(res, 'Blood requisition not found', 404);
+    }
+
     const updatedRequisition = await prisma.bloodRequisition.update({
       where: { id: requisitionId },
       data: {
@@ -1414,7 +1453,10 @@ const getWillingDonors = async (req, res) => {
     const willingDonors = await prisma.donorResponse.findMany({
       where: {
         requisitionId,
-        response: 'WILLING'
+        response: 'WILLING',
+        requisition: {
+          ...getTenantFilter(req)
+        }
       },
       include: {
         donor: {
@@ -1490,9 +1532,14 @@ const respondToNotification = async (req, res) => {
     const { response, message } = req.body;
     const userId = req.user.id;
 
-    // Get notification with requisition and requester details
-    const notification = await prisma.donorNotification.findUnique({
-      where: { id: notificationId },
+    // Get notification with requisition and requester details - verify tenant
+    const notification = await prisma.donorNotification.findFirst({
+      where: {
+        id: notificationId,
+        requisition: {
+          ...getTenantFilter(req)
+        }
+      },
       include: {
         requisition: {
           include: {
@@ -1545,7 +1592,7 @@ const respondToNotification = async (req, res) => {
                               notification.requisition.allowContactReveal && 
                               user.showPhone;
 
-    // Create or update donor response
+    // Create or update donor response with tenant data
     const donorResponse = await prisma.donorResponse.upsert({
       where: {
         donorId_requisitionId: {
@@ -1567,7 +1614,8 @@ const respondToNotification = async (req, res) => {
         message,
         respondedAt: new Date(),
         contactPhone: shouldRevealContact ? user.whatsappNumber : null,
-        isContactRevealed: shouldRevealContact
+        isContactRevealed: shouldRevealContact,
+        ...getTenantData(req)
       }
     });
 
@@ -1658,9 +1706,12 @@ const respondToRequisition = async (req, res) => {
     const { response, message } = req.body;
     const userId = req.user.id;
 
-    // Get requisition details with requester info
-    const requisition = await prisma.bloodRequisition.findUnique({
-      where: { id: requisitionId },
+    // Get requisition details with requester info - verify tenant
+    const requisition = await prisma.bloodRequisition.findFirst({
+      where: {
+        id: requisitionId,
+        ...getTenantFilter(req)
+      },
       include: {
         requester: {
           select: {
@@ -1719,7 +1770,7 @@ const respondToRequisition = async (req, res) => {
                               requisition.allowContactReveal && 
                               user.showPhone;
 
-    // Create donor response
+    // Create donor response with tenant data
     const donorResponse = await prisma.donorResponse.create({
       data: {
         donorId: userId,
@@ -1728,7 +1779,8 @@ const respondToRequisition = async (req, res) => {
         message,
         respondedAt: new Date(),
         contactPhone: shouldRevealContact ? user.whatsappNumber : null,
-        isContactRevealed: shouldRevealContact
+        isContactRevealed: shouldRevealContact,
+        ...getTenantData(req)
       }
     });
 

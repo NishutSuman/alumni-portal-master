@@ -1,57 +1,65 @@
 // src/middleware/notification.cache.middleware.js
 // Notification Cache Middleware - Following established patterns
+// Multi-Tenant Aware Implementation
 
 const { CacheService } = require('../../config/redis');
 const { successResponse } = require('../../utils/response');
 
 // ============================================
-// CACHE KEY GENERATORS
+// CACHE KEY GENERATORS (Tenant-Aware)
 // ============================================
 
-const generateUserNotificationsCacheKey = (userId, filters = {}) => {
-  const { 
-    type, 
-    status, 
-    priority, 
+const generateUserNotificationsCacheKey = (userId, filters = {}, tenantId = null) => {
+  const {
+    type,
+    status,
+    priority,
     unreadOnly = false,
-    page = 1, 
-    limit = 20 
+    page = 1,
+    limit = 20
   } = filters;
-  
-  return `notifications:user:${userId}:${type || 'all'}:${status || 'all'}:${priority || 'all'}:unread:${unreadOnly}:page:${page}:limit:${limit}`;
+
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:user:${userId}:${type || 'all'}:${status || 'all'}:${priority || 'all'}:unread:${unreadOnly}:page:${page}:limit:${limit}`;
 };
 
-const generateUnreadCountCacheKey = (userId) => {
-  return `notifications:unread:${userId}`;
+const generateUnreadCountCacheKey = (userId, tenantId = null) => {
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:unread:${userId}`;
 };
 
-const generateNotificationDetailsCacheKey = (notificationId) => {
-  return `notifications:details:${notificationId}`;
+const generateNotificationDetailsCacheKey = (notificationId, tenantId = null) => {
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:details:${notificationId}`;
 };
 
-const generateNotificationAnalyticsCacheKey = (filters = {}) => {
+const generateNotificationAnalyticsCacheKey = (filters = {}, tenantId = null) => {
   const { fromDate, toDate } = filters;
   const dateKey = `${fromDate || 'all'}-${toDate || 'all'}`;
-  return `notifications:analytics:${dateKey}`;
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:analytics:${dateKey}`;
 };
 
-const generateUserPushTokensCacheKey = (userId) => {
-  return `notifications:tokens:${userId}`;
+const generateUserPushTokensCacheKey = (userId, tenantId = null) => {
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:tokens:${userId}`;
 };
 
-const generateSystemStatsCacheKey = () => {
-  return 'notifications:system:stats';
+const generateSystemStatsCacheKey = (tenantId = null) => {
+  const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+  return `${tenantPrefix}notifications:system:stats`;
 };
 
 // ============================================
 // CACHING MIDDLEWARE FUNCTIONS
 // ============================================
 
-// Cache user notifications list
+// Cache user notifications list (Tenant-Aware)
 const cacheUserNotifications = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const cacheKey = generateUserNotificationsCacheKey(userId, req.query);
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateUserNotificationsCacheKey(userId, req.query, tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -73,11 +81,12 @@ const cacheUserNotifications = async (req, res, next) => {
   }
 };
 
-// Cache unread count
+// Cache unread count (Tenant-Aware)
 const cacheUnreadCount = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const cacheKey = generateUnreadCountCacheKey(userId);
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateUnreadCountCacheKey(userId, tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -99,11 +108,12 @@ const cacheUnreadCount = async (req, res, next) => {
   }
 };
 
-// Cache notification details
+// Cache notification details (Tenant-Aware)
 const cacheNotificationDetails = async (req, res, next) => {
   try {
     const { notificationId } = req.params;
-    const cacheKey = generateNotificationDetailsCacheKey(notificationId);
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateNotificationDetailsCacheKey(notificationId, tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -125,10 +135,11 @@ const cacheNotificationDetails = async (req, res, next) => {
   }
 };
 
-// Cache notification analytics
+// Cache notification analytics (Tenant-Aware)
 const cacheNotificationAnalytics = async (req, res, next) => {
   try {
-    const cacheKey = generateNotificationAnalyticsCacheKey(req.query);
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateNotificationAnalyticsCacheKey(req.query, tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -150,11 +161,12 @@ const cacheNotificationAnalytics = async (req, res, next) => {
   }
 };
 
-// Cache user push tokens
+// Cache user push tokens (Tenant-Aware)
 const cacheUserPushTokens = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const cacheKey = generateUserPushTokensCacheKey(userId);
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateUserPushTokensCacheKey(userId, tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -176,10 +188,11 @@ const cacheUserPushTokens = async (req, res, next) => {
   }
 };
 
-// Cache system notification stats
+// Cache system notification stats (Tenant-Aware)
 const cacheSystemStats = async (req, res, next) => {
   try {
-    const cacheKey = generateSystemStatsCacheKey();
+    const tenantId = req.tenant?.id || null;
+    const cacheKey = generateSystemStatsCacheKey(tenantId);
     const cached = await CacheService.get(cacheKey);
 
     if (cached) {
@@ -225,37 +238,40 @@ const autoInvalidateNotificationCaches = async (req, res, next) => {
   next();
 };
 
-// Invalidate all notification-related caches for specific patterns
+// Invalidate all notification-related caches for specific patterns (Tenant-Aware)
 const invalidateNotificationCaches = async (req) => {
   try {
     const { notificationId } = req.params || {};
     const userId = req.user?.id;
+    const tenantId = req.tenant?.id || null;
     const { recipientIds = [] } = req.body || {};
-    
+
+    const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+
     // Base patterns that always get invalidated
     const patterns = [
-      'notifications:system:stats',
-      'notifications:analytics*'
+      `${tenantPrefix}notifications:system:stats`,
+      `${tenantPrefix}notifications:analytics*`
     ];
 
     // User-specific patterns
     if (userId) {
-      patterns.push(`notifications:user:${userId}*`);
-      patterns.push(`notifications:unread:${userId}`);
-      patterns.push(`notifications:tokens:${userId}`);
+      patterns.push(`${tenantPrefix}notifications:user:${userId}*`);
+      patterns.push(`${tenantPrefix}notifications:unread:${userId}`);
+      patterns.push(`${tenantPrefix}notifications:tokens:${userId}`);
     }
 
     // Recipient-specific patterns (for sent notifications)
     if (recipientIds && recipientIds.length > 0) {
       recipientIds.forEach(recipientId => {
-        patterns.push(`notifications:user:${recipientId}*`);
-        patterns.push(`notifications:unread:${recipientId}`);
+        patterns.push(`${tenantPrefix}notifications:user:${recipientId}*`);
+        patterns.push(`${tenantPrefix}notifications:unread:${recipientId}`);
       });
     }
 
     // Notification-specific patterns
     if (notificationId) {
-      patterns.push(`notifications:details:${notificationId}`);
+      patterns.push(`${tenantPrefix}notifications:details:${notificationId}`);
     }
 
     // Delete cache keys by pattern
@@ -269,77 +285,81 @@ const invalidateNotificationCaches = async (req) => {
   }
 };
 
-// Invalidate user-specific notification caches
-const invalidateUserNotificationCaches = async (userId) => {
+// Invalidate user-specific notification caches (Tenant-Aware)
+const invalidateUserNotificationCaches = async (userId, tenantId = null) => {
   try {
+    const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
     const patterns = [
-      `notifications:user:${userId}*`,
-      `notifications:unread:${userId}`,
-      `notifications:tokens:${userId}`,
-      'notifications:system:stats' // System stats may change when user notifications change
+      `${tenantPrefix}notifications:user:${userId}*`,
+      `${tenantPrefix}notifications:unread:${userId}`,
+      `${tenantPrefix}notifications:tokens:${userId}`,
+      `${tenantPrefix}notifications:system:stats` // System stats may change when user notifications change
     ];
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated user notification caches for user: ${userId}`);
+    console.log(`Invalidated user notification caches for user: ${userId} (tenant: ${tenantId || 'all'})`);
   } catch (error) {
     console.error('User notification cache invalidation error:', error);
   }
 };
 
-// Invalidate multiple users' notification caches (for broadcast notifications)
-const invalidateMultipleUserCaches = async (userIds) => {
+// Invalidate multiple users' notification caches (for broadcast notifications) (Tenant-Aware)
+const invalidateMultipleUserCaches = async (userIds, tenantId = null) => {
   try {
-    const patterns = ['notifications:system:stats'];
-    
+    const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
+    const patterns = [`${tenantPrefix}notifications:system:stats`];
+
     userIds.forEach(userId => {
-      patterns.push(`notifications:user:${userId}*`);
-      patterns.push(`notifications:unread:${userId}`);
+      patterns.push(`${tenantPrefix}notifications:user:${userId}*`);
+      patterns.push(`${tenantPrefix}notifications:unread:${userId}`);
     });
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated notification caches for ${userIds.length} users`);
+    console.log(`Invalidated notification caches for ${userIds.length} users (tenant: ${tenantId || 'all'})`);
   } catch (error) {
     console.error('Multiple user cache invalidation error:', error);
   }
 };
 
-// Invalidate system-wide notification caches
-const invalidateSystemNotificationCaches = async () => {
+// Invalidate system-wide notification caches (Tenant-Aware)
+const invalidateSystemNotificationCaches = async (tenantId = null) => {
   try {
+    const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
     const patterns = [
-      'notifications:system:stats',
-      'notifications:analytics*',
-      'notifications:user:*' // Invalidate all user caches for system announcements
+      `${tenantPrefix}notifications:system:stats`,
+      `${tenantPrefix}notifications:analytics*`,
+      `${tenantPrefix}notifications:user:*` // Invalidate all user caches for system announcements
     ];
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log('Invalidated all system notification caches');
+    console.log(`Invalidated all system notification caches (tenant: ${tenantId || 'all'})`);
   } catch (error) {
     console.error('System notification cache invalidation error:', error);
   }
 };
 
-// Auto-invalidate caches after push token operations
+// Auto-invalidate caches after push token operations (Tenant-Aware)
 const autoInvalidatePushTokenCaches = async (req, res, next) => {
   const originalJson = res.json;
-  
+
   res.json = function(data) {
     originalJson.call(this, data);
-    
+
     setImmediate(async () => {
       try {
         const userId = req.user?.id;
+        const tenantId = req.tenant?.id || null;
         if (userId) {
-          await invalidateUserPushTokenCaches(userId);
+          await invalidateUserPushTokenCaches(userId, tenantId);
         }
       } catch (error) {
         console.error('Push token cache invalidation error:', error);
@@ -350,18 +370,19 @@ const autoInvalidatePushTokenCaches = async (req, res, next) => {
   next();
 };
 
-// Invalidate user push token caches
-const invalidateUserPushTokenCaches = async (userId) => {
+// Invalidate user push token caches (Tenant-Aware)
+const invalidateUserPushTokenCaches = async (userId, tenantId = null) => {
   try {
+    const tenantPrefix = tenantId ? `tenant:${tenantId}:` : '';
     const patterns = [
-      `notifications:tokens:${userId}`
+      `${tenantPrefix}notifications:tokens:${userId}`
     ];
 
     for (const pattern of patterns) {
       await CacheService.delPattern(pattern);
     }
 
-    console.log(`Invalidated push token caches for user: ${userId}`);
+    console.log(`Invalidated push token caches for user: ${userId} (tenant: ${tenantId || 'all'})`);
   } catch (error) {
     console.error('Push token cache invalidation error:', error);
   }

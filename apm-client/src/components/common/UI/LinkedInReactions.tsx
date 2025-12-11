@@ -125,34 +125,39 @@ const LinkedInReactions: React.FC<LinkedInReactionsProps> = ({
   return (
     <div className={`space-y-3 ${className}`}>
       {/* Top section: Reaction summary (LinkedIn style) */}
-      {totalReactions > 0 && (
+      {(totalReactions > 0 || commentCount > 0) && (
         <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-          <button 
-            onClick={() => setShowReactionsModal(true)}
-            className="flex items-center space-x-2 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
-          >
-            {/* Reaction emojis stack */}
-            <div className="flex -space-x-1">
-              {topReactions.map((reactionType, index) => (
-                <div
-                  key={reactionType}
-                  className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs border-2 border-white dark:border-gray-800"
-                  style={{ zIndex: topReactions.length - index }}
-                >
-                  {REACTION_CONFIG[reactionType].emoji}
-                </div>
-              ))}
-            </div>
-            
-            {/* LinkedIn-style reaction text */}
-            <span className="ml-1">
-              {getReactionText()}
-            </span>
-          </button>
+          {/* Reactions summary - left side */}
+          {totalReactions > 0 ? (
+            <button
+              onClick={() => setShowReactionsModal(true)}
+              className="flex items-center space-x-2 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
+            >
+              {/* Reaction emojis stack */}
+              <div className="flex -space-x-1">
+                {topReactions.map((reactionType, index) => (
+                  <div
+                    key={reactionType}
+                    className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs border-2 border-white dark:border-gray-800"
+                    style={{ zIndex: topReactions.length - index }}
+                  >
+                    {REACTION_CONFIG[reactionType].emoji}
+                  </div>
+                ))}
+              </div>
 
-          {/* Comments count */}
+              {/* LinkedIn-style reaction text */}
+              <span className="ml-1">
+                {getReactionText()}
+              </span>
+            </button>
+          ) : (
+            <div /> /* Empty placeholder for flex justify-between */
+          )}
+
+          {/* Comments count - right side */}
           {commentCount > 0 && (
-            <button 
+            <button
               onClick={onCommentClick}
               className="hover:text-gray-700 dark:hover:text-gray-300 hover:underline"
             >

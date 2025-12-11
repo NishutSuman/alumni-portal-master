@@ -2,6 +2,7 @@
 const GmailProvider = require('./GmailProvider');
 const SendGridProvider = require('./SendGridProvider');
 const ResendProvider = require('./ResendProvider');
+const MailerSendProvider = require('./MailerSendProvider');
 
 class EmailProviderFactory {
   static create(providerType, config) {
@@ -15,13 +16,16 @@ class EmailProviderFactory {
       case 'resend':
         return new ResendProvider(config);
 
+      case 'mailersend':
+        return new MailerSendProvider(config);
+
       default:
         throw new Error(`Unsupported email provider: ${providerType}`);
     }
   }
 
   static getAvailableProviders() {
-    return ['gmail', 'sendgrid', 'resend'];
+    return ['gmail', 'sendgrid', 'resend', 'mailersend'];
   }
 }
 
@@ -29,5 +33,6 @@ module.exports = {
   EmailProviderFactory,
   GmailProvider,
   SendGridProvider,
-  ResendProvider
+  ResendProvider,
+  MailerSendProvider
 };

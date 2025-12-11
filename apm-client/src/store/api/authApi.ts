@@ -4,13 +4,38 @@
 import { apiSlice } from './apiSlice'
 import type { User } from '../slices/authSlice'
 
+// Organization type for multi-org support
+export interface Organization {
+  id: string
+  name: string
+  shortName?: string
+  tenantCode: string
+  logoUrl?: string | null
+  logoProxyUrl?: string | null  // Proxy URL for accessing R2 logos via API
+  description?: string
+  isActive?: boolean
+}
+
 // Authentication request/response types
 export interface LoginRequest {
   email: string
   password: string
   rememberMe?: boolean
+  organizationId?: string  // For multi-org login
 }
 
+// Multi-org login response (when user has accounts in multiple orgs)
+export interface MultiOrgLoginResponse {
+  success: boolean
+  message: string
+  data: {
+    multipleOrganizations: true
+    organizations: Organization[]
+    message: string
+  }
+}
+
+// Standard login response
 export interface LoginResponse {
   success: boolean
   message: string
@@ -28,6 +53,23 @@ export interface LoginResponse {
       hasSerialId: boolean
       message: string
     }
+    // Multi-org case
+    multipleOrganizations?: boolean
+    organizations?: Organization[]
+  }
+}
+
+// Get organizations by email request/response
+export interface GetOrganizationsByEmailRequest {
+  email: string
+}
+
+export interface GetOrganizationsByEmailResponse {
+  success: boolean
+  message: string
+  data: {
+    organizations: Organization[]
+    multipleOrganizations: boolean
   }
 }
 
@@ -250,6 +292,77 @@ export const authApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Auth', 'User'],
     }),
+
+    // Self-deactivate account (user deactivates their own account)
+    deactivateAccount: builder.mutation<{ success: boolean; message: string }, { password: string }>({
+      query: ({ password }) => ({
+        url: '/auth/deactivate-account',
+        method: 'POST',
+        body: { password },
+      }),
+      invalidatesTags: ['Auth', 'User'],
+    }),
+
+    // Request reactivation OTP (for deactivated accounts)
+    requestReactivation: builder.mutation<{ success: boolean; message: string }, { email: string }>({
+      query: ({ email }) => ({
+        url: '/auth/request-reactivation',
+        method: 'POST',
+        body: { email },
+      }),
+    }),
+
+    // Verify reactivation OTP and reactivate account
+    verifyReactivation: builder.mutation<{
+      success: boolean;
+      message: string;
+      data: {
+        user: User;
+        tokens: {
+          accessToken: string;
+          refreshToken: string;
+        };
+      };
+    }, { email: string; otp: string; organizationId?: string }>({
+      query: ({ email, otp, organizationId }) => ({
+        url: '/auth/verify-reactivation',
+        method: 'POST',
+        body: { email, otp, organizationId },
+      }),
+      invalidatesTags: ['Auth', 'User'],
+    }),
+
+    // Get organizations by email (for multi-org login)
+    getOrganizationsByEmail: builder.mutation<GetOrganizationsByEmailResponse, GetOrganizationsByEmailRequest>({
+      query: ({ email }) => ({
+        url: '/auth/organizations-by-email',
+        method: 'POST',
+        body: { email },
+      }),
+    }),
+
+    // Get all organizations (for new users who need to pick org)
+    getAllOrganizations: builder.query<{
+      success: boolean
+      message: string
+      data: {
+        organizations: Organization[]
+        count: number
+      }
+    }, void>({
+      query: () => '/auth/organizations',
+    }),
+
+    // Get organization by code (for manual code entry)
+    getOrganizationByCode: builder.query<{
+      success: boolean
+      message: string
+      data: {
+        organization: Organization
+      }
+    }, string>({
+      query: (code) => `/auth/organization-by-code/${encodeURIComponent(code)}`,
+    }),
   }),
   overrideExisting: false,
 })
@@ -272,6 +385,14 @@ export const {
   useBulkVerifyUsersMutation,
   useUpdateUserRoleMutation,
   useToggleUserStatusMutation,
+  useDeactivateAccountMutation,
+  useRequestReactivationMutation,
+  useVerifyReactivationMutation,
+  useGetOrganizationsByEmailMutation,
+  useGetAllOrganizationsQuery,
+  useLazyGetAllOrganizationsQuery,
+  useGetOrganizationByCodeQuery,
+  useLazyGetOrganizationByCodeQuery,
 } = authApi
 
 // Export the enhanced api slice

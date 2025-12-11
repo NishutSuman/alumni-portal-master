@@ -166,7 +166,7 @@ export const AlumniIdentityCard: React.FC<AlumniIdentityCardProps> = ({
                     <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm border-2 border-white/50 flex items-center justify-center overflow-hidden">
                       {profile.profileImage ? (
                         <img
-                          src={`http://localhost:3000/api/users/profile-picture/${profile.id}?t=${Date.now()}`}
+                          src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${profile.id}?t=${Date.now()}`}
                           alt={profile.fullName}
                           className="w-full h-full object-cover rounded-full"
                           onError={(e) => {

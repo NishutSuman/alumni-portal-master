@@ -2,29 +2,36 @@
 const { CacheService } = require('../../config/redis');
 
 // ============================================
-// PHOTO CACHE KEYS
+// TENANT-AWARE PHOTO CACHE KEYS
 // ============================================
 
+/**
+ * Get tenant code from request for cache key namespacing
+ */
+function getTenantCode(req) {
+  return req.headers['x-tenant-code'] || 'default';
+}
+
 const PhotoCacheKeys = {
-  // Albums
-  ALBUMS_LIST: 'photos:albums:list',
-  ALBUM_DETAILS: (albumId) => `photos:album:${albumId}`,
-  ALBUM_PHOTOS: (albumId) => `photos:album:${albumId}:photos`,
-  ALBUM_STATS: (albumId) => `photos:album:${albumId}:stats`,
-  USER_ALBUMS: (userId) => `photos:user:${userId}:albums`,
-  
-  // Photos
-  PHOTO_DETAILS: (photoId) => `photos:photo:${photoId}`,
-  RECENT_PHOTOS: 'photos:recent',
-  PHOTO_SEARCH: (query) => `photos:search:${generateSearchKey(query)}`,
-  
-  // Statistics
-  PHOTOS_STATS: 'photos:stats',
-  USER_PHOTO_STATS: (userId) => `photos:user:${userId}:stats`,
-  
-  // Admin specific
-  ADMIN_ALBUMS_LIST: 'photos:admin:albums',
-  ADMIN_PHOTOS_LIST: 'photos:admin:photos'
+  // Albums (tenant-aware)
+  ALBUMS_LIST: (tenantCode) => `${tenantCode}:photos:albums:list`,
+  ALBUM_DETAILS: (tenantCode, albumId) => `${tenantCode}:photos:album:${albumId}`,
+  ALBUM_PHOTOS: (tenantCode, albumId) => `${tenantCode}:photos:album:${albumId}:photos`,
+  ALBUM_STATS: (tenantCode, albumId) => `${tenantCode}:photos:album:${albumId}:stats`,
+  USER_ALBUMS: (tenantCode, userId) => `${tenantCode}:photos:user:${userId}:albums`,
+
+  // Photos (tenant-aware)
+  PHOTO_DETAILS: (tenantCode, photoId) => `${tenantCode}:photos:photo:${photoId}`,
+  RECENT_PHOTOS: (tenantCode) => `${tenantCode}:photos:recent`,
+  PHOTO_SEARCH: (tenantCode, query) => `${tenantCode}:photos:search:${generateSearchKey(query)}`,
+
+  // Statistics (tenant-aware)
+  PHOTOS_STATS: (tenantCode) => `${tenantCode}:photos:stats`,
+  USER_PHOTO_STATS: (tenantCode, userId) => `${tenantCode}:photos:user:${userId}:stats`,
+
+  // Admin specific (tenant-aware)
+  ADMIN_ALBUMS_LIST: (tenantCode) => `${tenantCode}:photos:admin:albums`,
+  ADMIN_PHOTOS_LIST: (tenantCode) => `${tenantCode}:photos:admin:photos`
 };
 
 // ============================================
@@ -127,73 +134,75 @@ function createCacheMiddleware(keyGenerator, duration) {
 // CACHE MIDDLEWARE FUNCTIONS
 // ============================================
 
-// Albums caching
+// Albums caching (tenant-aware)
 const cacheAlbumsList = createCacheMiddleware(
   (req) => {
+    const tenantCode = getTenantCode(req);
     const { includeArchived } = req.query;
-    return `${PhotoCacheKeys.ALBUMS_LIST}:${includeArchived || 'false'}`;
+    return `${PhotoCacheKeys.ALBUMS_LIST(tenantCode)}:${includeArchived || 'false'}`;
   },
   CacheDurations.ALBUMS_LIST
 );
 
 const cacheAlbumDetails = createCacheMiddleware(
-  (req) => PhotoCacheKeys.ALBUM_DETAILS(req.params.albumId),
+  (req) => PhotoCacheKeys.ALBUM_DETAILS(getTenantCode(req), req.params.albumId),
   CacheDurations.ALBUM_DETAILS
 );
 
 const cacheAlbumPhotos = createCacheMiddleware(
-  (req) => PhotoCacheKeys.ALBUM_PHOTOS(req.params.albumId),
+  (req) => PhotoCacheKeys.ALBUM_PHOTOS(getTenantCode(req), req.params.albumId),
   CacheDurations.ALBUM_PHOTOS
 );
 
 const cacheAlbumStats = createCacheMiddleware(
-  (req) => PhotoCacheKeys.ALBUM_STATS(req.params.albumId),
+  (req) => PhotoCacheKeys.ALBUM_STATS(getTenantCode(req), req.params.albumId),
   CacheDurations.ALBUM_STATS
 );
 
 const cacheUserAlbums = createCacheMiddleware(
-  (req) => PhotoCacheKeys.USER_ALBUMS(req.user?.id || req.params.userId),
+  (req) => PhotoCacheKeys.USER_ALBUMS(getTenantCode(req), req.user?.id || req.params.userId),
   CacheDurations.ALBUMS_LIST
 );
 
-// Photos caching
+// Photos caching (tenant-aware)
 const cachePhotoDetails = createCacheMiddleware(
-  (req) => PhotoCacheKeys.PHOTO_DETAILS(req.params.photoId),
+  (req) => PhotoCacheKeys.PHOTO_DETAILS(getTenantCode(req), req.params.photoId),
   CacheDurations.PHOTO_DETAILS
 );
 
 const cacheRecentPhotos = createCacheMiddleware(
-  PhotoCacheKeys.RECENT_PHOTOS,
+  (req) => PhotoCacheKeys.RECENT_PHOTOS(getTenantCode(req)),
   CacheDurations.RECENT_PHOTOS
 );
 
 const cachePhotoSearch = createCacheMiddleware(
-  (req) => PhotoCacheKeys.PHOTO_SEARCH(req.query),
+  (req) => PhotoCacheKeys.PHOTO_SEARCH(getTenantCode(req), req.query),
   CacheDurations.SEARCH_RESULTS
 );
 
-// Statistics caching
+// Statistics caching (tenant-aware)
 const cachePhotosStats = createCacheMiddleware(
-  PhotoCacheKeys.PHOTOS_STATS,
+  (req) => PhotoCacheKeys.PHOTOS_STATS(getTenantCode(req)),
   CacheDurations.STATS
 );
 
 const cacheUserPhotoStats = createCacheMiddleware(
-  (req) => PhotoCacheKeys.USER_PHOTO_STATS(req.user?.id || req.params.userId),
+  (req) => PhotoCacheKeys.USER_PHOTO_STATS(getTenantCode(req), req.user?.id || req.params.userId),
   CacheDurations.STATS
 );
 
-// Admin caching
+// Admin caching (tenant-aware)
 const cacheAdminAlbumsList = createCacheMiddleware(
   (req) => {
+    const tenantCode = getTenantCode(req);
     const { includeArchived } = req.query;
-    return `${PhotoCacheKeys.ADMIN_ALBUMS_LIST}:${includeArchived || 'false'}`;
+    return `${PhotoCacheKeys.ADMIN_ALBUMS_LIST(tenantCode)}:${includeArchived || 'false'}`;
   },
   CacheDurations.ADMIN_LISTS
 );
 
 const cacheAdminPhotosList = createCacheMiddleware(
-  PhotoCacheKeys.ADMIN_PHOTOS_LIST,
+  (req) => PhotoCacheKeys.ADMIN_PHOTOS_LIST(getTenantCode(req)),
   CacheDurations.ADMIN_LISTS
 );
 
@@ -202,7 +211,7 @@ const cacheAdminPhotosList = createCacheMiddleware(
 // ============================================
 
 /**
- * Invalidate album-related caches
+ * Invalidate album-related caches (tenant-aware)
  */
 const autoInvalidateAlbumCaches = async (req, res, next) => {
   // Store original res.json
@@ -212,28 +221,29 @@ const autoInvalidateAlbumCaches = async (req, res, next) => {
     // Invalidate caches BEFORE sending response for successful operations (200 or 201 status codes)
     if (data.success !== false && (res.statusCode === 200 || res.statusCode === 201)) {
       try {
+        const tenantCode = getTenantCode(req);
         const { albumId } = req.params;
         const userId = req.user?.id;
 
         const cacheKeysToInvalidate = [
-          PhotoCacheKeys.ALBUMS_LIST,
-          PhotoCacheKeys.ADMIN_ALBUMS_LIST,
-          PhotoCacheKeys.PHOTOS_STATS,
-          PhotoCacheKeys.RECENT_PHOTOS
+          PhotoCacheKeys.ALBUMS_LIST(tenantCode),
+          PhotoCacheKeys.ADMIN_ALBUMS_LIST(tenantCode),
+          PhotoCacheKeys.PHOTOS_STATS(tenantCode),
+          PhotoCacheKeys.RECENT_PHOTOS(tenantCode)
         ];
 
         if (albumId) {
           cacheKeysToInvalidate.push(
-            PhotoCacheKeys.ALBUM_DETAILS(albumId),
-            PhotoCacheKeys.ALBUM_PHOTOS(albumId),
-            PhotoCacheKeys.ALBUM_STATS(albumId)
+            PhotoCacheKeys.ALBUM_DETAILS(tenantCode, albumId),
+            PhotoCacheKeys.ALBUM_PHOTOS(tenantCode, albumId),
+            PhotoCacheKeys.ALBUM_STATS(tenantCode, albumId)
           );
         }
 
         if (userId) {
           cacheKeysToInvalidate.push(
-            PhotoCacheKeys.USER_ALBUMS(userId),
-            PhotoCacheKeys.USER_PHOTO_STATS(userId)
+            PhotoCacheKeys.USER_ALBUMS(tenantCode, userId),
+            PhotoCacheKeys.USER_PHOTO_STATS(tenantCode, userId)
           );
         }
 
@@ -241,7 +251,7 @@ const autoInvalidateAlbumCaches = async (req, res, next) => {
         for (const key of cacheKeysToInvalidate) {
           await CacheService.del(key);
         }
-        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} album cache keys`);
+        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} album cache keys for tenant ${tenantCode}`);
       } catch (error) {
         console.error('Album cache invalidation error:', error);
       }
@@ -254,7 +264,7 @@ const autoInvalidateAlbumCaches = async (req, res, next) => {
 };
 
 /**
- * Invalidate photo-related caches
+ * Invalidate photo-related caches (tenant-aware)
  */
 const autoInvalidatePhotoCaches = async (req, res, next) => {
   // Store original res.json
@@ -264,42 +274,43 @@ const autoInvalidatePhotoCaches = async (req, res, next) => {
     // Invalidate caches BEFORE sending response for successful operations (200 or 201 status codes)
     if (data.success !== false && (res.statusCode === 200 || res.statusCode === 201)) {
       try {
+        const tenantCode = getTenantCode(req);
         const { photoId, albumId } = req.params;
         const userId = req.user?.id;
 
         const cacheKeysToInvalidate = [
-          PhotoCacheKeys.RECENT_PHOTOS,
-          PhotoCacheKeys.PHOTOS_STATS,
-          PhotoCacheKeys.ADMIN_PHOTOS_LIST
+          PhotoCacheKeys.RECENT_PHOTOS(tenantCode),
+          PhotoCacheKeys.PHOTOS_STATS(tenantCode),
+          PhotoCacheKeys.ADMIN_PHOTOS_LIST(tenantCode)
         ];
 
         if (photoId) {
-          cacheKeysToInvalidate.push(PhotoCacheKeys.PHOTO_DETAILS(photoId));
+          cacheKeysToInvalidate.push(PhotoCacheKeys.PHOTO_DETAILS(tenantCode, photoId));
         }
 
         if (albumId) {
           cacheKeysToInvalidate.push(
-            PhotoCacheKeys.ALBUM_PHOTOS(albumId),
-            PhotoCacheKeys.ALBUM_STATS(albumId),
-            PhotoCacheKeys.ALBUM_DETAILS(albumId)
+            PhotoCacheKeys.ALBUM_PHOTOS(tenantCode, albumId),
+            PhotoCacheKeys.ALBUM_STATS(tenantCode, albumId),
+            PhotoCacheKeys.ALBUM_DETAILS(tenantCode, albumId)
           );
         }
 
         if (userId) {
           cacheKeysToInvalidate.push(
-            PhotoCacheKeys.USER_ALBUMS(userId),
-            PhotoCacheKeys.USER_PHOTO_STATS(userId)
+            PhotoCacheKeys.USER_ALBUMS(tenantCode, userId),
+            PhotoCacheKeys.USER_PHOTO_STATS(tenantCode, userId)
           );
         }
 
-        // Invalidate search results (pattern-based)
-        await CacheService.delPattern('photos:search:*');
+        // Invalidate search results (pattern-based, tenant-specific)
+        await CacheService.delPattern(`${tenantCode}:photos:search:*`);
 
         // Delete each cache key individually
         for (const key of cacheKeysToInvalidate) {
           await CacheService.del(key);
         }
-        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} photo cache keys`);
+        console.log(`🗑️ Invalidated ${cacheKeysToInvalidate.length} photo cache keys for tenant ${tenantCode}`);
       } catch (error) {
         console.error('Photo cache invalidation error:', error);
       }
@@ -312,38 +323,47 @@ const autoInvalidatePhotoCaches = async (req, res, next) => {
 };
 
 /**
- * Invalidate all photo-related caches
+ * Invalidate all photo-related caches (tenant-specific or all)
  */
-const invalidateAllPhotoCaches = async () => {
+const invalidateAllPhotoCaches = async (tenantCode = null) => {
   try {
-    await CacheService.deletePattern('photos:*');
-    console.log('🗑️ Invalidated all photo caches');
+    if (tenantCode) {
+      // Invalidate only for specific tenant
+      await CacheService.deletePattern(`${tenantCode}:photos:*`);
+      console.log(`🗑️ Invalidated all photo caches for tenant ${tenantCode}`);
+    } else {
+      // Invalidate for all tenants (legacy support)
+      await CacheService.deletePattern('*:photos:*');
+      console.log('🗑️ Invalidated all photo caches for all tenants');
+    }
   } catch (error) {
     console.error('Full photo cache invalidation error:', error);
   }
 };
 
 /**
- * Warm up frequently accessed caches
+ * Warm up frequently accessed caches (tenant-aware)
  */
 const warmUpPhotoCaches = async (req, res) => {
   try {
+    const tenantCode = req ? getTenantCode(req) : 'default';
     const warmupKeys = [
-      PhotoCacheKeys.ALBUMS_LIST,
-      PhotoCacheKeys.RECENT_PHOTOS,
-      PhotoCacheKeys.PHOTOS_STATS,
-      PhotoCacheKeys.ADMIN_ALBUMS_LIST
+      PhotoCacheKeys.ALBUMS_LIST(tenantCode),
+      PhotoCacheKeys.RECENT_PHOTOS(tenantCode),
+      PhotoCacheKeys.PHOTOS_STATS(tenantCode),
+      PhotoCacheKeys.ADMIN_ALBUMS_LIST(tenantCode)
     ];
-    
-    console.log(`🔥 Warming up ${warmupKeys.length} photo cache keys...`);
-    
+
+    console.log(`🔥 Warming up ${warmupKeys.length} photo cache keys for tenant ${tenantCode}...`);
+
     // Note: Actual warmup would require making requests to the endpoints
     // This is a placeholder for the warmup logic
-    
+
     return {
       success: true,
       message: 'Photo caches warmup completed',
-      warmedKeys: warmupKeys.length
+      warmedKeys: warmupKeys.length,
+      tenantCode
     };
   } catch (error) {
     console.error('Photo cache warmup error:', error);
@@ -406,7 +426,7 @@ module.exports = {
   // Cache keys
   PhotoCacheKeys,
   CacheDurations,
-  
+
   // Cache middleware
   cacheAlbumsList,
   cacheAlbumDetails,
@@ -420,17 +440,18 @@ module.exports = {
   cacheUserPhotoStats,
   cacheAdminAlbumsList,
   cacheAdminPhotosList,
-  
+
   // Cache invalidation
   autoInvalidateAlbumCaches,
   autoInvalidatePhotoCaches,
   invalidateAllPhotoCaches,
-  
+
   // Cache management
   warmUpPhotoCaches,
   checkPhotoCacheHealth,
-  
+
   // Utilities
   generateSearchKey,
-  generateFilterKey
+  generateFilterKey,
+  getTenantCode
 };

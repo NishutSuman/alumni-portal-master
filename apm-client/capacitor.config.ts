@@ -13,15 +13,15 @@ const config: CapacitorConfig = {
       launchShowDuration: 3000,
       launchAutoHide: true,
       launchFadeOutDuration: 500,
-      backgroundColor: '#3b82f6',
+      backgroundColor: '#1f2937', // Dark gray for dark mode splash
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
       androidSpinnerStyle: 'large',
       iosSpinnerStyle: 'small',
       spinnerColor: '#ffffff',
-      splashFullScreen: true,
-      splashImmersive: true,
+      splashFullScreen: false, // Disable full screen to respect system UI
+      splashImmersive: false,  // Disable immersive to show status bar
     },
 
     // Push Notifications
@@ -50,9 +50,9 @@ const config: CapacitorConfig = {
 
     // Status Bar
     StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#3b82f6',
-      overlaysWebView: false,
+      style: 'LIGHT', // Light icons on dark background
+      backgroundColor: '#1f2937', // Dark gray to match app header
+      overlaysWebView: false, // Keep status bar separate from WebView
     },
 
     // Keyboard
@@ -119,9 +119,8 @@ const config: CapacitorConfig = {
     captureInput: true,
     webContentsDebuggingEnabled: true,
     appendUserAgent: 'GUILD-Alumni-App',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#1f2937', // Dark gray background
     // Custom intent filters for deep linking
-    
   },
 
   // Build configuration

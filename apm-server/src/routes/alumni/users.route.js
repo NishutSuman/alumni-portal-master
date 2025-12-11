@@ -69,6 +69,9 @@ router.get(
 	asyncHandler(userController.getPublicProfile)
 );
 
+// NOTE: Profile picture serving is handled by the route in app.js
+// DO NOT add a route here as it will conflict with the app.js route
+
 // View membership status (even if unverified)
 router.get(
 	"/membership-status",

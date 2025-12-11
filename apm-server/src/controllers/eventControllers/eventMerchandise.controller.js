@@ -1,6 +1,7 @@
 // src/controllers/eventControllers/eventMerchandise.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // Add merchandise item (Admin only)
 const addMerchandise = async (req, res) => {
@@ -10,13 +11,13 @@ const addMerchandise = async (req, res) => {
 
   try {
     // Check if event exists and has merchandise enabled
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
         hasMerchandise: true,
-        status: true 
+        status: true
       }
     });
 
@@ -82,12 +83,12 @@ const getEventMerchandise = async (req, res) => {
 
   try {
     // Check if event exists
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
-        hasMerchandise: true 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
+        hasMerchandise: true
       }
     });
 
@@ -150,6 +151,7 @@ const getMerchandiseItem = async (req, res) => {
       where: {
         id: itemId,
         eventId,
+        event: { ...getTenantFilter(req) },
         ...(req.user?.role !== 'SUPER_ADMIN' && { isActive: true })
       },
       select: {
@@ -196,7 +198,8 @@ const updateMerchandise = async (req, res) => {
     const existingItem = await prisma.eventMerchandise.findFirst({
       where: {
         id: itemId,
-        eventId
+        eventId,
+        event: { ...getTenantFilter(req) }
       }
     });
 
@@ -252,7 +255,8 @@ const deleteMerchandise = async (req, res) => {
     const existingItem = await prisma.eventMerchandise.findFirst({
       where: {
         id: itemId,
-        eventId
+        eventId,
+        event: { ...getTenantFilter(req) }
       },
       include: {
         _count: {
@@ -310,7 +314,8 @@ const reorderMerchandise = async (req, res) => {
     const existingItems = await prisma.eventMerchandise.findMany({
       where: {
         id: { in: itemIds },
-        eventId
+        eventId,
+        event: { ...getTenantFilter(req) }
       },
       select: { id: true }
     });

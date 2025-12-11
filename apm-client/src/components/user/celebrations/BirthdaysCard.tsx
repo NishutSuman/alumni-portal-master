@@ -185,7 +185,7 @@ const BirthdaysCard: React.FC = () => {
                           >
                             {birthday.profileImage ? (
                               <img
-                                src={`http://localhost:3000/api/users/profile-picture/${birthday.id}`}
+                                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${birthday.id}`}
                                 alt={birthday.fullName}
                                 className="w-16 h-16 rounded-full object-cover border-2 border-pink-400 shadow-lg"
                                 onError={(e) => {
@@ -243,7 +243,7 @@ const BirthdaysCard: React.FC = () => {
                         <div className="w-14 h-14 mx-auto mb-2 relative">
                           {birthday.profileImage ? (
                             <img
-                              src={`http://localhost:3000/api/users/profile-picture/${birthday.id}`}
+                              src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${birthday.id}`}
                               alt={birthday.fullName}
                               className="w-14 h-14 rounded-full object-cover border border-blue-300 dark:border-blue-600"
                               onError={(e) => {

@@ -38,10 +38,21 @@ import {
   type RegisterRequest,
 } from '@/store/api/authApi'
 
+// Organization type for multi-org support
+interface Organization {
+  id: string
+  name: string
+  tenantCode: string
+  logoUrl?: string
+}
+
 // Define return types for our functions
 interface AuthActionResult {
   success: boolean
   error?: string
+  data?: any
+  multipleOrganizations?: boolean
+  organizations?: Organization[]
 }
 
 export const useAuth = () => {
@@ -69,44 +80,57 @@ export const useAuth = () => {
   const [verifyEmailMutation] = useVerifyEmailMutation()
   const [resendVerificationMutation] = useResendVerificationEmailMutation()
 
-  // Login function - FIXED with proper return type
+  // Login function - FIXED with proper return type and multi-org support
   const login = async (credentials: LoginRequest): Promise<AuthActionResult> => {
     try {
       dispatch(loginStart())
-      
+
       const response = await loginMutation(credentials).unwrap()
-      
+
       if (response.success) {
+        // Check if this is a multi-org response (user has accounts in multiple orgs)
+        if (response.data.multipleOrganizations && response.data.organizations) {
+          // Don't dispatch login success - let the UI handle org selection
+          dispatch(loginFailure('')) // Clear loading state without error
+          return {
+            success: false,
+            multipleOrganizations: true,
+            organizations: response.data.organizations,
+          }
+        }
+
         dispatch(loginSuccess({
           user: response.data.user,
           token: response.data.tokens.accessToken,
           refreshToken: response.data.tokens.refreshToken,
           rememberMe: credentials.rememberMe || false,
         }))
-        
+
         toast.success(`Welcome back, ${response.data.user.fullName}!`)
-        
+
         // Navigate based on user role and verification status
         const { user } = response.data
         if (!user.isAlumniVerified && user.pendingVerification) {
           navigate('/auth/verification-pending')
-        } else if (user.role === 'SUPER_ADMIN') {
+        } else if (user.role === 'DEVELOPER') {
+          navigate('/developer')
+        } else if (user.role === 'SUPER_ADMIN' || user.role === 'BATCH_ADMIN') {
           navigate('/admin/dashboard')
         } else {
           navigate('/user/dashboard')
         }
-        
+
         return { success: true }
       }
-      
+
       // If we reach here, response.success was false
       return { success: false, error: 'Login failed' }
     } catch (error: any) {
       const errorMessage = error?.data?.message || error?.message || 'Login failed'
       const errorData = error?.data?.data || {}
-      
+
       dispatch(loginFailure(errorMessage))
-      
+
       // Handle email verification required error
       if (errorData.emailVerificationRequired) {
         if (errorData.verificationEmailSent) {
@@ -114,18 +138,18 @@ export const useAuth = () => {
         } else {
           toast.error('Please verify your email address first')
         }
-        navigate('/auth/verify-email', { 
-          state: { 
+        navigate('/auth/verify-email', {
+          state: {
             email: errorData.email,
             fullName: errorData.fullName,
             fromLogin: true,
             emailSent: errorData.verificationEmailSent
-          } 
+          }
         })
       } else {
         toast.error(errorMessage)
       }
-      
+
       return { success: false, error: errorMessage, data: errorData }
     }
   }
@@ -162,8 +186,10 @@ export const useAuth = () => {
       // Even if server logout fails, we still want to clear local state
       console.warn('Server logout failed:', error)
     }
-    
+
     dispatch(logout())
+    // Clear organization context on logout for multi-tenant support
+    localStorage.removeItem('guild-org-code')
     toast.success('Logged out successfully')
     navigate('/auth/login')
   }

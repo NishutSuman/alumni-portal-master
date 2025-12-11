@@ -9,7 +9,7 @@ export interface User {
   id: string
   email: string
   fullName: string
-  role: 'USER' | 'BATCH_ADMIN' | 'SUPER_ADMIN'
+  role: 'USER' | 'TEACHER' | 'BATCH_ADMIN' | 'SUPER_ADMIN' | 'DEVELOPER'
   batch: number
   admissionYear?: number
   passoutYear?: number

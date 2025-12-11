@@ -1,12 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  UserCircleIcon, 
-  AcademicCapIcon, 
-  UsersIcon, 
-  CalendarDaysIcon,
-  BellIcon,
-  Cog6ToothIcon,
+import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
@@ -16,6 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 import BirthdaysCard from '../../components/user/celebrations/BirthdaysCard';
 import FestivalsCard from '../../components/user/celebrations/FestivalsCard';
 import SocialSection from '../../components/user/SocialSection';
+import AlumniStorySection from '../../components/user/AlumniStorySection';
+import EventsComingSoon from '../../components/user/EventsComingSoon';
+import ProfileMarquee from '../../components/common/UI/ProfileMarquee';
+import AnnouncementBanner from '../../components/common/UI/AnnouncementBanner';
 
 const BatchAdminDashboard = () => {
   const { user } = useAuth();
@@ -47,6 +45,9 @@ const BatchAdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Announcement Banner - Shows active announcements */}
+      <AnnouncementBanner />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header with Gradient Background */}
         <motion.div
@@ -94,6 +95,16 @@ const BatchAdminDashboard = () => {
               <circle cx="170" cy="70" r="15" fill="white" fillOpacity="0.08"/>
             </svg>
           </div>
+        </motion.div>
+
+        {/* Alumni Showcase Marquee */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <ProfileMarquee speed="medium" />
         </motion.div>
 
         {/* Verification Status Banner - Only show if admin is not verified */}
@@ -150,89 +161,11 @@ const BatchAdminDashboard = () => {
             <SocialSection />
           </div>
 
-          {/* Right Column - Festivals & Batch Admin Actions */}
+          {/* Right Column - Festivals, Alumni Story & Events */}
           <div className="space-y-6">
             <FestivalsCard />
-            
-            {/* Batch Admin Actions */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-            >
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Batch Management - Batch {user?.batch || 'N/A'}
-                </h3>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {/* Batch admin specific actions */}
-                  <a
-                    href="/admin/batch-users"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <AcademicCapIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-                    <span className="text-sm font-medium">My Batch</span>
-                  </a>
-                  <a
-                    href="/admin/batch-verification"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <ShieldCheckIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
-                    <span className="text-sm font-medium">Verify Alumni</span>
-                  </a>
-                  <a
-                    href="/admin/batch-events"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <CalendarDaysIcon className="h-5 w-5 text-purple-600 dark:text-purple-400 mr-2" />
-                    <span className="text-sm font-medium">Batch Events</span>
-                  </a>
-                  <a
-                    href="/user/alumni"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <UsersIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-                    <span className="text-sm font-medium">Alumni Directory</span>
-                  </a>
-                  <a
-                    href="/user/profile"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <UserCircleIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
-                    <span className="text-sm font-medium">My Profile</span>
-                  </a>
-                  <a
-                    href="/user/settings"
-                    className="flex items-center p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <Cog6ToothIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2" />
-                    <span className="text-sm font-medium">Settings</span>
-                  </a>
-                </div>
-                
-                {/* Batch statistics or recent activity */}
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Quick Stats</h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">--</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Batch Members</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">--</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Verified</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">--</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            <AlumniStorySection />
+            <EventsComingSoon />
           </div>
         </div>
       </div>

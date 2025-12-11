@@ -161,11 +161,7 @@ const RegistrationPage = () => {
         batch: parseInt((data as any).batch), // Backend expects number  
       };
       
-      console.log('Sending registration payload:', payload);
-      
       const response = await apiClient.post('/auth/register', payload);
-      
-      console.log('Registration response:', response.data);
       
       if (response.data.success) {
         toast.success(response.data.message || 'Registration successful! Your account is pending alumni verification.');

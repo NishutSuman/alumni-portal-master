@@ -106,7 +106,7 @@ const AlumniProfile: React.FC = () => {
               <div className="relative">
                 {profile.profileImage ? (
                   <img
-                    src={`http://localhost:3000/api/users/profile-picture/${profile.id}`}
+                    src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${profile.id}`}
                     alt={profile.fullName}
                     className="h-32 w-32 rounded-full border-4 border-white dark:border-gray-800 bg-white dark:bg-gray-800 object-cover"
                     onError={(e) => {

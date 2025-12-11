@@ -23,7 +23,7 @@ import {
 } from '@heroicons/react/24/solid';
 
 interface MobileBottomNavProps {
-  userRole: 'USER' | 'BATCH_ADMIN' | 'SUPER_ADMIN';
+  userRole: 'USER' | 'TEACHER' | 'BATCH_ADMIN' | 'SUPER_ADMIN' | 'DEVELOPER';
   onMoreClick: () => void;
 }
 

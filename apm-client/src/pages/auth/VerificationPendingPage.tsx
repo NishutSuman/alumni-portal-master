@@ -1,17 +1,18 @@
 // pages/auth/VerificationPendingPage.tsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  ClockIcon, 
-  EnvelopeIcon, 
+import {
+  ClockIcon,
+  EnvelopeIcon,
   ExclamationTriangleIcon,
   ArrowRightOnRectangleIcon,
   UserGroupIcon,
   PencilIcon,
   XMarkIcon,
-  CheckIcon
+  CheckIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useDispatch } from 'react-redux';
 import { updateProfile } from '@/store/slices/authSlice';
@@ -21,9 +22,11 @@ import { api } from '@/services/api';
 const VerificationPendingPage = () => {
   const { user, logout } = useAuth();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [isEditingBatch, setIsEditingBatch] = useState(false);
   const [newBatch, setNewBatch] = useState(user?.batch || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   // Check if user is rejected, pending, or blacklisted
   const isRejected = user?.isRejected;
@@ -33,6 +36,46 @@ const VerificationPendingPage = () => {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  // Check verification status and redirect if approved
+  const handleCheckStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const response = await api.get('/auth/me');
+
+      if (response.data.success) {
+        const updatedUser = response.data.data;
+
+        // Update Redux state with fresh user data
+        dispatch(updateProfile(updatedUser));
+
+        // Check if verification is now approved
+        if (updatedUser.isAlumniVerified && !updatedUser.pendingVerification) {
+          toast.success('Your verification has been approved! Redirecting to dashboard...');
+
+          // Redirect based on role
+          setTimeout(() => {
+            if (updatedUser.role === 'DEVELOPER') {
+              navigate('/developer');
+            } else if (updatedUser.role === 'SUPER_ADMIN' || updatedUser.role === 'BATCH_ADMIN') {
+              navigate('/admin/dashboard');
+            } else {
+              navigate('/user/dashboard');
+            }
+          }, 1500);
+        } else if (updatedUser.isRejected) {
+          toast.error('Your verification was rejected. Please check the rejection reason.');
+        } else {
+          toast('Verification is still pending. Please check back later.', { icon: '⏳' });
+        }
+      }
+    } catch (error: any) {
+      console.error('Error checking verification status:', error);
+      toast.error('Failed to check status. Please try again.');
+    } finally {
+      setIsCheckingStatus(false);
+    }
   };
 
   const handleBatchEdit = () => {
@@ -405,8 +448,28 @@ const VerificationPendingPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="flex justify-center"
+          className="flex flex-col sm:flex-row justify-center gap-4"
         >
+          {/* Check Verification Status Button - Primary */}
+          <button
+            onClick={handleCheckStatus}
+            disabled={isCheckingStatus}
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-3 rounded-lg font-medium transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          >
+            {isCheckingStatus ? (
+              <>
+                <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
+                Checking Status...
+              </>
+            ) : (
+              <>
+                <ArrowPathIcon className="h-5 w-5 mr-2" />
+                Check Verification Status
+              </>
+            )}
+          </button>
+
+          {/* Sign Out Button - Secondary */}
           <button
             onClick={handleLogout}
             className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
@@ -424,8 +487,8 @@ const VerificationPendingPage = () => {
           className="text-center mt-8"
         >
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            You'll remain logged in during the verification process. 
-            Feel free to close this page and check back later.
+            You'll remain logged in during the verification process.
+            Click "Check Verification Status" to see if your account has been approved.
           </p>
         </motion.div>
       </div>

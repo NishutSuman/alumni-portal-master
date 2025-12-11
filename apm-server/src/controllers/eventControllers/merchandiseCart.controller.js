@@ -2,6 +2,7 @@
 const { prisma } = require("../../config/database");
 const { successResponse, errorResponse } = require("../../utils/response");
 const EventService = require("../../services/event/event.service");
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // Add item to cart (Authenticated users)
 const addToCart = async (req, res) => {
@@ -637,6 +638,7 @@ const getAllEventOrders = async (req, res) => {
 		const whereClause = {
 			registration: {
 				eventId,
+				event: { ...getTenantFilter(req) }
 			},
 		};
 
@@ -690,7 +692,12 @@ const getAllEventOrders = async (req, res) => {
 
 		// Calculate totals
 		const totalAmount = await prisma.eventMerchandiseOrder.aggregate({
-			where: { registration: { eventId } },
+			where: {
+				registration: {
+					eventId,
+					event: { ...getTenantFilter(req) }
+				}
+			},
 			_sum: { totalPrice: true },
 		});
 

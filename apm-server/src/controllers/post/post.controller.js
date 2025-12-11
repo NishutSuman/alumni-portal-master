@@ -3,6 +3,7 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
 const { deleteUploadedFile } = require('../../middleware/upload.middleware');
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
+const { getTenantFilter, getTenantData, withTenant } = require('../../utils/tenant.util');
 
 // Create new post
 const createPost = async (req, res) => {
@@ -36,32 +37,57 @@ const createPost = async (req, res) => {
     // Handle uploaded files with R2
     let heroImage = null;
     let images = [];
-    
+
+    // Get tenant code from tenant middleware (preferred) or header (fallback)
+    // Priority: 1) tenant middleware, 2) header, 3) user's organization from DB
+    let tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+
+    // Fallback: If no tenant code from middleware/header, get from user's organization
+    // This handles cases where multipart/form-data requests don't include the header
+    if (!tenantCode) {
+      const userWithOrg = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          organization: {
+            select: { tenantCode: true }
+          }
+        }
+      });
+      tenantCode = userWithOrg?.organization?.tenantCode || null;
+    }
+
+    console.log('📁 Post image upload - Tenant debug:', {
+      fromMiddleware: req.tenant?.tenantCode,
+      fromHeader: req.headers['x-tenant-code'],
+      final: tenantCode,
+      userId: req.user.id
+    });
+
     if (req.files) {
-      // Upload hero image to R2
+      // Upload hero image to R2 (tenant-aware)
       if (req.files.heroImage && req.files.heroImage[0]) {
         const heroFile = req.files.heroImage[0];
         const validation = cloudflareR2Service.validatePostImage(heroFile);
         if (!validation.valid) {
           return errorResponse(res, validation.error, 400);
         }
-        
-        const heroUploadResult = await cloudflareR2Service.uploadPostImage(heroFile, 'hero');
+
+        const heroUploadResult = await cloudflareR2Service.uploadPostImage(heroFile, 'hero', tenantCode);
         if (!heroUploadResult.success) {
           return errorResponse(res, heroUploadResult.error, 500);
         }
         heroImage = heroUploadResult.url;
       }
-      
-      // Upload additional images to R2
+
+      // Upload additional images to R2 (tenant-aware)
       if (req.files.images && req.files.images.length > 0) {
         const imageUploadPromises = req.files.images.map(async (file) => {
           const validation = cloudflareR2Service.validatePostImage(file);
           if (!validation.valid) {
             throw new Error(`Image ${file.originalname}: ${validation.error}`);
           }
-          
-          const uploadResult = await cloudflareR2Service.uploadPostImage(file, 'gallery');
+
+          const uploadResult = await cloudflareR2Service.uploadPostImage(file, 'gallery', tenantCode);
           if (!uploadResult.success) {
             throw new Error(`Failed to upload ${file.originalname}: ${uploadResult.error}`);
           }
@@ -98,6 +124,9 @@ const createPost = async (req, res) => {
       }
     }
     
+    // Get tenant data for multi-tenant support
+    const tenantData = getTenantData(req);
+
     // Create post with interaction controls
     const post = await prisma.post.create({
       data: {
@@ -113,6 +142,8 @@ const createPost = async (req, res) => {
         allowLikes: Boolean(allowLikes),        // New field
         isPublished: !needsApproval, // Super Admin posts are published immediately
         approvedBy: needsApproval ? null : req.user.id,
+        // Multi-tenant support
+        ...tenantData,
       },
       include: {
         author: {
@@ -237,11 +268,12 @@ const getPosts = async (req, res) => {
   } = req.query;
   
   const { page, limit, skip } = getPaginationParams(req.query, 10);
-  
+
   try {
-    // Build where clause
-    const whereClause = {};
-    
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+    const whereClause = { ...tenantFilter };
+
     // Handle isArchived parameter from frontend
     if (isArchived !== undefined) {
       whereClause.isArchived = isArchived === 'true';
@@ -504,10 +536,16 @@ const getPosts = async (req, res) => {
 // Get single post by ID
 const getPostById = async (req, res) => {
   const { postId } = req.params;
-  
+
   try {
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       include: {
         author: {
           select: {
@@ -645,20 +683,26 @@ const getPostById = async (req, res) => {
 // Update post
 const updatePost = async (req, res) => {
   const { postId } = req.params;
-  const { 
-    title, 
-    body, 
-    category, 
-    linkedEventId, 
+  const {
+    title,
+    body,
+    category,
+    linkedEventId,
     tags,
     allowComments,  // New field
     allowLikes      // New field
   } = req.body;
-  
+
   try {
-    // Get existing post
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
+    // Get existing post with tenant filter
+    const existingPost = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: {
         id: true,
         createdBy: true,
@@ -669,7 +713,7 @@ const updatePost = async (req, res) => {
         allowLikes: true,
       },
     });
-    
+
     if (!existingPost) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -878,25 +922,31 @@ const updatePost = async (req, res) => {
 const approvePost = async (req, res) => {
   const { postId } = req.params;
   const { action, reason } = req.body; // action: 'approve' or 'reject'
-  
+
   if (req.user.role !== 'SUPER_ADMIN') {
     return errorResponse(res, 'Only Super Admins can approve posts', 403);
   }
-  
+
   if (!['approve', 'reject'].includes(action)) {
     return errorResponse(res, 'Action must be "approve" or "reject"', 400);
   }
-  
+
   try {
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       include: {
         author: {
           select: { id: true, fullName: true },
         },
       },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -1002,10 +1052,16 @@ const approvePost = async (req, res) => {
 const archivePost = async (req, res) => {
   const { postId } = req.params;
   const { isArchived } = req.body; // Allow toggling archive status
-  
+
   try {
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: {
         id: true,
         createdBy: true,
@@ -1013,7 +1069,7 @@ const archivePost = async (req, res) => {
         title: true,
       },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -1062,10 +1118,16 @@ const archivePost = async (req, res) => {
 // Delete post (Super Admin only)
 const deletePost = async (req, res) => {
   const { postId } = req.params;
-  
+
   try {
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        ...tenantFilter, // Multi-tenant isolation
+      },
       select: {
         id: true,
         title: true,
@@ -1074,7 +1136,7 @@ const deletePost = async (req, res) => {
         createdBy: true,
       },
     });
-    
+
     if (!post) {
       return errorResponse(res, 'Post not found', 404);
     }
@@ -1143,13 +1205,16 @@ const getPendingPosts = async (req, res) => {
   }
   
   const { page, limit, skip } = getPaginationParams(req.query, 10);
-  
+
   try {
+    // Build where clause with tenant filter for multi-tenant support
+    const tenantFilter = getTenantFilter(req);
     const whereClause = {
+      ...tenantFilter,
       isPublished: false,
       isArchived: false,
     };
-    
+
     const total = await prisma.post.count({ where: whereClause });
     
     const posts = await prisma.post.findMany({

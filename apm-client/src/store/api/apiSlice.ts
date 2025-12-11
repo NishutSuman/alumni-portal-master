@@ -27,6 +27,13 @@ const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
         headers.set('authorization', `Bearer ${token}`)
       }
 
+      // Multi-tenant support: Add X-Tenant-Code header if organization is selected
+      // This allows a shared backend to identify which organization the request is for
+      const orgCode = localStorage.getItem('guild-org-code')
+      if (orgCode) {
+        headers.set('X-Tenant-Code', orgCode)
+      }
+
       // IMPORTANT: Don't set content-type here for any request
       // Let fetchBaseQuery handle it automatically
       // For FormData, browser will set multipart/form-data with boundary
@@ -105,7 +112,7 @@ export const apiSlice = createApi({
     'Event', 'EventRegistration', 'EventCategory',
     'Post', 'Comment', 'Like', 'PostReactions', 'PostReactionUsers', 'PostComments', 'PostLikes', 'PendingPost', 'CommentReactions', 'UserLike', 'CommentReactionUsers',
     'Album', 'Photo',
-    'Notification', 'UnreadCount', 'NotificationPreferences', 'PushToken',
+    'Notification', 'UnreadCount', 'NotificationPreferences', 'PushToken', 'Announcement',
     
     // LifeLink system
     'LifeLink', 'BloodRequisition', 'Donation',
@@ -130,6 +137,9 @@ export const apiSlice = createApi({
     
     // Analytics and reporting
     'Analytics', 'Report', 'Statistics',
+
+    // Email configuration (multi-tenant)
+    'EmailConfig',
   ],
   
   // Base endpoints (empty, will be injected by other files)

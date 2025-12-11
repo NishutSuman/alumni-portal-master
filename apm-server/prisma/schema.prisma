@@ -17,7 +17,7 @@ model Organization {
   shortName      String @unique @db.VarChar(10) // For Serial ID generation
   foundationYear Int
 
-  // Contact Information  
+  // Contact Information
   officialEmail         String  @unique
   officialContactNumber String?
   officeAddress         String? @db.Text
@@ -48,15 +48,79 @@ model Organization {
   // Serial ID Configuration
   serialCounter Int @default(0) // Auto-increment for serial ID generation
 
+  // ==========================================
+  // MULTI-TENANT FIELDS (NEW)
+  // ==========================================
+
+  // Unique tenant identifier (used in X-Tenant-Code header)
+  tenantCode String? @unique // "GUILD-DEMO", "JNAAB", etc.
+
+  // Organization description for developer portal
+  description String? @db.Text
+  mission     String? @db.Text
+  vision      String? @db.Text
+
+  // Desk Messages from Office Bearers
+  presidentMessage String? @db.Text
+  secretaryMessage String? @db.Text
+  treasurerMessage String? @db.Text
+
+  // Subscription Management
+  subscriptionStatus  SubscriptionStatus @default(TRIAL)
+  subscriptionStartAt DateTime?
+  subscriptionEndsAt  DateTime?
+
+  // System Controls
+  isMaintenanceMode  Boolean @default(false)
+  maintenanceMessage String? @db.Text
+
+  // Resource Limits
+  maxUsers       Int @default(1500)
+  storageQuotaMB Int @default(51200) // 50GB default
+
+  // Relations to tenant-scoped models
+  users         User[]
+  posts         Post[]
+  events        Event[]
+  albums        Album[]
+  photos        Photo[]
+  polls         Poll[]
+  groups        OrganizationGroup[]
+  tickets       Ticket[]
+  notifications Notification[]
+  transactions  Transaction[]
+  sponsors      Sponsor[]
+
+  // LifeLink Relations
+  bloodDonations     BloodDonation[]     @relation("OrganizationBloodDonations")
+  bloodRequisitions  BloodRequisition[]  @relation("OrganizationBloodRequisitions")
+  donorNotifications DonorNotification[] @relation("OrganizationDonorNotifications")
+  donorResponses     DonorResponse[]     @relation("OrganizationDonorResponses")
+
+  // Multi-tenant Email & Push Configuration
+  emailConfig  OrganizationEmailConfig?
+  pushConfig   OrganizationPushConfig?
+  deviceTokens UserDeviceToken[]
+
+  // Subscription & Feature Management
+  subscription         OrganizationSubscription?
+  organizationFeatures OrganizationFeature[]
+
+  // System Announcements
+  announcements Announcement[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantCode])
+  @@index([subscriptionStatus])
+  @@index([isActive])
   @@map("organization")
 }
 
 model User {
   id                   String    @id @default(cuid())
-  email                String    @unique
+  email                String // Removed @unique - now composite unique with organizationId
   passwordHash         String
   isEmailVerified      Boolean   @default(false)
   emailVerifyToken     String?
@@ -126,6 +190,20 @@ model User {
 
   // Role and Permissions
   role UserRole @default(USER)
+
+  // ==========================================
+  // MULTI-TENANT FIELDS (Required for multi-org support)
+  // ==========================================
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // ==========================================
+  // TEACHER-SPECIFIC FIELDS (NEW)
+  // ==========================================
+  teacherSubject    String? // "Mathematics", "Physics", etc.
+  teacherJoinYear   Int? // Year they joined the school
+  teacherRetireYear Int? // Year they retired (null if active)
+  isActiveTeacher   Boolean @default(false)
 
   // NEW MEMBERSHIP FIELDS (Add these to existing User model)
   membershipStatus      MembershipStatus @default(ACTIVE) // ACTIVE, EXPIRED, PENDING, INACTIVE
@@ -250,6 +328,9 @@ model User {
   // Organization updates
   organizationUpdates Organization[] @relation("OrgUpdates")
 
+  // Device tokens for push notifications
+  deviceTokens UserDeviceToken[]
+
   // Blacklist management
   blacklistedEmails      BlacklistedEmail[] @relation("EmailBlacklist")
   emailBlacklistRemovals BlacklistedEmail[] @relation("EmailBlacklistRemovals")
@@ -257,11 +338,17 @@ model User {
   // Enhanced notification relations
   relatedNotifications Notification[] @relation("NotificationRelatedUser")
 
+  // Announcements created by admin
+  announcementsCreated Announcement[] @relation("AnnouncementCreatedBy")
+
   messageReactions   TicketMessageReaction[] @relation("MessageReactions")
   messageEdits       TicketMessageEdit[]     @relation("MessageEdits")
   messageDrafts      TicketMessageDraft[]    @relation("MessageDrafts")
   auditLogsPerformed TicketAuditLog[]        @relation("PerformedAudits")
 
+  // Composite unique: Same email can exist in different organizations
+  @@unique([email, organizationId], name: "user_email_org_unique")
+  @@index([email])
   @@index([batch])
   @@index([fullName])
   @@index([employmentStatus])
@@ -272,6 +359,8 @@ model User {
   @@index([pendingVerification])
   @@index([serialId])
   @@index([serialCounter])
+  @@index([organizationId])
+  @@index([role])
   @@map("users")
 }
 
@@ -509,6 +598,10 @@ model Post {
   linkedEventId String?
   linkedEvent   Event?  @relation(fields: [linkedEventId], references: [id])
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   comments Comment[]
   likes    Like[]
 
@@ -519,6 +612,7 @@ model Post {
   @@index([category])
   @@index([isPublished, isArchived])
   @@index([createdAt])
+  @@index([organizationId])
   @@map("posts")
 }
 
@@ -612,10 +706,15 @@ model Album {
   creator   User    @relation("AlbumCreator", fields: [createdBy], references: [id])
   photos    Photo[]
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([createdBy])
+  @@index([organizationId])
   @@map("albums")
 }
 
@@ -632,11 +731,16 @@ model Photo {
   uploadedBy String
   uploader   User    @relation(fields: [uploadedBy], references: [id])
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([uploadedBy])
   @@index([albumId])
+  @@index([organizationId])
   @@map("photos")
 }
 
@@ -656,12 +760,17 @@ model Transaction {
   approvedBy String?
   approver   User?   @relation("TransactionApprover", fields: [approvedBy], references: [id])
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([type, status])
   @@index([createdAt])
+  @@index([organizationId])
   @@map("transactions")
 }
 
@@ -685,13 +794,40 @@ model Notification {
   batchContext  Int? // Batch year context for batch admin notifications
   actionContext String? // Additional context (verification/rejection reason)
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
 
   @@index([userId, isRead])
   @@index([createdAt])
   @@index([relatedUserId])
   @@index([batchContext])
+  @@index([organizationId])
   @@map("notifications")
+}
+
+// System Announcements - visible on dashboard
+model Announcement {
+  id       String  @id @default(cuid())
+  message  String  @db.VarChar(500) // Text only, ~100 words
+  isActive Boolean @default(true)
+
+  // Created by admin
+  createdById String
+  createdBy   User   @relation("AnnouncementCreatedBy", fields: [createdById], references: [id])
+
+  // Multi-tenant
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, isActive])
+  @@index([createdAt])
+  @@map("announcements")
 }
 
 model ActivityLog {
@@ -832,6 +968,10 @@ model Event {
   registrations EventRegistration[]
   linkedPosts   Post[] // Posts can be linked to events
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -840,6 +980,7 @@ model Event {
   @@index([status])
   @@index([createdBy])
   @@index([hasRegistration])
+  @@index([organizationId])
   @@map("events")
 }
 
@@ -1796,12 +1937,17 @@ model OrganizationGroup {
   createdBy String
   creator   User          @relation("GroupCreator", fields: [createdBy], references: [id])
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([isActive])
   @@index([createdBy])
+  @@index([organizationId])
   @@map("organization_groups")
 }
 
@@ -1846,6 +1992,10 @@ model Sponsor {
   createdBy String
   creator   User   @relation("SponsorCreator", fields: [createdBy], references: [id])
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1853,6 +2003,7 @@ model Sponsor {
   @@index([isActive])
   @@index([displayOrder])
   @@index([createdBy])
+  @@index([organizationId])
   @@map("sponsors")
 }
 
@@ -1877,6 +2028,10 @@ model Poll {
   options   PollOption[]
   votes     PollVote[]
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1884,6 +2039,7 @@ model Poll {
   @@index([isActive])
   @@index([expiresAt])
   @@index([createdAt])
+  @@index([organizationId])
   @@map("polls")
 }
 
@@ -1940,11 +2096,16 @@ model BloodDonation {
   donorId String
   donor   User   @relation("DonorHistory", fields: [donorId], references: [id])
 
+  // Multi-tenant support
+  organizationId String?
+  organization   Organization? @relation("OrganizationBloodDonations", fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([donorId])
   @@index([donationDate])
+  @@index([organizationId])
   @@map("blood_donations")
 }
 
@@ -1975,6 +2136,10 @@ model BloodRequisition {
   notifications DonorNotification[]
   responses     DonorResponse[]
 
+  // Multi-tenant support
+  organizationId String?
+  organization   Organization? @relation("OrganizationBloodRequisitions", fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1983,6 +2148,7 @@ model BloodRequisition {
   @@index([status])
   @@index([location])
   @@index([requiredByDate])
+  @@index([organizationId])
   @@map("blood_requisitions")
 }
 
@@ -2008,6 +2174,10 @@ model DonorNotification {
   requisitionId String?
   requisition   BloodRequisition? @relation(fields: [requisitionId], references: [id])
 
+  // Multi-tenant support
+  organizationId String?
+  organization   Organization? @relation("OrganizationDonorNotifications", fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2015,6 +2185,7 @@ model DonorNotification {
   @@index([status])
   @@index([notificationType])
   @@index([requisitionId])
+  @@index([organizationId])
   @@map("donor_notifications")
 }
 
@@ -2036,6 +2207,10 @@ model DonorResponse {
   requisitionId String
   requisition   BloodRequisition @relation(fields: [requisitionId], references: [id])
 
+  // Multi-tenant support
+  organizationId String?
+  organization   Organization? @relation("OrganizationDonorResponses", fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2043,6 +2218,7 @@ model DonorResponse {
   @@index([donorId])
   @@index([requisitionId])
   @@index([response])
+  @@index([organizationId])
   @@map("donor_responses")
 }
 
@@ -2114,6 +2290,10 @@ model Ticket {
   messages    TicketMessage[]
   attachments TicketAttachment[]
 
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2125,6 +2305,7 @@ model Ticket {
   @@index([ticketNumber]) // Quick lookup by ticket number
   @@index([lastActivity]) // Recently active tickets
   @@index([priority, status]) // Priority-based filtering
+  @@index([organizationId])
   @@map("tickets")
 }
 
@@ -2630,8 +2811,349 @@ model Festival {
 // Enums
 enum UserRole {
   USER
+  TEACHER // Teachers with same permissions as USER
   BATCH_ADMIN
   SUPER_ADMIN
+  DEVELOPER // Platform developers with cross-tenant access
+}
+
+// Subscription status for multi-tenant
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+  GRACE_PERIOD
+}
+
+// ==========================================
+// SUBSCRIPTION PLANS & FEATURE MANAGEMENT
+// ==========================================
+
+// Subscription Plan Templates - Managed by Developer
+model SubscriptionPlan {
+  id          String @id @default(cuid())
+  name        String @unique // "Free", "Starter", "Professional", "Enterprise"
+  code        String @unique // "FREE", "STARTER", "PRO", "ENTERPRISE"
+  description String @db.Text
+
+  // Pricing
+  priceMonthly Decimal @db.Decimal(10, 2)
+  priceYearly  Decimal @db.Decimal(10, 2)
+  currency     String  @default("INR") @db.VarChar(3)
+
+  // Resource Limits
+  maxUsers          Int @default(100)
+  maxStorageMB      Int @default(5120) // 5GB
+  maxEventsPerMonth Int @default(10)
+  maxPostsPerMonth  Int @default(50)
+  maxEmailsPerMonth Int @default(1000)
+  maxPushPerMonth   Int @default(5000)
+
+  // Plan Characteristics
+  trialDays       Int     @default(14)
+  gracePeriodDays Int     @default(7)
+  isPopular       Boolean @default(false)
+  isActive        Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  // Support Level
+  supportLevel       String @default("email") // "email", "priority", "dedicated"
+  supportResponseHrs Int    @default(48)
+
+  // Features included in this plan (JSON array of feature codes)
+  includedFeatures String[] @default([])
+
+  // Relations
+  organizations    OrganizationSubscription[]
+  featureOverrides PlanFeatureOverride[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@map("subscription_plan")
+}
+
+// Organization's Active Subscription
+model OrganizationSubscription {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  // Subscription Period
+  status             SubscriptionStatus @default(TRIAL)
+  billingCycle       BillingCycle       @default(MONTHLY)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  trialEndsAt        DateTime?
+  gracePeriodEndsAt  DateTime?
+
+  // Cancellation
+  cancelledAt  DateTime?
+  cancelReason String?   @db.Text
+  cancelledBy  String? // User ID who cancelled
+
+  // Auto-renewal
+  autoRenew           Boolean   @default(true)
+  renewalReminderSent Boolean   @default(false)
+  lastReminderSentAt  DateTime?
+
+  // Custom Limits (override plan defaults)
+  customMaxUsers     Int?
+  customMaxStorageMB Int?
+
+  // Payment Reference
+  lastPaymentId     String?
+  lastPaymentAmount Decimal?  @db.Decimal(10, 2)
+  lastPaymentDate   DateTime?
+  nextBillingDate   DateTime?
+
+  // Relations
+  paymentRequests SubscriptionPaymentRequest[]
+  usageRecords    OrganizationUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("organization_subscription")
+}
+
+// Feature Definitions - Platform-wide feature catalog
+model Feature {
+  id          String @id @default(cuid())
+  code        String @unique // "EVENTS", "POLLS", "GALLERY", "LIFELINK", "TREASURY", etc.
+  name        String
+  description String @db.Text
+  category    String // "CORE", "COMMUNICATION", "ENGAGEMENT", "ADMIN", "PREMIUM"
+
+  // Feature Configuration
+  isCore    Boolean @default(false) // Core features always available
+  isPremium Boolean @default(false) // Premium features need higher plans
+  isAddOn   Boolean @default(false) // Can be purchased separately
+
+  // Add-on Pricing (if applicable)
+  addOnPriceMonthly Decimal? @db.Decimal(10, 2)
+  addOnPriceYearly  Decimal? @db.Decimal(10, 2)
+
+  // Feature Status
+  isActive        Boolean   @default(true)
+  isBeta          Boolean   @default(false)
+  isDeprecated    Boolean   @default(false)
+  deprecationDate DateTime?
+
+  // Relations
+  organizationFeatures OrganizationFeature[]
+  planOverrides        PlanFeatureOverride[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([category])
+  @@map("feature")
+}
+
+// Plan-level Feature Overrides (which features each plan includes)
+model PlanFeatureOverride {
+  id        String           @id @default(cuid())
+  planId    String
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureId String
+  feature   Feature          @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  // Override settings
+  isEnabled Boolean @default(true)
+  limit     Int? // Optional limit (e.g., max events = 5)
+  limitType String? // "per_month", "per_year", "total"
+
+  createdAt DateTime @default(now())
+
+  @@unique([planId, featureId])
+  @@map("plan_feature_override")
+}
+
+// Organization-specific Feature Toggles (override plan defaults)
+model OrganizationFeature {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  featureId      String
+  feature        Feature      @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  // Feature Status
+  isEnabled     Boolean   @default(true)
+  enabledAt     DateTime?
+  disabledAt    DateTime?
+  disableReason String?
+
+  // Custom Limits (override plan limits)
+  customLimit     Int?
+  customLimitType String?
+
+  // Add-on Purchase (if purchased separately)
+  isPurchasedAddOn Boolean   @default(false)
+  addOnExpiresAt   DateTime?
+  addOnPaymentId   String?
+
+  // Audit
+  lastModifiedBy String? // Admin who last modified
+  lastModifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, featureId])
+  @@index([organizationId])
+  @@map("organization_feature")
+}
+
+// Subscription Payment Requests - Developer requests payment from Super Admin
+model SubscriptionPaymentRequest {
+  id             String                   @id @default(cuid())
+  subscriptionId String
+  subscription   OrganizationSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  // Request Details
+  requestType     PaymentRequestType // RENEWAL, UPGRADE, ADDON
+  requestedPlanId String? // For upgrade requests
+  requestedAddOns String[] // Feature codes for add-on requests
+
+  // Amount
+  amount       Decimal      @db.Decimal(10, 2)
+  currency     String       @default("INR") @db.VarChar(3)
+  billingCycle BillingCycle
+
+  // Request Status
+  status PaymentRequestStatus @default(PENDING)
+
+  // Developer Info
+  requestedBy String // Developer user ID
+  requestedAt DateTime @default(now())
+  requestNote String?  @db.Text
+
+  // Admin Response
+  respondedBy  String? // Super Admin user ID
+  respondedAt  DateTime?
+  responseNote String?   @db.Text
+
+  // Payment Info (filled after admin pays)
+  paymentTransactionId String?
+  paidAmount           Decimal?  @db.Decimal(10, 2)
+  paidAt               DateTime?
+  invoiceUrl           String?
+
+  // Expiry
+  expiresAt DateTime // Request expires after X days
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([requestedBy])
+  @@map("subscription_payment_request")
+}
+
+// Organization Usage Tracking
+model OrganizationUsage {
+  id             String                   @id @default(cuid())
+  subscriptionId String
+  subscription   OrganizationSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  // Period
+  periodStart DateTime
+  periodEnd   DateTime
+  periodType  String // "daily", "monthly", "yearly"
+
+  // Usage Metrics
+  activeUsers   Int @default(0)
+  totalUsers    Int @default(0)
+  storageUsedMB Int @default(0)
+  eventsCreated Int @default(0)
+  postsCreated  Int @default(0)
+  emailsSent    Int @default(0)
+  pushSent      Int @default(0)
+  apiCalls      Int @default(0)
+
+  // Quota Status
+  usersQuotaPercent   Float @default(0)
+  storageQuotaPercent Float @default(0)
+
+  // Alerts
+  quotaWarningsSent Boolean @default(false)
+  quotaExceeded     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriptionId, periodStart, periodType])
+  @@index([subscriptionId])
+  @@index([periodStart])
+  @@map("organization_usage")
+}
+
+// Subscription Audit Log - Track all subscription changes
+model SubscriptionAuditLog {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // Event Info
+  eventType    String // "CREATED", "RENEWED", "UPGRADED", "DOWNGRADED", "CANCELLED", "EXPIRED", "SUSPENDED", "REACTIVATED"
+  eventDetails Json?
+
+  // Before/After State
+  previousStatus SubscriptionStatus?
+  newStatus      SubscriptionStatus?
+  previousPlanId String?
+  newPlanId      String?
+
+  // Actor
+  performedBy     String? // User ID (null for system actions)
+  performedByRole String? // "DEVELOPER", "SUPER_ADMIN", "SYSTEM"
+
+  // Additional Context
+  ipAddress String?
+  userAgent String?
+  notes     String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("subscription_audit_log")
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum PaymentRequestType {
+  RENEWAL
+  UPGRADE
+  DOWNGRADE
+  ADDON
+  CUSTOM
+}
+
+enum PaymentRequestStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  EXPIRED
+  CANCELLED
 }
 
 enum PostCategory {
@@ -2679,6 +3201,7 @@ enum NotificationType {
   LIFELINK_REMINDER // Blood donation eligibility reminder
   EVENT_REGISTRATION // Event registration confirmation
   POLL_CREATED // New poll notification
+  SYSTEM_ANNOUNCEMENT // System-wide announcements from admin
 }
 
 enum EmploymentStatus {
@@ -2793,6 +3316,10 @@ enum PaymentReferenceType {
   BATCH_ADMIN_PAYMENT
   MERCHANDISE_PAYMENT
   MERCHANDISE_ORDER
+  // Subscription payments (Super Admin pays for organization)
+  SUBSCRIPTION_RENEWAL // Subscription renewal payment
+  SUBSCRIPTION_UPGRADE // Plan upgrade payment
+  SUBSCRIPTION_NEW // New subscription payment
 }
 
 enum PaymentStatus {
@@ -3060,4 +3587,188 @@ enum FestivalPriority {
   MAJOR // Major festivals like Diwali, Holi, Eid
   REGIONAL // Regional festivals
   MINOR // Minor festivals
+}
+
+// ============================================
+// MULTI-TENANT EMAIL & PUSH CONFIGURATION
+// ============================================
+
+model OrganizationEmailConfig {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Email Provider Configuration
+  provider EmailProvider @default(SMTP)
+
+  // SMTP Settings (for custom SMTP/domain email)
+  smtpHost     String?
+  smtpPort     Int?    @default(587)
+  smtpSecure   Boolean @default(false) // true for port 465
+  smtpUser     String? // Email address for authentication
+  smtpPassword String? // Encrypted password
+
+  // Provider-specific API Keys (encrypted)
+  sendgridApiKey   String?
+  resendApiKey     String?
+  mailgunApiKey    String?
+  mailgunDomain    String?
+  mailersendApiKey String?
+
+  // Sender Configuration
+  fromEmail String  @db.VarChar(255) // noreply@clientdomain.com
+  fromName  String  @db.VarChar(100) // "Client Alumni Portal"
+  replyTo   String? @db.VarChar(255) // Optional reply-to address
+
+  // Domain Verification
+  domainVerified    Boolean   @default(false)
+  domainVerifiedAt  DateTime?
+  dkimRecordValue   String?   @db.Text // DKIM DNS record value
+  spfRecordValue    String?   @db.Text // SPF DNS record value
+  verificationToken String?   @unique // For domain ownership verification
+
+  // Email Templates (optional custom branding)
+  customHeaderHtml String? @db.Text
+  customFooterHtml String? @db.Text
+  primaryColor     String? @db.VarChar(7) // #hex color
+  secondaryColor   String? @db.VarChar(7)
+  logoUrl          String?
+
+  // Rate Limiting
+  dailyEmailLimit   Int       @default(1000)
+  monthlyEmailLimit Int       @default(25000)
+  dailyEmailsSent   Int       @default(0)
+  monthlyEmailsSent Int       @default(0)
+  lastDailyReset    DateTime?
+  lastMonthlyReset  DateTime?
+
+  // Status
+  isActive       Boolean   @default(false) // Only active after verification
+  isVerified     Boolean   @default(false) // Email test passed
+  lastTestedAt   DateTime?
+  lastTestResult String?   @db.Text
+
+  // Admin tracking
+  createdBy String
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@index([provider])
+  @@map("organization_email_configs")
+}
+
+model OrganizationPushConfig {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Firebase Configuration (tenant-specific FCM)
+  firebaseProjectId   String?
+  firebaseClientEmail String?
+  firebasePrivateKey  String? @db.Text // Encrypted
+
+  // Web Push (VAPID keys for progressive web apps)
+  vapidPublicKey  String?
+  vapidPrivateKey String? // Encrypted
+
+  // iOS Push (APNs)
+  apnsKeyId      String?
+  apnsTeamId     String?
+  apnsBundleId   String?
+  apnsKey        String? @db.Text // Encrypted .p8 key content
+  apnsProduction Boolean @default(false) // false = sandbox, true = production
+
+  // Android Push (alternative to Firebase - for custom implementations)
+  androidSenderId String?
+
+  // Notification Branding
+  defaultIcon  String? // URL to notification icon
+  defaultBadge String? // URL to badge icon
+  defaultSound String? // Sound file name
+
+  // Feature Toggles
+  enablePush  Boolean @default(true)
+  enableEmail Boolean @default(true)
+  enableSms   Boolean @default(false)
+  enableInApp Boolean @default(true)
+
+  // Rate Limiting
+  dailyPushLimit    Int       @default(10000)
+  monthlyPushLimit  Int       @default(100000)
+  dailyPushesSent   Int       @default(0)
+  monthlyPushesSent Int       @default(0)
+  lastDailyReset    DateTime?
+  lastMonthlyReset  DateTime?
+
+  // Status
+  isActive     Boolean   @default(false)
+  isConfigured Boolean   @default(false)
+  lastTestedAt DateTime?
+
+  // Admin tracking
+  createdBy String
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("organization_push_configs")
+}
+
+model UserDeviceToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Device Information
+  token      String         @db.Text // FCM/APNs token
+  platform   DevicePlatform
+  deviceId   String? // Unique device identifier
+  deviceName String? // "iPhone 14 Pro", "Chrome on Windows"
+  appVersion String? // App version number
+
+  // Token Status
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime  @default(now())
+  invalidAt  DateTime? // Set when token becomes invalid
+
+  // Multi-tenant
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@index([token])
+  @@index([platform])
+  @@index([isActive])
+  @@index([organizationId])
+  @@map("user_device_tokens")
+}
+
+// Email Provider Enum
+enum EmailProvider {
+  SMTP // Custom SMTP server (for domain emails)
+  GMAIL // Gmail SMTP (for basic setups)
+  SENDGRID // SendGrid API
+  RESEND // Resend API
+  MAILGUN // Mailgun API
+  MAILERSEND // MailerSend API
+  SES // AWS SES
+}
+
+// Device Platform Enum
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+  PWA
 }

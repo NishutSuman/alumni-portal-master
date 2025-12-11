@@ -1,19 +1,22 @@
 // src/controllers/eventCategory.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // Get all event categories (public)
 const getAllCategories = async (req, res) => {
   const { includeInactive = false } = req.query;
-  
+
   try {
-    const whereClause = {};
-    
+    const whereClause = {
+      ...getTenantFilter(req),
+    };
+
     // Only include active categories unless explicitly requested
     if (!includeInactive || req.user?.role !== 'SUPER_ADMIN') {
       whereClause.isActive = true;
     }
-    
+
     const categories = await prisma.eventCategory.findMany({
       where: whereClause,
       select: {
@@ -60,8 +63,11 @@ const getCategoryById = async (req, res) => {
   
   try {
     // Get category details
-    const category = await prisma.eventCategory.findUnique({
-      where: { id: categoryId },
+    const category = await prisma.eventCategory.findFirst({
+      where: {
+        id: categoryId,
+        ...getTenantFilter(req),
+      },
       select: {
         id: true,
         name: true,
@@ -83,6 +89,7 @@ const getCategoryById = async (req, res) => {
     // Get events in this category with pagination
     const whereClause = {
       categoryId,
+      ...getTenantFilter(req),
       status: {
         in: ['PUBLISHED', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING']
       }
@@ -169,19 +176,23 @@ const createCategory = async (req, res) => {
   
   try {
     // Check if category name already exists
-    const existingCategory = await prisma.eventCategory.findUnique({
-      where: { name: name.trim().toUpperCase() },
+    const existingCategory = await prisma.eventCategory.findFirst({
+      where: {
+        name: name.trim().toUpperCase(),
+        ...getTenantFilter(req),
+      },
     });
-    
+
     if (existingCategory) {
       return errorResponse(res, 'Event category with this name already exists', 409);
     }
-    
+
     // Create category
     const category = await prisma.eventCategory.create({
       data: {
         name: name.trim().toUpperCase(),
         description: description?.trim() || null,
+        ...getTenantData(req),
       },
       select: {
         id: true,
@@ -228,8 +239,11 @@ const updateCategory = async (req, res) => {
   
   try {
     // Check if category exists
-    const existingCategory = await prisma.eventCategory.findUnique({
-      where: { id: categoryId },
+    const existingCategory = await prisma.eventCategory.findFirst({
+      where: {
+        id: categoryId,
+        ...getTenantFilter(req),
+      },
       select: {
         id: true,
         name: true,
@@ -261,14 +275,17 @@ const updateCategory = async (req, res) => {
       
       // Check if new name conflicts with existing category
       if (trimmedName !== existingCategory.name) {
-        const nameConflict = await prisma.eventCategory.findUnique({
-          where: { name: trimmedName },
+        const nameConflict = await prisma.eventCategory.findFirst({
+          where: {
+            name: trimmedName,
+            ...getTenantFilter(req),
+          },
         });
-        
+
         if (nameConflict) {
           return errorResponse(res, 'Event category with this name already exists', 409);
         }
-        
+
         updateData.name = trimmedName;
       }
     }
@@ -334,8 +351,11 @@ const deleteCategory = async (req, res) => {
   
   try {
     // Check if category exists and has events
-    const category = await prisma.eventCategory.findUnique({
-      where: { id: categoryId },
+    const category = await prisma.eventCategory.findFirst({
+      where: {
+        id: categoryId,
+        ...getTenantFilter(req),
+      },
       select: {
         id: true,
         name: true,

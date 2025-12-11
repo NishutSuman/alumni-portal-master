@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const { cloudflareR2Service } = require('../../services/cloudflare-r2.service');
 const { invalidateAllCelebrationCaches } = require('../../middleware/cache/celebration.cache.middleware');
+const { getTenantFilter } = require('../../utils/tenant.util');
 const prisma = new PrismaClient();
 
 // ==========================================
@@ -438,16 +439,18 @@ const updateProfile = async (req, res) => {
 };
 
 /**
- * Get public user profile
+ * Get public user profile (Multi-Tenant Aware)
  */
 const getPublicProfile = async (req, res) => {
 	try {
 		const { userId } = req.params;
+		const tenantFilter = getTenantFilter(req);
 
-		const user = await prisma.user.findUnique({
+		const user = await prisma.user.findFirst({
 			where: {
 				id: userId,
 				isActive: true,
+				...tenantFilter, // Multi-tenant: only show users from same organization
 			},
 			select: {
 				id: true,
@@ -706,8 +709,33 @@ const uploadProfilePicture = async (req, res) => {
 			});
 		}
 
-		// Upload to R2
-		const uploadResult = await cloudflareR2Service.uploadProfilePicture(file);
+		// Get tenant code for R2 storage isolation
+		// Priority: 1) tenant middleware, 2) header, 3) user's organization from DB
+		let tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+
+		// Fallback: If no tenant code from middleware/header, get from user's organization
+		// This handles cases where multipart/form-data requests don't include the header
+		if (!tenantCode) {
+			const userWithOrg = await prisma.user.findUnique({
+				where: { id: userId },
+				select: {
+					organization: {
+						select: { tenantCode: true }
+					}
+				}
+			});
+			tenantCode = userWithOrg?.organization?.tenantCode || null;
+		}
+
+		console.log('📁 Profile picture upload - Tenant debug:', {
+			tenantFromMiddleware: req.tenant?.tenantCode,
+			tenantCode: tenantCode,
+			headerTenantCode: req.headers['x-tenant-code'],
+			userId: userId
+		});
+
+		// Upload to R2 (tenant-aware)
+		const uploadResult = await cloudflareR2Service.uploadProfilePicture(file, tenantCode);
 
 		// Update user profile picture URL in database
 		await prisma.user.update({
@@ -715,7 +743,7 @@ const uploadProfilePicture = async (req, res) => {
 			data: { profileImage: uploadResult.url },
 		});
 
-		console.log('✅ Profile picture uploaded to R2:', uploadResult.url);
+		console.log('✅ Profile picture uploaded to R2:', uploadResult.url, 'for tenant:', tenantCode);
 
 		res.json({
 			success: true,
@@ -774,8 +802,33 @@ const updateProfilePicture = async (req, res) => {
 			select: { profileImage: true }
 		});
 
-		// Upload new profile picture to R2
-		const uploadResult = await cloudflareR2Service.uploadProfilePicture(file);
+		// Get tenant code for R2 storage isolation
+		// Priority: 1) tenant middleware, 2) header, 3) user's organization from DB
+		let tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || null;
+
+		// Fallback: If no tenant code from middleware/header, get from user's organization
+		// This handles cases where multipart/form-data requests don't include the header
+		if (!tenantCode) {
+			const userWithOrg = await prisma.user.findUnique({
+				where: { id: userId },
+				select: {
+					organization: {
+						select: { tenantCode: true }
+					}
+				}
+			});
+			tenantCode = userWithOrg?.organization?.tenantCode || null;
+		}
+
+		console.log('📁 Profile picture update - Tenant debug:', {
+			tenantFromMiddleware: req.tenant?.tenantCode,
+			tenantCode: tenantCode,
+			headerTenantCode: req.headers['x-tenant-code'],
+			userId: userId
+		});
+
+		// Upload new profile picture to R2 (tenant-aware)
+		const uploadResult = await cloudflareR2Service.uploadProfilePicture(file, tenantCode);
 
 		// Update user profile picture URL in database
 		await prisma.user.update({
@@ -1104,12 +1157,13 @@ const deleteWorkExperience = async (req, res) => {
 // ==========================================
 
 /**
- * Search users for mentions - @username functionality
+ * Search users for mentions - @username functionality (Multi-Tenant Aware)
  */
 const searchUsersForMentions = async (req, res) => {
 	try {
 		const { query } = req.query;
-		
+		const tenantFilter = getTenantFilter(req);
+
 		if (!query || query.length < 2) {
 			return res.json({
 				success: true,
@@ -1119,6 +1173,7 @@ const searchUsersForMentions = async (req, res) => {
 		}
 
 		// Search users by fullName, allowing only verified and active users
+		// Multi-tenant: only search users from same organization
 		const users = await prisma.user.findMany({
 			where: {
 				AND: [
@@ -1136,7 +1191,8 @@ const searchUsersForMentions = async (req, res) => {
 					},
 					{
 						isProfilePublic: true
-					}
+					},
+					tenantFilter // Multi-tenant: only show users from same organization
 				]
 			},
 			select: {
@@ -1385,6 +1441,109 @@ const getMyEventRegistrations = async (req, res) => {
 	}
 };
 
+/**
+ * Serve user profile picture from R2 (Public proxy)
+ * GET /api/users/profile-picture/:userId
+ * Also handles dummy profile pictures for marquee component
+ */
+const serveProfilePicture = async (req, res) => {
+	try {
+		const { userId } = req.params;
+
+		// Check if this is a dummy profile picture request
+		if (userId.startsWith('dummy-pp')) {
+			// Extract dummy image number (e.g., "dummy-pp5" -> "pp5")
+			const dummyFileName = userId.replace('dummy-', '');
+
+			// Get tenant code from request
+			const tenantCode = req.tenant?.tenantCode || req.headers['x-tenant-code'] || 'default';
+
+			// Construct path: alumni-portal/tenants/{TENANT_CODE}/profile-pictures/{ppN}.jpeg
+			const key = `alumni-portal/tenants/${tenantCode}/profile-pictures/${dummyFileName}.jpeg`;
+
+			console.log('Fetching dummy profile picture with key:', key);
+
+			// Get file from R2
+			const result = await cloudflareR2Service.getFile(key);
+
+			if (!result.success) {
+				console.error('Failed to fetch dummy profile picture from R2:', result.error);
+				return res.status(404).send('Dummy image not found');
+			}
+
+			// Set content type and cache headers (long cache for dummy images)
+			res.set({
+				'Content-Type': result.contentType || 'image/jpeg',
+				'Cache-Control': 'public, max-age=2592000', // 30 days (static images)
+				'ETag': `"dummy-${dummyFileName}"`
+			});
+
+			return res.send(result.data);
+		}
+
+		// Regular user profile picture handling
+		// Public image proxy endpoint - no tenant filter needed
+		// The userId is already a unique identifier providing sufficient security
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			select: { profileImage: true, updatedAt: true }
+		});
+
+		if (!user || !user.profileImage) {
+			console.log('User or profile image not found for userId:', userId);
+			return res.status(404).send('Image not found');
+		}
+
+		console.log('Fetching profile picture from R2:', user.profileImage);
+
+		let key;
+
+		// Check if profileImage is a full URL or just a filename
+		if (user.profileImage.startsWith('http://') || user.profileImage.startsWith('https://')) {
+			// Extract the key from the full R2 URL
+			const urlParts = user.profileImage.split('.com/');
+			if (urlParts.length < 2) {
+				console.error('Invalid R2 URL format:', user.profileImage);
+				return res.status(400).send('Invalid image URL');
+			}
+			key = urlParts[1]; // e.g., "tenants/JAAJTEST/profile-pictures/profile_xxx.png"
+		} else {
+			// It's just a filename, prepend the profile-pictures path
+			key = `alumni-portal/profile-pictures/${user.profileImage}`;
+		}
+
+		console.log('Fetching profile picture with key:', key);
+
+		// Get file from R2
+		const result = await cloudflareR2Service.getFile(key);
+
+		if (!result.success) {
+			console.error('Failed to fetch profile picture from R2:', result.error);
+			return res.status(404).send('Image not found');
+		}
+
+		// Set content type and cache headers
+		// Use updatedAt timestamp for ETag to bust cache when image is updated
+		const etag = `"${userId}-${user.updatedAt.getTime()}"`;
+
+		res.set({
+			'Content-Type': result.contentType,
+			'Cache-Control': 'public, max-age=86400', // 24 hours
+			'ETag': etag
+		});
+
+		// Check if client already has the latest version
+		if (req.headers['if-none-match'] === etag) {
+			return res.status(304).end();
+		}
+
+		res.send(result.data);
+	} catch (error) {
+		console.error('Error serving profile picture:', error);
+		res.status(500).send('Internal server error');
+	}
+};
+
 module.exports = {
 	// Profile management
 	getProfile,
@@ -1400,6 +1559,7 @@ module.exports = {
 	uploadProfilePicture,
 	updateProfilePicture,
 	deleteProfilePicture,
+	serveProfilePicture,
 
 	// Education management
 	getEducationHistory,

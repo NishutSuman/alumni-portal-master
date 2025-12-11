@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import {
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
@@ -7,9 +8,20 @@ import {
 } from '@heroicons/react/24/outline';
 import Posts from './Posts';
 import Polls from './Polls';
+import UserAnnouncements from './Announcements';
 
 const Social: React.FC = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'posts' | 'polls' | 'announcements'>('posts');
+
+  // Handle navigation state to open specific tab
+  useEffect(() => {
+    if (location.state?.tab === 'announcements') {
+      setActiveTab('announcements');
+      // Clear the state to prevent reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const tabs = [
     {
@@ -29,7 +41,6 @@ const Social: React.FC = () => {
       name: 'Announcements',
       icon: MegaphoneIcon,
       description: 'Important updates and announcements',
-      comingSoon: true,
     },
   ];
 
@@ -40,17 +51,7 @@ const Social: React.FC = () => {
       case 'polls':
         return <Polls />;
       case 'announcements':
-        return (
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-            <div className="text-center">
-              <MegaphoneIcon className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Announcements Coming Soon</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Stay updated with important announcements and news from your organization.
-              </p>
-            </div>
-          </div>
-        );
+        return <UserAnnouncements />;
       default:
         return null;
     }
@@ -59,10 +60,9 @@ const Social: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Tab Navigation - Fixed */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-800 shadow-sm">
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <div className="-mb-px flex space-x-8 overflow-x-auto">
+            <div className="flex space-x-8 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -97,7 +97,6 @@ const Social: React.FC = () => {
               );
             })}
             </div>
-          </div>
         </div>
       </div>
 

@@ -18,7 +18,9 @@ import {
   CalendarIcon,
   UserGroupIcon,
   ExclamationTriangleIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  SparklesIcon,
+  ChatBubbleBottomCenterTextIcon
 } from '@heroicons/react/24/outline';
 import {
   useGetOrganizationAdminQuery,
@@ -53,6 +55,15 @@ const socialLinksSchema = yup.object({
   youtubeUrl: yup.string().url('Invalid URL').optional().nullable()
 });
 
+const aboutSchema = yup.object({
+  description: yup.string().optional().nullable(),
+  mission: yup.string().optional().nullable(),
+  vision: yup.string().optional().nullable(),
+  presidentMessage: yup.string().optional().nullable(),
+  secretaryMessage: yup.string().optional().nullable(),
+  treasurerMessage: yup.string().optional().nullable()
+});
+
 interface BasicInfoFormData {
   name: string;
   shortName: string;
@@ -71,6 +82,15 @@ interface SocialLinksFormData {
   youtubeUrl?: string;
 }
 
+interface AboutFormData {
+  description?: string;
+  mission?: string;
+  vision?: string;
+  presidentMessage?: string;
+  secretaryMessage?: string;
+  treasurerMessage?: string;
+}
+
 interface FoundingMember {
   name: string;
   role: string;
@@ -80,9 +100,11 @@ interface FoundingMember {
 const OrganizationManagement = () => {
   const { user: currentUser, auth } = useAuth();
   const dispatch = useDispatch();
-  const [activeTab, setActiveTab] = useState<'basic' | 'social' | 'members' | 'files'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'about' | 'social' | 'members' | 'files'>('basic');
   const [isEditingBasic, setIsEditingBasic] = useState(false);
   const [isEditingSocial, setIsEditingSocial] = useState(false);
+  const [isEditingAbout, setIsEditingAbout] = useState(false);
+  const [isUpdatingAbout, setIsUpdatingAbout] = useState(false);
   const [foundingMembers, setFoundingMembers] = useState<FoundingMember[]>([]);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [bylawFile, setBylawFile] = useState<File | null>(null);
@@ -126,6 +148,18 @@ const OrganizationManagement = () => {
     }
   });
 
+  const aboutForm = useForm<AboutFormData>({
+    resolver: yupResolver(aboutSchema),
+    defaultValues: {
+      description: '',
+      mission: '',
+      vision: '',
+      presidentMessage: '',
+      secretaryMessage: '',
+      treasurerMessage: ''
+    }
+  });
+
   // Update form data when organization data is loaded
   useEffect(() => {
     if (isConfigured && orgData.organization) {
@@ -146,6 +180,15 @@ const OrganizationManagement = () => {
         twitterUrl: org.twitterUrl || '',
         linkedinUrl: org.linkedinUrl || '',
         youtubeUrl: org.youtubeUrl || ''
+      });
+
+      aboutForm.reset({
+        description: org.description || '',
+        mission: org.mission || '',
+        vision: org.vision || '',
+        presidentMessage: org.presidentMessage || '',
+        secretaryMessage: org.secretaryMessage || '',
+        treasurerMessage: org.treasurerMessage || ''
       });
 
       if (org.foundingMembers) {
@@ -189,9 +232,18 @@ const OrganizationManagement = () => {
         youtubeUrl: ''
       });
 
+      aboutForm.reset({
+        description: '',
+        mission: '',
+        vision: '',
+        presidentMessage: '',
+        secretaryMessage: '',
+        treasurerMessage: ''
+      });
+
       setFoundingMembers([]);
     }
-  }, [orgData, basicForm, socialForm]);
+  }, [orgData, basicForm, socialForm, aboutForm]);
 
   // Handle basic info submission
   const handleBasicInfoSubmit = async (data: BasicInfoFormData) => {
@@ -218,6 +270,55 @@ const OrganizationManagement = () => {
     } catch (error: any) {
       console.error('Failed to update social links:', error);
       alert(error?.data?.message || 'Failed to update social links');
+    }
+  };
+
+  // Handle About section submission
+  const handleAboutSubmit = async (data: AboutFormData) => {
+    if (!orgData?.organization) {
+      alert('Organization data not loaded');
+      return;
+    }
+
+    setIsUpdatingAbout(true);
+    try {
+      const org = orgData.organization;
+      const basicFormData = basicForm.getValues();
+
+      // Include all organization data along with the about fields
+      await updateOrganization({
+        name: basicFormData.name,
+        shortName: basicFormData.shortName,
+        foundationYear: basicFormData.foundationYear,
+        officialEmail: basicFormData.officialEmail,
+        officialContactNumber: basicFormData.officialContactNumber,
+        officeAddress: basicFormData.officeAddress,
+        logoUrl: org.logoUrl,
+        bylawDocumentUrl: org.bylawDocumentUrl,
+        registrationCertUrl: org.registrationCertUrl,
+        websiteUrl: org.websiteUrl,
+        instagramUrl: org.instagramUrl,
+        facebookUrl: org.facebookUrl,
+        youtubeUrl: org.youtubeUrl,
+        twitterUrl: org.twitterUrl,
+        linkedinUrl: org.linkedinUrl,
+        foundingMembers: foundingMembers,
+        // About section fields
+        description: data.description,
+        mission: data.mission,
+        vision: data.vision,
+        presidentMessage: data.presidentMessage,
+        secretaryMessage: data.secretaryMessage,
+        treasurerMessage: data.treasurerMessage
+      }).unwrap();
+
+      setIsEditingAbout(false);
+      refetch();
+    } catch (error: any) {
+      console.error('Failed to update about section:', error);
+      alert(error?.data?.message || 'Failed to update organization details');
+    } finally {
+      setIsUpdatingAbout(false);
     }
   };
 
@@ -332,11 +433,13 @@ const OrganizationManagement = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/admin/organization/files/delete`, {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+      const response = await fetch(`${apiBaseUrl}/admin/organization/files/delete`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${auth?.token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Tenant-Code': auth?.tenantCode || ''
         },
         body: JSON.stringify({ fileType })
       });
@@ -387,11 +490,13 @@ const OrganizationManagement = () => {
         certFile: certFile?.name
       });
 
-      // TEST: Use plain fetch instead of RTK Query
-      const response = await fetch('http://localhost:3000/api/admin/organization/admin/upload/files', {
+      // Use plain fetch instead of RTK Query for FormData uploads
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+      const response = await fetch(`${apiBaseUrl}/admin/organization/admin/upload/files`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${auth?.token}`,
+          'X-Tenant-Code': auth?.tenantCode || ''
           // Don't set Content-Type - let browser set it with boundary
         },
         body: formData
@@ -508,6 +613,7 @@ const OrganizationManagement = () => {
         <nav className="-mb-px flex space-x-8 overflow-x-auto">
           {[
             { id: 'basic', label: 'Basic Information', icon: BuildingOfficeIcon },
+            { id: 'about', label: 'About Organization', icon: SparklesIcon },
             { id: 'social', label: 'Social Links', icon: GlobeAltIcon },
             { id: 'members', label: 'Founding Members', icon: UserGroupIcon },
             { id: 'files', label: 'File Uploads', icon: DocumentIcon }
@@ -690,6 +796,170 @@ const OrganizationManagement = () => {
                       <>
                         <CheckIcon className="h-4 w-4 mr-2" />
                         {isConfigured ? 'Update Information' : 'Initialize Organization'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </form>
+          </motion.div>
+        )}
+
+        {/* About Organization Tab */}
+        {activeTab === 'about' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6"
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                About Organization
+              </h2>
+              {isConfigured && (
+                <button
+                  onClick={() => setIsEditingAbout(!isEditingAbout)}
+                  className="flex items-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-600 dark:border-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  {isEditingAbout ? (
+                    <>
+                      <XMarkIcon className="h-4 w-4 mr-2" />
+                      Cancel
+                    </>
+                  ) : (
+                    <>
+                      <PencilIcon className="h-4 w-4 mr-2" />
+                      Edit
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={aboutForm.handleSubmit(handleAboutSubmit)} className="space-y-8">
+              {/* Vision, Mission, Description Section */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                  <SparklesIcon className="h-5 w-5 mr-2 text-blue-500" />
+                  Vision, Mission & Description
+                </h3>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Organization Description
+                    <span className="text-xs text-gray-500 ml-1">(Tell your story)</span>
+                  </label>
+                  <textarea
+                    {...aboutForm.register('description')}
+                    disabled={!isEditingAbout}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="Describe your organization, its history, and what makes it special..."
+                  />
+                </div>
+
+                {/* Vision */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Vision
+                    <span className="text-xs text-gray-500 ml-1">(Long-term aspirations)</span>
+                  </label>
+                  <textarea
+                    {...aboutForm.register('vision')}
+                    disabled={!isEditingAbout}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="What does your organization aspire to become or achieve in the future?"
+                  />
+                </div>
+
+                {/* Mission */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Mission
+                    <span className="text-xs text-gray-500 ml-1">(Purpose and values)</span>
+                  </label>
+                  <textarea
+                    {...aboutForm.register('mission')}
+                    disabled={!isEditingAbout}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="What is the core purpose and guiding principles of your organization?"
+                  />
+                </div>
+              </div>
+
+              {/* Desk Messages Section */}
+              <div className="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-8">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                  <ChatBubbleBottomCenterTextIcon className="h-5 w-5 mr-2 text-purple-500" />
+                  Messages from Office Bearers
+                </h3>
+
+                {/* President's Message */}
+                <div className="bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900/20 dark:to-transparent p-4 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    President's Message
+                  </label>
+                  <textarea
+                    {...aboutForm.register('presidentMessage')}
+                    disabled={!isEditingAbout}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="A message from the President to the alumni community..."
+                  />
+                </div>
+
+                {/* Secretary's Message */}
+                <div className="bg-gradient-to-r from-green-50 to-transparent dark:from-green-900/20 dark:to-transparent p-4 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Secretary's Message
+                  </label>
+                  <textarea
+                    {...aboutForm.register('secretaryMessage')}
+                    disabled={!isEditingAbout}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="A message from the Secretary to the alumni community..."
+                  />
+                </div>
+
+                {/* Treasurer's Message */}
+                <div className="bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/20 dark:to-transparent p-4 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Treasurer's Message
+                  </label>
+                  <textarea
+                    {...aboutForm.register('treasurerMessage')}
+                    disabled={!isEditingAbout}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="A message from the Treasurer to the alumni community..."
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              {isEditingAbout && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                  <button
+                    type="submit"
+                    disabled={isUpdatingAbout}
+                    className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isUpdatingAbout ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon className="h-4 w-4 mr-2" />
+                        Save About Information
                       </>
                     )}
                   </button>

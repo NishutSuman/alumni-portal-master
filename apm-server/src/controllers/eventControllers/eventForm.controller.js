@@ -1,6 +1,7 @@
 // src/controllers/eventForm.controller.js
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
+const { getTenantFilter, getTenantData } = require('../../utils/tenant.util');
 
 // ==========================================
 // EVENT FORM MANAGEMENT (Admin Only)
@@ -12,17 +13,17 @@ const getEventForm = async (req, res) => {
   
   try {
     // Check if event exists and has registration enabled
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
         hasRegistration: true,
         hasCustomForm: true,
         status: true,
       },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -81,16 +82,16 @@ const createOrUpdateEventForm = async (req, res) => {
   
   try {
     // Check if event exists
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { 
-        id: true, 
-        title: true, 
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
+      select: {
+        id: true,
+        title: true,
         hasRegistration: true,
         hasCustomForm: true,
       },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -179,11 +180,11 @@ const deleteEventForm = async (req, res) => {
   
   try {
     // Check if event exists
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, ...getTenantFilter(req) },
       select: { id: true, title: true },
     });
-    
+
     if (!event) {
       return errorResponse(res, 'Event not found', 404);
     }
@@ -256,8 +257,11 @@ const addFormField = async (req, res) => {
   
   try {
     // Check if form exists
-    const form = await prisma.eventForm.findUnique({
-      where: { eventId },
+    const form = await prisma.eventForm.findFirst({
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         event: {
           select: { id: true, title: true },
@@ -267,7 +271,7 @@ const addFormField = async (req, res) => {
         },
       },
     });
-    
+
     if (!form) {
       return errorResponse(res, 'Event form not found. Create a form first.', 404);
     }
@@ -345,7 +349,10 @@ const updateFormField = async (req, res) => {
     const field = await prisma.eventFormField.findFirst({
       where: {
         id: fieldId,
-        form: { eventId },
+        form: {
+          eventId,
+          event: { ...getTenantFilter(req) }
+        },
       },
       include: {
         form: {
@@ -357,7 +364,7 @@ const updateFormField = async (req, res) => {
         },
       },
     });
-    
+
     if (!field) {
       return errorResponse(res, 'Form field not found', 404);
     }
@@ -413,7 +420,10 @@ const deleteFormField = async (req, res) => {
     const field = await prisma.eventFormField.findFirst({
       where: {
         id: fieldId,
-        form: { eventId },
+        form: {
+          eventId,
+          event: { ...getTenantFilter(req) }
+        },
       },
       include: {
         form: {
@@ -428,7 +438,7 @@ const deleteFormField = async (req, res) => {
         },
       },
     });
-    
+
     if (!field) {
       return errorResponse(res, 'Form field not found', 404);
     }
@@ -475,8 +485,11 @@ const reorderFormFields = async (req, res) => {
   
   try {
     // Check if form exists
-    const form = await prisma.eventForm.findUnique({
-      where: { eventId },
+    const form = await prisma.eventForm.findFirst({
+      where: {
+        eventId,
+        event: { ...getTenantFilter(req) }
+      },
       include: {
         event: {
           select: { id: true, title: true },
@@ -486,7 +499,7 @@ const reorderFormFields = async (req, res) => {
         },
       },
     });
-    
+
     if (!form) {
       return errorResponse(res, 'Event form not found', 404);
     }

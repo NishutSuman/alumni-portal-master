@@ -1,10 +1,12 @@
 // src/controllers/notification.controller.js
 // Generic Notification Controller - Following established patterns
+// Multi-Tenant Aware Implementation
 
 const { PrismaClient } = require('@prisma/client');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { CacheService } = require('../../config/redis');
 const { NotificationService, NOTIFICATION_TYPES, PRIORITY_LEVELS } = require('../../services/notification.service');
+const { getTenantFilter } = require('../../utils/tenant.util');
 
 const prisma = new PrismaClient();
 
@@ -427,6 +429,7 @@ const unregisterPushToken = async (req, res) => {
  * Send custom notification (Admin)
  * POST /api/notifications/send
  * Access: SUPER_ADMIN
+ * Multi-Tenant: Recipients filtered by admin's organization
  */
 const sendCustomNotification = async (req, res) => {
   try {
@@ -440,17 +443,22 @@ const sendCustomNotification = async (req, res) => {
       scheduleAt = null
     } = req.body;
 
-    // Validate recipients exist
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const tenantId = req.tenantId || null;
+
+    // Validate recipients exist and belong to the same tenant
     if (recipientIds && recipientIds.length > 0) {
       const recipientCount = await prisma.user.count({
-        where: { 
+        where: {
           id: { in: recipientIds },
-          isActive: true 
+          isActive: true,
+          ...tenantFilter // Multi-tenant isolation - only allow recipients from same org
         }
       });
 
       if (recipientCount !== recipientIds.length) {
-        return errorResponse(res, 'Some recipient users not found or inactive', 400);
+        return errorResponse(res, 'Some recipient users not found, inactive, or not in your organization', 400);
       }
     }
 
@@ -461,7 +469,9 @@ const sendCustomNotification = async (req, res) => {
       message,
       data,
       priority,
-      scheduleAt
+      scheduleAt,
+      organizationId: tenantId, // Pass tenant ID for multi-tenant notification storage
+      tenantCode: req.tenantCode // Pass tenant code for push notifications
     });
 
     // Log activity
@@ -491,21 +501,29 @@ const sendCustomNotification = async (req, res) => {
  * Send system announcement to all users
  * POST /api/notifications/announce
  * Access: SUPER_ADMIN
+ * Multi-Tenant: Only sends to users in admin's organization
  */
 const sendSystemAnnouncement = async (req, res) => {
   try {
     const { title, message, priority = PRIORITY_LEVELS.MEDIUM } = req.body;
 
-    // Get all active users
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+    const tenantId = req.tenantId || null;
+
+    // Get all active users in the tenant's organization
     const activeUsers = await prisma.user.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...tenantFilter // Multi-tenant isolation - only users from same org
+      },
       select: { id: true }
     });
 
     const recipientIds = activeUsers.map(user => user.id);
 
     if (recipientIds.length === 0) {
-      return errorResponse(res, 'No active users found', 400);
+      return errorResponse(res, 'No active users found in your organization', 400);
     }
 
     const result = await NotificationService.createAndSendNotification({
@@ -513,7 +531,9 @@ const sendSystemAnnouncement = async (req, res) => {
       type: NOTIFICATION_TYPES.SYSTEM_ANNOUNCEMENT,
       title,
       message,
-      priority
+      priority,
+      organizationId: tenantId, // Pass tenant ID for multi-tenant notification storage
+      tenantCode: req.tenantCode // Pass tenant code for push notifications
     });
 
     // Log activity
@@ -546,20 +566,26 @@ const sendSystemAnnouncement = async (req, res) => {
  * Get notification analytics (Admin)
  * GET /api/notifications/admin/analytics
  * Access: SUPER_ADMIN
+ * Multi-Tenant: Only shows analytics for admin's organization
  */
 const getNotificationAnalytics = async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
 
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
     const dateFilter = {};
     if (fromDate) dateFilter.gte = new Date(fromDate);
     if (toDate) dateFilter.lte = new Date(toDate);
 
-    const whereClause = Object.keys(dateFilter).length > 0 
-      ? { createdAt: dateFilter } 
-      : {};
+    // Combine date filter with tenant filter
+    const whereClause = {
+      ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+      ...tenantFilter // Multi-tenant isolation
+    };
 
-    // Get analytics data
+    // Get analytics data filtered by tenant
     const [
       totalNotifications,
       notificationsByType,
@@ -567,7 +593,7 @@ const getNotificationAnalytics = async (req, res) => {
       notificationsByPriority
     ] = await Promise.all([
       prisma.notification.count({ where: whereClause }),
-      
+
       prisma.notification.groupBy({
         by: ['type'],
         where: whereClause,
@@ -618,12 +644,28 @@ const getNotificationAnalytics = async (req, res) => {
  * Cleanup old notifications (Admin)
  * POST /api/notifications/admin/cleanup
  * Access: SUPER_ADMIN
+ * Multi-Tenant: Only cleans up notifications in admin's organization
  */
 const cleanupOldNotifications = async (req, res) => {
   try {
     const { daysOld = 30 } = req.body;
 
-    const result = await NotificationService.cleanupOldNotifications(parseInt(daysOld));
+    // Build tenant filter for multi-tenant isolation
+    const tenantFilter = getTenantFilter(req);
+
+    // Custom cleanup with tenant filter (instead of using service that doesn't filter)
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - parseInt(daysOld));
+
+    const result = await prisma.notification.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+        ...tenantFilter, // Multi-tenant isolation
+        OR: [
+          { isRead: true }, // Read notifications
+        ]
+      }
+    });
 
     // Log activity
     await prisma.activityLog.create({
@@ -632,14 +674,14 @@ const cleanupOldNotifications = async (req, res) => {
         action: 'notifications_cleanup',
         details: {
           daysOld: parseInt(daysOld),
-          deletedCount: result.deletedCount
+          deletedCount: result.count
         },
         ipAddress: req.ip,
         userAgent: req.get('User-Agent')
       }
     });
 
-    return successResponse(res, result, `Cleaned up ${result.deletedCount} old notifications`);
+    return successResponse(res, { deletedCount: result.count }, `Cleaned up ${result.count} old notifications`);
   } catch (error) {
     console.error('Cleanup old notifications error:', error);
     return errorResponse(res, 'Failed to cleanup old notifications', 500);

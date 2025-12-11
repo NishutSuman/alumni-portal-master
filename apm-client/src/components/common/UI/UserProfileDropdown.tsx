@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { switchOrganization } from '@/store';
 import { getStoredOrgName } from '@/config/organizations';
+import SettingsModal from './SettingsModal';
 
 interface UserProfileDropdownProps {
   className?: string;
@@ -23,6 +24,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -51,6 +53,11 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
   const handleSwitchOrganization = () => {
     setIsOpen(false);
     switchOrganization();
+  };
+
+  const handleOpenSettings = () => {
+    setIsOpen(false);
+    setIsSettingsOpen(true);
   };
 
   // Get current organization name
@@ -153,7 +160,10 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
                 </button>
 
                 {/* Settings */}
-                <button className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                <button
+                  onClick={handleOpenSettings}
+                  className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                >
                   <CogIcon className="h-5 w-5 mr-3" />
                   <span>Settings</span>
                 </button>
@@ -194,6 +204,12 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
           </>
         )}
       </AnimatePresence>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 };
