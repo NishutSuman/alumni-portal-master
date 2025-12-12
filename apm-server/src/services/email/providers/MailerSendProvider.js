@@ -11,6 +11,10 @@ class MailerSendProvider extends BaseEmailProvider {
 
   async sendEmail(to, subject, htmlContent, data = {}) {
     try {
+      console.log(`📧 MailerSend: Preparing email to ${to}`);
+      console.log(`📧 MailerSend: From ${this.config.fromName} <${this.config.fromEmail}>`);
+      console.log(`📧 MailerSend: API Key present: ${this.config.apiKey ? 'Yes (starts with ' + this.config.apiKey.substring(0, 10) + '...)' : 'No'}`);
+
       const sentFrom = new Sender(this.config.fromEmail, this.config.fromName);
       const recipients = [new Recipient(to)];
 
@@ -20,9 +24,11 @@ class MailerSendProvider extends BaseEmailProvider {
         .setSubject(subject)
         .setHtml(htmlContent);
 
+      console.log(`📧 MailerSend: Sending email...`);
       const result = await this.mailerSend.email.send(emailParams);
 
-      console.log(`✅ Email sent successfully via MailerSend to ${to}`);
+      console.log(`✅ MailerSend: Email sent successfully to ${to}`);
+      console.log(`✅ MailerSend: Result:`, JSON.stringify(result, null, 2));
 
       return {
         success: true,
@@ -34,9 +40,10 @@ class MailerSendProvider extends BaseEmailProvider {
 
     } catch (error) {
       console.error(`❌ MailerSend send error to ${to}:`, error);
+      console.error(`❌ MailerSend error details:`, error.body || error.response?.data || error.message);
       return {
         success: false,
-        error: error.message,
+        error: error.body?.message || error.message || 'Unknown MailerSend error',
         to: to,
         subject: subject
       };

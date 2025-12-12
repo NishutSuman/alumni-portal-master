@@ -461,20 +461,18 @@ class TenantEmailManager {
       // Encrypt sensitive fields
       const encryptedData = { ...configData };
 
-      if (configData.smtpPassword) {
-        encryptedData.smtpPassword = encrypt(configData.smtpPassword);
-      }
-      if (configData.sendgridApiKey) {
-        encryptedData.sendgridApiKey = encrypt(configData.sendgridApiKey);
-      }
-      if (configData.resendApiKey) {
-        encryptedData.resendApiKey = encrypt(configData.resendApiKey);
-      }
-      if (configData.mailgunApiKey) {
-        encryptedData.mailgunApiKey = encrypt(configData.mailgunApiKey);
-      }
-      if (configData.mailersendApiKey) {
-        encryptedData.mailersendApiKey = encrypt(configData.mailersendApiKey);
+      // Handle sensitive fields - encrypt if provided, remove from update if empty
+      // This prevents overwriting existing encrypted values with empty strings
+      const sensitiveFields = ['smtpPassword', 'sendgridApiKey', 'resendApiKey', 'mailgunApiKey', 'mailersendApiKey'];
+
+      for (const field of sensitiveFields) {
+        if (configData[field] && configData[field].trim() !== '') {
+          // Encrypt the new value
+          encryptedData[field] = encrypt(configData[field]);
+        } else {
+          // Remove empty values so they don't overwrite existing encrypted values
+          delete encryptedData[field];
+        }
       }
 
       // Generate verification token for domain verification

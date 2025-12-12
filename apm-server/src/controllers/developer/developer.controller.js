@@ -1876,20 +1876,26 @@ const saveOrganizationEmailConfig = async (req, res) => {
       return errorResponse(res, 'Provider, fromEmail, and fromName are required', 400);
     }
 
+    // Check if there's an existing config (to allow updates without re-entering API keys)
+    const existingConfig = await prisma.organizationEmailConfig.findUnique({
+      where: { organizationId: orgId }
+    });
+
     // Validate provider-specific fields
+    // For updates, API keys are only required if not already saved
     if (provider === 'SMTP' && (!smtpHost || !smtpUser)) {
       return errorResponse(res, 'SMTP host and user are required for SMTP provider', 400);
     }
-    if (provider === 'SENDGRID' && !sendgridApiKey) {
+    if (provider === 'SENDGRID' && !sendgridApiKey && !existingConfig?.sendgridApiKey) {
       return errorResponse(res, 'SendGrid API key is required', 400);
     }
-    if (provider === 'RESEND' && !resendApiKey) {
+    if (provider === 'RESEND' && !resendApiKey && !existingConfig?.resendApiKey) {
       return errorResponse(res, 'Resend API key is required', 400);
     }
-    if (provider === 'MAILGUN' && (!mailgunApiKey || !mailgunDomain)) {
+    if (provider === 'MAILGUN' && ((!mailgunApiKey && !existingConfig?.mailgunApiKey) || !mailgunDomain)) {
       return errorResponse(res, 'Mailgun API key and domain are required', 400);
     }
-    if (provider === 'MAILERSEND' && !mailersendApiKey) {
+    if (provider === 'MAILERSEND' && !mailersendApiKey && !existingConfig?.mailersendApiKey) {
       return errorResponse(res, 'MailerSend API key is required', 400);
     }
 
@@ -1950,7 +1956,8 @@ const testOrganizationEmailConfig = async (req, res) => {
       return errorResponse(res, `Connection test failed: ${testResult.error}`, 400);
     }
 
-    // If test email provided, send a test email
+    // If test email provided, send a test email using the provider directly
+    // (not via sendEmail which requires isActive=true)
     if (testEmail) {
       try {
         const org = await prisma.organization.findUnique({
@@ -1958,24 +1965,49 @@ const testOrganizationEmailConfig = async (req, res) => {
           select: { tenantCode: true, name: true }
         });
 
-        if (org?.tenantCode) {
-          await TenantEmailManager.sendEmail(org.tenantCode, {
-            to: testEmail,
-            subject: `Test Email from ${org.name}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #3b82f6;">Email Configuration Test</h2>
-                <p>This is a test email to verify your email configuration is working correctly.</p>
-                <p>If you received this email, your email configuration is set up correctly!</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #6b7280; font-size: 12px;">
-                  Sent from ${org.name} Alumni Portal
-                </p>
-              </div>
-            `,
-          });
+        // Get the config and create provider directly (bypasses isActive check)
+        const config = await prisma.organizationEmailConfig.findUnique({
+          where: { organizationId: orgId }
+        });
+
+        if (!config) {
+          return errorResponse(res, 'No email configuration found', 404);
         }
+
+        // Create provider directly from config for testing
+        const provider = await TenantEmailManager.createProviderFromConfig(config);
+
+        console.log(`📧 Sending test email via ${config.provider} to ${testEmail}`);
+
+        const testHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #3b82f6;">Email Configuration Test</h2>
+            <p>This is a test email to verify your email configuration is working correctly.</p>
+            <p>If you received this email, your email configuration is set up correctly!</p>
+            <p><strong>Provider:</strong> ${config.provider}</p>
+            <p><strong>From:</strong> ${config.fromName} &lt;${config.fromEmail}&gt;</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 12px;">
+              Sent from ${org?.name || 'Alumni Portal'}
+            </p>
+          </div>
+        `;
+
+        const sendResult = await provider.sendEmail(
+          testEmail,
+          `Test Email from ${org?.name || 'Alumni Portal'}`,
+          testHtml
+        );
+
+        // Check if email actually sent successfully
+        if (!sendResult.success) {
+          console.error(`❌ Test email failed:`, sendResult.error);
+          return errorResponse(res, `Failed to send test email: ${sendResult.error}`, 400);
+        }
+
+        console.log(`✅ Test email sent successfully via ${config.provider}`);
       } catch (sendError) {
+        console.error('Test email send error:', sendError);
         return errorResponse(res, `Connection verified but failed to send test email: ${sendError.message}`, 400);
       }
     }
