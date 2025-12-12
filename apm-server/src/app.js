@@ -237,30 +237,36 @@ app.get("/api/users/profile-picture/:userId", asyncHandler(async (req, res) => {
       const dummyFileName = userId.replace('dummy-', '');
       // Get tenant code from query parameter (preferred) or header (fallback)
       const tenantCode = req.query.tenant || req.headers['x-tenant-code'] || 'default';
-      const key = `tenants/${tenantCode}/profile-pictures/${dummyFileName}.jpeg`;
 
+      // First, try to fetch from R2 (in case custom dummy images were uploaded)
+      const key = `tenants/${tenantCode}/profile-pictures/${dummyFileName}.jpeg`;
       console.log('Fetching dummy profile picture with key:', key, 'tenant:', tenantCode);
 
       const result = await cloudflareR2Service.getFile(key);
 
-      if (!result.success) {
-        console.error('Failed to fetch dummy profile picture from R2:', result.error);
-        // Return placeholder for failed dummy images
-        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-          <rect width="100" height="100" fill="#f3f4f6"/>
-          <circle cx="50" cy="50" r="25" fill="#6b7280"/>
-        </svg>`;
-        res.set('Content-Type', 'image/svg+xml');
-        return res.send(placeholderSvg);
+      if (result.success) {
+        res.set({
+          'Content-Type': result.contentType || 'image/jpeg',
+          'Cache-Control': 'public, max-age=2592000', // 30 days for dummy images
+          'ETag': `"dummy-${dummyFileName}"`
+        });
+        return res.send(result.data);
       }
 
+      // R2 fetch failed - redirect to DiceBear avatar service
+      // DiceBear generates consistent avatars based on seed value
+      console.log('R2 dummy image not found, redirecting to DiceBear avatar');
+
+      // Use the dummy filename as seed to get consistent avatar per dummy ID
+      // Using 'avataaars' style for professional-looking avatars
+      const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${dummyFileName}-${tenantCode}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50`;
+
       res.set({
-        'Content-Type': result.contentType || 'image/jpeg',
-        'Cache-Control': 'public, max-age=2592000', // 30 days for dummy images
-        'ETag': `"dummy-${dummyFileName}"`
+        'Cache-Control': 'public, max-age=2592000', // 30 days
+        'ETag': `"dummy-${dummyFileName}-dicebear"`
       });
 
-      return res.send(result.data);
+      return res.redirect(302, avatarUrl);
     }
 
     // Get user profile picture URL

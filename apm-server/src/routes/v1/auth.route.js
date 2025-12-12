@@ -6,31 +6,34 @@ const { asyncHandler } = require("../../utils/response.js");
 const {
 	checkEmailBlacklist,
 } = require("../../middleware/auth/alumniVerification.middleware.js");
+const { optionalTenantMiddleware } = require("../../middleware/tenant.middleware.js");
 
 // Import auth controller (we'll create this next)
 const authController = require("../../controllers/auth/auth.controller");
 
-// Public routes
+// Public routes - use optionalTenantMiddleware to set req.tenant from X-Tenant-Code header
+// This ensures proper tenant isolation for multi-org users with same email
 router.post(
 	"/register",
+	optionalTenantMiddleware,
 	checkEmailBlacklist,
 	asyncHandler(authController.register)
 );
-router.post("/login", asyncHandler(authController.login));
-router.post("/refresh-token", asyncHandler(authController.refreshToken));
-router.post("/forgot-password", asyncHandler(authController.forgotPassword));
-router.get("/validate-reset-token", asyncHandler(authController.validateResetToken));
-router.post("/reset-password", asyncHandler(authController.resetPassword));
-router.get("/verify-email/:token", asyncHandler(authController.verifyEmail));
-router.post("/resend-verification", asyncHandler(authController.resendVerificationEmail));
-router.post("/test-email", asyncHandler(authController.testEmail));
+router.post("/login", optionalTenantMiddleware, asyncHandler(authController.login));
+router.post("/refresh-token", optionalTenantMiddleware, asyncHandler(authController.refreshToken));
+router.post("/forgot-password", optionalTenantMiddleware, asyncHandler(authController.forgotPassword));
+router.get("/validate-reset-token", optionalTenantMiddleware, asyncHandler(authController.validateResetToken));
+router.post("/reset-password", optionalTenantMiddleware, asyncHandler(authController.resetPassword));
+router.get("/verify-email/:token", optionalTenantMiddleware, asyncHandler(authController.verifyEmail));
+router.post("/resend-verification", optionalTenantMiddleware, asyncHandler(authController.resendVerificationEmail));
+router.post("/test-email", optionalTenantMiddleware, asyncHandler(authController.testEmail));
 
 // Reactivation routes (public - for deactivated users)
-router.post("/request-reactivation", asyncHandler(authController.requestReactivation));
-router.post("/verify-reactivation", asyncHandler(authController.verifyReactivation));
+router.post("/request-reactivation", optionalTenantMiddleware, asyncHandler(authController.requestReactivation));
+router.post("/verify-reactivation", optionalTenantMiddleware, asyncHandler(authController.verifyReactivation));
 
 // Multi-org support routes (public)
-router.post("/organizations-by-email", asyncHandler(authController.getOrganizationsByEmail));
+router.post("/organizations-by-email", optionalTenantMiddleware, asyncHandler(authController.getOrganizationsByEmail));
 router.get("/organizations", asyncHandler(authController.getAllOrganizations));
 router.get("/organization-by-code/:code", asyncHandler(authController.getOrganizationByCode));
 
