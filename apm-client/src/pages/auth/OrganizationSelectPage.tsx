@@ -103,11 +103,14 @@ const OrganizationSelectPage: React.FC = () => {
   }, [])
 
   // Filter organizations based on search query
+  // Also filter out LOCAL-DEV which is only for development
   const filteredOrganizations = organizations.filter(
     (org) =>
-      org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      org.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      org.shortName.toLowerCase().includes(searchQuery.toLowerCase())
+      // Exclude LOCAL-DEV from public display
+      org.code.toUpperCase() !== 'LOCAL-DEV' &&
+      (org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        org.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        org.shortName.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   // Handle organization selection from list

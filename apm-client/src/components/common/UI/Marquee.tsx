@@ -15,6 +15,9 @@ interface MarqueeProps {
   className?: string;
 }
 
+// Fallback placeholder for failed images
+const PLACEHOLDER_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIzMiIgZmlsbD0iI2U1ZTdlYiIvPjxjaXJjbGUgY3g9IjMyIiBjeT0iMjQiIHI9IjEwIiBmaWxsPSIjOWNhM2FmIi8+PHBhdGggZD0iTTEyIDU2YzAtMTEuMDQ2IDguOTU0LTIwIDIwLTIwczIwIDguOTU0IDIwIDIwIiBmaWxsPSIjOWNhM2FmIi8+PC9zdmc+';
+
 const Marquee: React.FC<MarqueeProps> = ({
   images,
   speed = 'medium',
@@ -22,6 +25,20 @@ const Marquee: React.FC<MarqueeProps> = ({
   className = ''
 }) => {
   const [isPaused, setIsPaused] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  // Handle image load error
+  const handleImageError = (imageId: string) => {
+    setFailedImages(prev => new Set(prev).add(imageId));
+  };
+
+  // Get the image URL - use placeholder if image failed to load
+  const getImageSrc = (img: MarqueeImage): string => {
+    if (failedImages.has(img.id)) {
+      return PLACEHOLDER_AVATAR;
+    }
+    return getApiUrl(img.profileImage);
+  };
 
   // Split images into two rows (15 each)
   const row1Images = images.slice(0, 15);
@@ -67,10 +84,11 @@ const Marquee: React.FC<MarqueeProps> = ({
               className="flex-shrink-0"
             >
               <img
-                src={getApiUrl(img.profileImage)}
+                src={getImageSrc(img)}
                 alt=""
                 className="w-16 h-16 rounded-full object-cover shadow-lg ring-2 ring-white dark:ring-gray-700 hover:scale-110 transition-transform duration-300"
                 loading="lazy"
+                onError={() => handleImageError(img.id)}
               />
             </div>
           ))}
@@ -96,10 +114,11 @@ const Marquee: React.FC<MarqueeProps> = ({
               className="flex-shrink-0"
             >
               <img
-                src={getApiUrl(img.profileImage)}
+                src={getImageSrc(img)}
                 alt=""
                 className="w-16 h-16 rounded-full object-cover shadow-lg ring-2 ring-white dark:ring-gray-700 hover:scale-110 transition-transform duration-300"
                 loading="lazy"
+                onError={() => handleImageError(img.id)}
               />
             </div>
           ))}

@@ -958,8 +958,19 @@ console.log("🖼️ Organization logo proxy endpoint registered: GET /api/organ
 app.get("/api/public/organizations", asyncHandler(async (req, res) => {
 	try {
 		// Get all active organizations with basic public info
+		// Exclude LOCAL-DEV and other development/test organizations
 		const organizations = await prisma.organization.findMany({
-			where: { isActive: true },
+			where: {
+				isActive: true,
+				// Exclude development organizations from public listing
+				NOT: {
+					OR: [
+						{ tenantCode: { equals: 'LOCAL-DEV', mode: 'insensitive' } },
+						{ shortName: { equals: 'LOCAL', mode: 'insensitive' } },
+						{ name: { contains: 'Local Development', mode: 'insensitive' } },
+					]
+				}
+			},
 			select: {
 				id: true,
 				name: true,
