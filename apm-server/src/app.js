@@ -971,8 +971,13 @@ app.get("/api/public/organizations", asyncHandler(async (req, res) => {
 			orderBy: { name: 'asc' }
 		});
 
-		// Map to frontend-compatible format and construct apiUrl
-		const baseUrl = process.env.API_BASE_URL || `http://localhost:${config.port}`;
+		// Map to frontend-compatible format
+		// Construct apiUrl dynamically from the request's actual origin
+		// This ensures we return the correct URL whether accessed from localhost or production
+		const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+		const host = req.headers['x-forwarded-host'] || req.headers.host;
+		const baseUrl = process.env.API_BASE_URL || `${protocol}://${host}`;
+
 		const mappedOrganizations = organizations.map(org => ({
 			code: org.tenantCode || org.shortName,
 			name: org.name,

@@ -143,12 +143,29 @@ export const hasOrganizationSelected = (): boolean => {
 
 // Get the API base URL (dynamic based on selected org or fallback to env)
 export const getApiBaseUrl = (): string => {
+  // Priority 1: Environment variable (most reliable for production)
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL
+  if (envUrl) {
+    // Ensure it ends with /api
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`
+  }
+
+  // Priority 2: Stored organization URL (but protect against localhost in production)
   const storedUrl = getStoredApiUrl()
   if (storedUrl) {
-    return storedUrl
+    // In production (non-localhost window location), reject localhost stored URLs
+    const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    if (isProduction && storedUrl.includes('localhost')) {
+      console.warn('Ignoring localhost API URL in production environment')
+      // Clear the invalid localStorage entry
+      localStorage.removeItem(ORG_STORAGE_KEYS.API_URL)
+    } else {
+      return storedUrl
+    }
   }
-  // Fallback to environment variable or localhost for development
-  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+
+  // Fallback: localhost for development
+  return 'http://localhost:3000/api'
 }
 
 // Validate organization code (check if it exists in registry or allow custom)
