@@ -7,6 +7,7 @@ import { useGetPostReactionUsersQuery } from '../../../store/api/postApi';
 import type { ReactionType } from '../../../types/post';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import { getApiUrl } from '@/utils/helpers';
 
 interface ReactionsModalProps {
   isOpen: boolean;
@@ -170,7 +171,7 @@ const ReactionsModal: React.FC<ReactionsModalProps> = ({
                             <div className="relative">
                               {reaction.user.profileImage ? (
                                 <img
-                                  src={`/api/users/profile-picture/${reaction.user.id}`}
+                                  src={getApiUrl(`/api/users/profile-picture/${reaction.user.id}`)}
                                   alt={reaction.user.fullName}
                                   className="h-10 w-10 rounded-full object-cover"
                                 />

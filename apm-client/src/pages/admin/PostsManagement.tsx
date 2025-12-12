@@ -29,6 +29,7 @@ import LoadingSpinner from '../../components/common/UI/LoadingSpinner';
 import { Button } from '../../components/common/UI/Button';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
+import { getApiUrl } from '@/utils/helpers';
 
 const PostsManagement: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -295,7 +296,7 @@ const PostsManagement: React.FC = () => {
                         <div className="flex items-center">
                           {post.heroImage && (
                             <img
-                              src={`/api/posts/${post.id}/hero-image`}
+                              src={getApiUrl(`/api/posts/${post.id}/hero-image`)}
                               alt={post.title}
                               className="h-10 w-10 rounded object-cover mr-3"
                             />
@@ -315,7 +316,7 @@ const PostsManagement: React.FC = () => {
                           <div className="h-8 w-8 rounded-full mr-2 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs">
                             {post.author.profileImage ? (
                               <img
-                                src={`/api/users/profile-picture/${post.author.id}`}
+                                src={getApiUrl(`/api/users/profile-picture/${post.author.id}`)}
                                 alt={post.author.fullName}
                                 className="h-full w-full object-cover rounded-full"
                                 onError={(e) => {

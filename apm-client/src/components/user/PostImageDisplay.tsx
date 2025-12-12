@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ChevronLeftIcon, 
-  ChevronRightIcon, 
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   XMarkIcon,
   PhotoIcon
 } from '@heroicons/react/24/outline';
+import { getApiUrl } from '@/utils/helpers';
 
 interface PostImageDisplayProps {
   postId: string;
@@ -22,11 +23,11 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
 }) => {
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  
+
   // Combine hero image and additional images for the carousel
   const allImages = [
-    ...(heroImage ? [`/api/posts/${postId}/hero-image`] : []),
-    ...images.map((_, index) => `/api/posts/${postId}/images/${index}`)
+    ...(heroImage ? [getApiUrl(`/api/posts/${postId}/hero-image`)] : []),
+    ...images.map((_, index) => getApiUrl(`/api/posts/${postId}/images/${index}`))
   ];
 
   const openImageViewer = useCallback((index: number) => {
@@ -40,11 +41,11 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
 
   const navigateImage = useCallback((direction: 'prev' | 'next') => {
     if (direction === 'prev') {
-      setSelectedImageIndex((prev) => 
+      setSelectedImageIndex((prev) =>
         prev === 0 ? allImages.length - 1 : prev - 1
       );
     } else {
-      setSelectedImageIndex((prev) => 
+      setSelectedImageIndex((prev) =>
         prev === allImages.length - 1 ? 0 : prev + 1
       );
     }
@@ -53,7 +54,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!imageViewerOpen) return;
-    
+
     switch (e.key) {
       case 'ArrowLeft':
         navigateImage('prev');
@@ -83,7 +84,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
         {heroImage && (
           <div className="relative overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer">
             <img
-              src={`/api/posts/${postId}/hero-image`}
+              src={getApiUrl(`/api/posts/${postId}/hero-image`)}
               alt={title}
               className="w-full h-auto object-contain max-h-80"
               style={{ minHeight: '200px' }}
@@ -102,7 +103,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
                 }
               }}
             />
-            
+
             {/* Image counter overlay */}
             {images.length > 0 && (
               <div className="absolute top-3 right-3 bg-black bg-opacity-60 text-white px-2 py-1 rounded-full text-sm flex items-center space-x-1">
@@ -120,7 +121,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
               /* If no hero image, show first additional image as main */
               <div className="relative overflow-hidden bg-gray-100 dark:bg-gray-800 rounded-lg mb-3 cursor-pointer">
                 <img
-                  src={`/api/posts/${postId}/images/0`}
+                  src={getApiUrl(`/api/posts/${postId}/images/0`)}
                   alt={`${title} - Image 1`}
                   className="w-full h-auto object-contain max-h-80"
                   onClick={() => openImageViewer(0)}
@@ -138,7 +139,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
                     }
                   }}
                 />
-                
+
                 {/* Image counter overlay */}
                 <div className="absolute top-3 right-3 bg-black bg-opacity-60 text-white px-2 py-1 rounded-full text-sm flex items-center space-x-1">
                   <PhotoIcon className="h-4 w-4" />
@@ -153,7 +154,7 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
                 {(heroImage ? images : images.slice(1)).map((_, index) => {
                   const imageIndex = heroImage ? index : index + 1;
                   const carouselIndex = heroImage ? index + 1 : index + 1;
-                  
+
                   return (
                     <div
                       key={imageIndex}
@@ -161,11 +162,11 @@ const PostImageDisplay: React.FC<PostImageDisplayProps> = ({
                       onClick={() => openImageViewer(carouselIndex)}
                     >
                       <img
-                        src={`/api/posts/${postId}/images/${imageIndex}`}
+                        src={getApiUrl(`/api/posts/${postId}/images/${imageIndex}`)}
                         alt={`${title} - Image ${imageIndex + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      
+
                       {/* Show count on last thumbnail if there are more images */}
                       {index === 4 && (heroImage ? images.length > 5 : images.length > 6) && (
                         <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center">

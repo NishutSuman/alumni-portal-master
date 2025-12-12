@@ -7,6 +7,7 @@ import { useGetCommentReactionUsersQuery } from '../../../store/api/postApi';
 import type { ReactionType } from '../../../types/post';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import { getApiUrl } from '@/utils/helpers';
 
 interface CommentReactionsModalProps {
   isOpen: boolean;
@@ -190,7 +191,7 @@ const CommentReactionsModal: React.FC<CommentReactionsModalProps> = ({
                             <div className="relative">
                               {reaction.user.profileImage ? (
                                 <img
-                                  src={`/api/users/profile-picture/${reaction.user.id}`}
+                                  src={getApiUrl(`/api/users/profile-picture/${reaction.user.id}`)}
                                   alt={reaction.user.fullName}
                                   className="h-10 w-10 rounded-full object-cover"
                                 />

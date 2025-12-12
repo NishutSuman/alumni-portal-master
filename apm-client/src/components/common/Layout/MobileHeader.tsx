@@ -4,6 +4,7 @@ import { BellIcon } from '@heroicons/react/24/outline';
 import { useSelector } from 'react-redux';
 import { selectUser } from '@/store/slices/authSlice';
 import OrganizationLogo from '@/components/common/UI/OrganizationLogo';
+import { getApiUrl } from '@/utils/helpers';
 
 interface MobileHeaderProps {
   unreadNotifications?: number;
@@ -14,7 +15,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({ unreadNotifications = 0 }) 
   const [imageError, setImageError] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 lg:hidden">
+    <header className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 lg:hidden" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="px-4 py-3">
         {/* Single Row - User Icon & Notification (left), Org Logo (right) */}
         <div className="flex items-center justify-between">
@@ -24,7 +25,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({ unreadNotifications = 0 }) 
             <Link to="/profile" className="relative flex-shrink-0">
               {!imageError && user?.id ? (
                 <img
-                  src={`/api/users/profile-picture/${user.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                   alt={user.name || 'User'}
                   className="w-10 h-10 rounded-full object-cover border-2 border-purple-500 dark:border-purple-400"
                   onError={() => setImageError(true)}

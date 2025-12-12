@@ -9,6 +9,7 @@ import {
   CodeBracketIcon,
   AtSymbolIcon,
 } from '@heroicons/react/24/outline';
+import { getApiUrl } from '@/utils/helpers';
 
 interface HybridRichTextEditorProps {
   content?: string;
@@ -457,7 +458,7 @@ const HybridRichTextEditor: React.FC<HybridRichTextEditorProps> = ({
             >
               {user.profileImage ? (
                 <img
-                  src={`/api/users/profile-picture/${user.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                   alt={user.fullName}
                   className="w-8 h-8 rounded-full object-cover"
                   onError={(e) => {

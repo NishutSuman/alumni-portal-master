@@ -42,6 +42,7 @@ import { useGetPublicOrganizationQuery } from '@/store/api/apiSlice';
 import MobileHeader from '@/components/common/Layout/MobileHeader';
 import MobileBottomNav from '@/components/common/Layout/MobileBottomNav';
 import MobileMoreSidebar from '@/components/common/Layout/MobileMoreSidebar';
+import { getApiUrl } from '@/utils/helpers';
 
 // Get navigation items based on user role
 const getNavigationItems = (userRole: string) => {
@@ -602,7 +603,7 @@ const AdminLayout = () => {
               <div className="flex-shrink-0">
                 {!imageError && user?.id ? (
                   <img
-                    src={`/api/users/profile-picture/${user.id}`}
+                    src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                     alt={user.fullName}
                     className="h-10 w-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
                     onError={() => setImageError(true)}

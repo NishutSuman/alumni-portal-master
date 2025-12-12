@@ -28,19 +28,35 @@ const shuffleArray = (array) => {
 const getMarqueeProfiles = async (req, res) => {
   try {
     // Extract tenant info from request (set by tenant middleware)
-    const organizationId = req.tenant?.id || req.user?.organizationId;
+    let organizationId = req.tenant?.id || req.user?.organizationId;
 
+    // If no organization ID, try to find a default organization
     if (!organizationId) {
-      console.error('❌ Marquee: No organization ID found', {
-        hasTenant: !!req.tenant,
-        hasUser: !!req.user,
-        tenantId: req.tenant?.id,
-        userOrgId: req.user?.organizationId
+      console.log('⚠️ Marquee: No organization ID from tenant/user, attempting fallback...');
+
+      // Try to find the first active organization as fallback
+      const defaultOrg = await prisma.organization.findFirst({
+        where: { isActive: true },
+        select: { id: true, name: true }
       });
-      return res.status(400).json({
-        success: false,
-        message: 'Organization ID is required'
-      });
+
+      if (defaultOrg) {
+        organizationId = defaultOrg.id;
+        console.log(`✅ Marquee: Using fallback organization: ${defaultOrg.name} (${organizationId})`);
+      } else {
+        console.error('❌ Marquee: No organization found for marquee', {
+          hasTenant: !!req.tenant,
+          hasUser: !!req.user,
+          tenantId: req.tenant?.id,
+          userOrgId: req.user?.organizationId
+        });
+        // Return empty array instead of error to not break the UI
+        return res.json({
+          success: true,
+          data: [],
+          message: 'No organization found'
+        });
+      }
     }
 
     console.log('✅ Marquee: Using organization ID:', organizationId);

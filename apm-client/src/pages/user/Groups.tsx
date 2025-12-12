@@ -1,6 +1,6 @@
 // src/pages/user/Groups.tsx
 import React, { useState } from 'react'
-import { 
+import {
   UserGroupIcon,
   ExclamationTriangleIcon,
   EnvelopeIcon,
@@ -10,6 +10,7 @@ import { useGetGroupsQuery, useGetGroupQuery, Group, GroupMember } from '@/store
 import { useAuth } from '@/hooks/useAuth'
 import LoadingSpinner from '@/components/common/UI/LoadingSpinner'
 import { motion } from 'framer-motion'
+import { getApiUrl } from '@/utils/helpers'
 
 const Groups: React.FC = () => {
   const { user } = useAuth()
@@ -84,7 +85,7 @@ const Groups: React.FC = () => {
             <div className="flex justify-center mb-3">
               {memberUser.profileImage ? (
                 <img
-                  src={`/api/users/profile-picture/${memberUser.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${memberUser.id}`)}
                   alt={memberUser.fullName}
                   className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
                   onError={(e) => {

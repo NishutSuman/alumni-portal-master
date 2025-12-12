@@ -1,7 +1,7 @@
 // src/components/common/UI/MemberProfileCard.tsx
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { 
+import {
   UserCircleIcon,
   CalendarIcon,
   EnvelopeIcon,
@@ -9,6 +9,7 @@ import {
 import { GroupMember, GroupType } from '@/store/api/groupsApi'
 import RoleBadge from './RoleBadge'
 import { formatDate } from '@/utils/format'
+import { getApiUrl } from '@/utils/helpers'
 
 interface MemberProfileCardProps {
   member: GroupMember
@@ -39,7 +40,7 @@ const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
           <div className="flex-shrink-0">
             {!imageError && user.id ? (
               <img
-                src={`/api/users/profile-picture/${user.id}`}
+                src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                 alt={user.fullName}
                 className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
                 onError={() => setImageError(true)}

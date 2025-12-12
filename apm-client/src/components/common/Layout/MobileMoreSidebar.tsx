@@ -32,6 +32,7 @@ import { selectIsDark } from '@/store/slices/themeSlice';
 import { selectUser } from '@/store/slices/authSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
 import SettingsModal from '@/components/common/UI/SettingsModal';
+import { getApiUrl } from '@/utils/helpers';
 
 interface MobileMoreSidebarProps {
   isOpen: boolean;
@@ -167,7 +168,7 @@ const MobileMoreSidebar: React.FC<MobileMoreSidebarProps> = ({
                 <div className="flex-shrink-0">
                   {!imageError && user?.id ? (
                     <img
-                      src={`/api/users/profile-picture/${user.id}`}
+                      src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                       alt={userName}
                       className="w-10 h-10 rounded-full object-cover border-2 border-purple-500 dark:border-purple-400"
                       onError={() => setImageError(true)}

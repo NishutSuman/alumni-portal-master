@@ -69,15 +69,26 @@ const ProfileMarquee: React.FC<ProfileMarqueeProps> = ({
     );
   }
 
-  // Error state
+  // Error state - log but still try to show something
   if (error) {
     console.error('Marquee error:', error);
-    return null; // Silently fail, don't show error to user
+    // Don't return null immediately - check if we have cached data
   }
 
-  // No images
+  // No images - show a placeholder message instead of nothing
   if (!finalImages || finalImages.length === 0) {
-    return null; // Don't show marquee if no images
+    // Only hide if there's no error (error might mean network issue)
+    if (!error) {
+      return null; // Don't show marquee if no images and no error
+    }
+    // If there's an error, show a subtle loading indicator
+    return (
+      <div className={`w-full py-4 ${className}`}>
+        <div className="flex justify-center items-center text-gray-400 dark:text-gray-600 text-sm">
+          <span>Loading alumni profiles...</span>
+        </div>
+      </div>
+    );
   }
 
   return (

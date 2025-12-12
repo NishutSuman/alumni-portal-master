@@ -1,9 +1,9 @@
 // src/components/common/UI/GroupMembersModal.tsx
 import React, { useState } from 'react'
 import { Dialog, DialogPanel, DialogTitle, DialogBackdrop } from '@headlessui/react'
-import { 
-  XMarkIcon, 
-  UsersIcon, 
+import {
+  XMarkIcon,
+  UsersIcon,
   EnvelopeIcon,
   TrashIcon,
   ExclamationTriangleIcon,
@@ -12,6 +12,7 @@ import { motion } from 'framer-motion'
 import { Group, useGetGroupQuery, useRemoveGroupMemberMutation } from '@/store/api/groupsApi'
 import LoadingSpinner from './LoadingSpinner'
 import toast from 'react-hot-toast'
+import { getApiUrl } from '@/utils/helpers'
 
 interface GroupMembersModalProps {
   isOpen: boolean
@@ -143,7 +144,7 @@ const GroupMembersModal: React.FC<GroupMembersModalProps> = ({
             <div className="flex justify-center mb-3">
               {memberUser.profileImage ? (
                 <img
-                  src={`/api/users/profile-picture/${memberUser.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${memberUser.id}`)}
                   alt={memberUser.fullName}
                   className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
                   onError={(e) => {

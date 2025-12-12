@@ -14,6 +14,7 @@ import { useSearchAlumniQuery } from '@/store/api/alumniApi'
 import { useAddGroupMemberMutation, Group, GroupMemberRole } from '@/store/api/groupsApi'
 import { getRolesByGroupType } from '@/components/common/UI/RoleBadge'
 import toast from 'react-hot-toast'
+import { getApiUrl } from '@/utils/helpers'
 
 interface AddMembersModalProps {
   isOpen: boolean
@@ -222,7 +223,7 @@ const AddMembersModal: React.FC<AddMembersModalProps> = ({
                                 <div className="flex-shrink-0">
                                   {user.profileImage ? (
                                     <img
-                                      src={`/api/users/profile-picture/${user.id}`}
+                                      src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                                       alt={user.fullName}
                                       className="w-10 h-10 rounded-full object-cover"
                                       onError={(e) => {
@@ -261,7 +262,7 @@ const AddMembersModal: React.FC<AddMembersModalProps> = ({
                           <div className="flex-shrink-0">
                             {selectedUser.profileImage ? (
                               <img
-                                src={`/api/users/profile-picture/${selectedUser.id}`}
+                                src={getApiUrl(`/api/users/profile-picture/${selectedUser.id}`)}
                                 alt={selectedUser.fullName}
                                 className="w-10 h-10 rounded-full object-cover"
                                 onError={(e) => {

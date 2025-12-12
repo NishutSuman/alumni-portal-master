@@ -20,9 +20,9 @@ import {
 import { Post } from '../../types/post';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../../store';
-import { 
-  useToggleLikeMutation, 
-  useToggleReactionMutation 
+import {
+  useToggleLikeMutation,
+  useToggleReactionMutation
 } from '../../store/api/postApi';
 import type { ReactionType } from '../../types/post';
 import { formatDistanceToNow } from 'date-fns';
@@ -33,6 +33,7 @@ import LinkedInReactions from '../common/UI/LinkedInReactions';
 import CommentsSection from '../common/UI/CommentsSection';
 import PostImageDisplay from './PostImageDisplay';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '@/utils/helpers';
 
 interface PostCardProps {
   post: Post;
@@ -281,7 +282,7 @@ const PostCard: React.FC<PostCardProps> = ({
           <div className="flex items-center space-x-3">
             {!imageError ? (
               <img
-                src={`/api/users/profile-picture/${post.author.id}`}
+                src={getApiUrl(`/api/users/profile-picture/${post.author.id}`)}
                 alt={post.author.fullName}
                 className="h-10 w-10 rounded-full object-cover"
                 onError={() => setImageError(true)}

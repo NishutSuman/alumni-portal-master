@@ -29,6 +29,7 @@ import { useGetPublicOrganizationQuery } from '../../store/api/apiSlice'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../../components/common/UI/LoadingSpinner'
 import BrandedLoader from '../../components/common/UI/BrandedLoader'
+import { getApiUrl } from '@/utils/helpers'
 
 // Employment status options
 const EMPLOYMENT_STATUS_OPTIONS = [
@@ -477,7 +478,7 @@ const AlumniDirectory: React.FC = () => {
                           <div className="flex justify-center mb-2 md:mb-3">
                             {alumnus.profileImage ? (
                               <img
-                                src={`/api/users/profile-picture/${alumnus.id}`}
+                                src={getApiUrl(`/api/users/profile-picture/${alumnus.id}`)}
                                 alt={alumnus.fullName}
                                 className="h-12 w-12 md:h-16 md:w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
                                 onError={(e) => {
@@ -693,7 +694,7 @@ const AlumniDirectory: React.FC = () => {
                     <div className="flex-shrink-0">
                       {selectedAlumniProfile.profileImage ? (
                         <img
-                          src={`/api/users/profile-picture/${selectedAlumniProfile.id}`}
+                          src={getApiUrl(`/api/users/profile-picture/${selectedAlumniProfile.id}`)}
                           alt={selectedAlumniProfile.fullName}
                           className="h-20 w-20 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700"
                           onError={(e) => {

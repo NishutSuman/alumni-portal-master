@@ -2,9 +2,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import { EllipsisHorizontalIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { 
-  useGetPostCommentsQuery, 
-  useCreateCommentMutation, 
+import {
+  useGetPostCommentsQuery,
+  useCreateCommentMutation,
   useCreateReplyMutation,
   useToggleCommentReactionMutation,
   useUpdateCommentMutation,
@@ -13,6 +13,7 @@ import {
 import type { Comment, ReactionType } from '../../../types/post';
 import { useAuth } from '../../../hooks/useAuth';
 import CommentReactionsModal from './CommentReactionsModal';
+import { getApiUrl } from '@/utils/helpers';
 
 interface CommentsSectionProps {
   postId: string;
@@ -283,14 +284,14 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
           <div className="flex-shrink-0 mt-1">
             {loadedImages.has(comment.author.id) ? (
               <img
-                src={`/api/users/profile-picture/${comment.author.id}`}
+                src={getApiUrl(`/api/users/profile-picture/${comment.author.id}`)}
                 alt={comment.author.fullName}
                 className="h-8 w-8 rounded-full object-cover"
               />
             ) : (
               <>
                 <img
-                  src={`/api/users/profile-picture/${comment.author.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${comment.author.id}`)}
                   alt={comment.author.fullName}
                   className="h-8 w-8 rounded-full object-cover opacity-0 absolute"
                   onLoad={(e) => handleImageLoad(comment.author.id, e)}
@@ -489,7 +490,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
                 <div className="flex items-start space-x-3">
                   <div className="flex-shrink-0 mt-1">
                     <img
-                      src={`/api/users/profile-picture/${user?.id}`}
+                      src={getApiUrl(`/api/users/profile-picture/${user?.id}`)}
                       alt={user?.fullName || ''}
                       className="h-6 w-6 rounded-full object-cover"
                       onLoad={(e) => {
@@ -642,14 +643,14 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
           <div className="flex-shrink-0 mt-1">
             {loadedImages.has(user.id) ? (
               <img
-                src={`/api/users/profile-picture/${user.id}`}
+                src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                 alt={user.fullName}
                 className="h-8 w-8 rounded-full object-cover"
               />
             ) : (
               <>
                 <img
-                  src={`/api/users/profile-picture/${user.id}`}
+                  src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                   alt={user.fullName}
                   className="h-8 w-8 rounded-full object-cover opacity-0 absolute"
                   onLoad={(e) => handleImageLoad(user.id, e)}

@@ -3,6 +3,7 @@ import React, { useRef } from 'react'
 import { Dialog, DialogPanel, DialogTitle, DialogBackdrop } from '@headlessui/react'
 import { XMarkIcon, CheckBadgeIcon, ExclamationTriangleIcon, UserIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { UserProfile, useGetOrganizationInfoQuery } from '../../../store/api/userApi'
+import { getApiUrl } from '@/utils/helpers'
 
 interface AlumniIdentityCardProps {
   isOpen: boolean
@@ -148,7 +149,7 @@ export const AlumniIdentityCard: React.FC<AlumniIdentityCardProps> = ({
                   {organizationInfo?.organization?.logoUrl && (
                     <div className="w-12 h-12 bg-white/20 rounded-lg p-2 flex items-center justify-center">
                       <img
-                        src="/api/organization/files/logo"
+                        src={getApiUrl("/api/organization/files/logo")}
                         alt="Organization Logo"
                         className="w-full h-full object-contain"
                         onError={(e) => {

@@ -134,7 +134,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ userRole, onMoreClick
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="grid grid-cols-5 h-16">
         {/* More Button - First item on left */}
         <button

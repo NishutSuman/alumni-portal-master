@@ -14,6 +14,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { switchOrganization } from '@/store';
 import { getStoredOrgName } from '@/config/organizations';
 import SettingsModal from './SettingsModal';
+import { getApiUrl } from '@/utils/helpers';
 
 interface UserProfileDropdownProps {
   className?: string;
@@ -73,7 +74,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
       >
         {!imageError && user?.id ? (
           <img
-            src={`/api/users/profile-picture/${user.id}`}
+            src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
             alt={user.fullName || 'User'}
             className="h-8 w-8 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
             onError={() => setImageError(true)}
@@ -112,7 +113,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
                 <div className="flex items-center space-x-3">
                   {!imageError && user?.id ? (
                     <img
-                      src={`/api/users/profile-picture/${user.id}`}
+                      src={getApiUrl(`/api/users/profile-picture/${user.id}`)}
                       alt={user.fullName || 'User'}
                       className="h-10 w-10 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
                       onError={() => setImageError(true)}

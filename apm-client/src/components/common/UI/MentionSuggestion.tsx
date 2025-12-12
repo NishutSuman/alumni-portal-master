@@ -1,5 +1,6 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { MentionUser } from '../../../store/api/userApi';
+import { getApiUrl } from '@/utils/helpers';
 
 interface MentionSuggestionProps {
   items: MentionUser[];
@@ -77,7 +78,7 @@ const MentionSuggestion = forwardRef<MentionSuggestionRef, MentionSuggestionProp
           >
             {item.profileImage ? (
               <img
-                src={`/api/users/profile-picture/${item.id}`}
+                src={getApiUrl(`/api/users/profile-picture/${item.id}`)}
                 alt={item.fullName}
                 className="w-8 h-8 rounded-full object-cover"
                 onError={(e) => {

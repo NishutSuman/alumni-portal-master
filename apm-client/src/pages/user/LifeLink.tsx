@@ -45,6 +45,7 @@ import LoadingSpinner from '../../components/common/UI/LoadingSpinner'
 import BloodProfileModal from '../../components/common/UI/BloodProfileModal'
 import BloodCompatibilityModal from '../../components/common/UI/BloodCompatibilityModal'
 import type { BloodGroup, BloodProfile, CreateRequisitionRequest, UrgencyLevel, DonorResponseStatus } from '../../types/lifeLink'
+import { getApiUrl } from '@/utils/helpers'
 
 // Blood group options for filtering
 const BLOOD_GROUP_OPTIONS: Array<{ value: BloodGroup | ''; label: string; color: string }> = [
@@ -1322,7 +1323,7 @@ const LifeLink: React.FC = () => {
                       <div className="h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center">
                         {donor.profileImage ? (
                           <img
-                            src={`/api/users/profile-picture/${donor.id}`}
+                            src={getApiUrl(`/api/users/profile-picture/${donor.id}`)}
                             alt={donor.fullName}
                             className="h-10 w-10 rounded-full object-cover"
                             onError={(e) => {

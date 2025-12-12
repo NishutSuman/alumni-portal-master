@@ -1,4 +1,5 @@
 import React from 'react';
+import { getApiUrl } from '@/utils/helpers';
 
 interface OrganizationLogoProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -34,7 +35,7 @@ const OrganizationLogo: React.FC<OrganizationLogoProps> = ({
   return (
     <div className={`${sizeClasses[size]} ${className} flex-shrink-0`}>
       <img
-        src="/api/organization/files/logo"
+        src={getApiUrl("/api/organization/files/logo")}
         alt="Organization Logo"
         className={`${sizeClasses[size]} object-contain rounded-lg`}
         onError={(e) => {
