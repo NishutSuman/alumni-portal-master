@@ -45,12 +45,42 @@ app.use("/api/payments/webhook/*", express.raw({ type: "application/json" }));
 console.log("🌐 CORS: Allowing all origins (production should restrict this)");
 console.log("🔧 FRONTEND_URL env:", process.env.FRONTEND_URL);
 
+// Handle preflight OPTIONS requests explicitly
+app.options('*', cors({
+	origin: true,
+	credentials: true,
+	methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+	allowedHeaders: [
+		"Content-Type",
+		"Authorization",
+		"X-Requested-With",
+		"X-Tenant-Code",
+		"x-tenant-code",  // lowercase variant for browser compatibility
+		"Accept",
+		"Origin",
+		"Cache-Control"
+	],
+	exposedHeaders: ["Content-Length", "Content-Type"],
+	maxAge: 86400, // 24 hours preflight cache
+}));
+
 app.use(
 	cors({
 		origin: true, // Allow all origins temporarily
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Tenant-Code"],
+		allowedHeaders: [
+			"Content-Type",
+			"Authorization",
+			"X-Requested-With",
+			"X-Tenant-Code",
+			"x-tenant-code",  // lowercase variant for browser compatibility
+			"Accept",
+			"Origin",
+			"Cache-Control"
+		],
+		exposedHeaders: ["Content-Length", "Content-Type"],
+		maxAge: 86400, // 24 hours preflight cache
 	})
 );
 
