@@ -55,6 +55,7 @@ import {
 } from '../../store/api/userApi'
 import { useAuth } from '../../hooks/useAuth'
 import AlumniIdentityCard from '../../components/common/UI/AlumniIdentityCard'
+import { getApiUrl } from '@/utils/helpers'
 
 
 interface Address {
@@ -1714,7 +1715,7 @@ const Profile: React.FC = () => {
 
       // Use plain fetch instead of RTK Query (like organization logo upload)
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture`,
+        getApiUrl('/api/users/profile-picture'),
         {
           method: 'PUT',
           headers: {
@@ -2055,7 +2056,7 @@ const Profile: React.FC = () => {
               <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full overflow-hidden bg-white shadow-xl border-4 border-white">
                 {profile.profileImage ? (
                   <img
-                    src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${profile.id}?t=${imageTimestamp}`}
+                    src={getApiUrl(`/api/users/profile-picture/${profile.id}?t=${imageTimestamp}`)}
                     alt={profile.fullName}
                     className="w-full h-full object-cover"
                     onError={(e) => {

@@ -556,7 +556,7 @@ const AlumniDirectory: React.FC = () => {
                           <div className="w-12 h-12 md:w-20 md:h-20 flex items-center justify-center mb-2 md:mb-4">
                             {organizationData ? (
                               <img
-                                src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/organization/files/logo`}
+                                src={getApiUrl('/api/organization/files/logo')}
                                 alt={organizationData.name || 'Organization Logo'}
                                 className="w-full h-full object-contain"
                                 onError={(e) => {

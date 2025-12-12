@@ -1,6 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { UserIcon, CalendarIcon, ChatBubbleLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import type { Photo } from '../../../types/gallery';
+import { getApiUrl } from '@/utils/helpers';
 
 interface PhotoCardProps {
   photo: Photo;
@@ -57,10 +58,10 @@ const PhotoCard: FC<PhotoCardProps> = ({
     // If URL is a full R2 URL, extract filename and use proxy
     if (url.startsWith('http://') || url.startsWith('https://')) {
       const filename = url.split('/').pop();
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/photo/${filename}`;
+      return getApiUrl(`/api/albums/photo/${filename}`);
     }
     // If it's already a filename, use proxy
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/photo/${url}`;
+    return getApiUrl(`/api/albums/photo/${url}`);
   };
 
   const photoUrl = getPhotoProxyUrl(photo.url);

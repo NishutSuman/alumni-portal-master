@@ -5,6 +5,7 @@ import PhotoCard from '../../common/UI/PhotoCard';
 import PhotoModal from '../../common/UI/PhotoModal';
 import LoadingSpinner from '../../common/UI/LoadingSpinner';
 import type { Photo } from '../../../types/gallery';
+import { getApiUrl } from '@/utils/helpers';
 
 interface AlbumViewerProps {
   albumId: string;
@@ -91,7 +92,7 @@ const AlbumViewer: FC<AlbumViewerProps> = ({ albumId, onBack }) => {
                   </div>
                 )}
                 <img
-                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/cover/${albumId}?t=${new Date(album.updatedAt).getTime()}`}
+                  src={getApiUrl(`/api/albums/cover/${albumId}?t=${new Date(album.updatedAt).getTime()}`)}
                   alt={album.name}
                   className={`w-full h-full object-cover transition-opacity duration-300 ${
                     coverImageLoaded ? 'opacity-100' : 'opacity-0'
@@ -117,7 +118,7 @@ const AlbumViewer: FC<AlbumViewerProps> = ({ albumId, onBack }) => {
                 <div className="flex items-center gap-2">
                   {!imageError && album.creator?.id ? (
                     <img
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/profile-picture/${album.creator.id}`}
+                      src={getApiUrl(`/api/users/profile-picture/${album.creator.id}`)}
                       alt={album.creator.fullName}
                       className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-gray-600"
                       onError={() => setImageError(true)}

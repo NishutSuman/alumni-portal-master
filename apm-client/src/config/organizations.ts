@@ -2,6 +2,8 @@
 // Organization configuration for multi-tenant support
 // Each organization has a unique code and corresponding API URL
 
+import { getApiUrl } from '@/utils/helpers'
+
 export interface Organization {
   code: string
   name: string
@@ -55,9 +57,8 @@ export const fetchOrgDetails = async (org: Organization): Promise<{
 // Fetch all organizations from the public API endpoint
 export const fetchAllOrganizations = async (): Promise<Organization[]> => {
   try {
-    // Use relative URL to leverage Vite's proxy in development
-    // In production, this will be served from the same origin
-    const response = await fetch('/api/public/organizations')
+    // Use getApiUrl to construct the full backend URL in production
+    const response = await fetch(getApiUrl('/api/public/organizations'))
     if (!response.ok) {
       console.error('Failed to fetch organizations:', response.statusText)
       return []

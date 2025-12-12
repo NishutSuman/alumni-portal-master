@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
-import { 
+import {
   ChevronDownIcon,
   ChevronUpIcon,
   UserIcon,
@@ -14,6 +14,7 @@ import { useGetEventsQuery } from '../../store/api/eventApi'
 import { useGetEventRegistrationsAdminQuery, useGetUserBatchesQuery } from '../../store/api/adminApi'
 import type { RootState } from '../../store'
 import toast from 'react-hot-toast'
+import { getApiUrl } from '@/utils/helpers'
 
 interface Event {
   id: string
@@ -70,7 +71,7 @@ const EventAnalyticsDashboard: React.FC = () => {
     const fetchEvents = async () => {
       try {
         setEventsLoading(true)
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events?status=PUBLISHED&limit=100`)
+        const response = await fetch(getApiUrl('/api/events?status=PUBLISHED&limit=100'))
         const data = await response.json()
         setEventsData(data)
       } catch (error) {
@@ -97,7 +98,7 @@ const EventAnalyticsDashboard: React.FC = () => {
 
       try {
         const token = auth.token || localStorage.getItem('token')
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events/${selectedEventId}/privacy-settings`, {
+        const response = await fetch(getApiUrl(`/api/events/${selectedEventId}/privacy-settings`), {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -247,7 +248,7 @@ const EventAnalyticsDashboard: React.FC = () => {
     try {
       const token = auth.token || localStorage.getItem('token')
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events/${selectedEventId}/privacy-settings`, {
+      const response = await fetch(getApiUrl(`/api/events/${selectedEventId}/privacy-settings`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -564,8 +565,8 @@ const EventAnalyticsDashboard: React.FC = () => {
                             <div className="flex items-center space-x-3">
                               <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
                                 {registration.user?.profileImage ? (
-                                  <img 
-                                    src={`http://localhost:3001/api/users/profile-picture/${registration.user.id}`}
+                                  <img
+                                    src={getApiUrl(`/api/users/profile-picture/${registration.user.id}`)}
                                     alt={registration.user.fullName}
                                     className="w-10 h-10 rounded-full object-cover"
                                     onError={(e) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { 
+import {
   ChevronDownIcon,
   ChevronUpIcon,
   UserIcon,
@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useGetEventsQuery } from '@/store/api/eventApi'
 import LoadingSpinner from '@/components/common/UI/LoadingSpinner'
+import { getApiUrl } from '@/utils/helpers'
 
 interface Event {
   id: string
@@ -113,7 +114,7 @@ const PublicEventAnalytics: React.FC = () => {
 
     setIsLoadingAnalytics(true)
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events/${eventId}/public-analytics`, {
+      const response = await fetch(getApiUrl(`/api/events/${eventId}/public-analytics`), {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -142,7 +143,7 @@ const PublicEventAnalytics: React.FC = () => {
 
     setIsLoadingRegistrations(true)
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/events/${eventId}/public-registrations`, {
+      const response = await fetch(getApiUrl(`/api/events/${eventId}/public-registrations`), {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -570,7 +571,7 @@ const PublicEventAnalytics: React.FC = () => {
                               <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
                                 {registration.user?.profileImage ? (
                                   <img 
-                                    src={`${import.meta.env.VITE_API_BASE_URL}/users/profile-picture/${registration.user.id}`}
+                                    src={getApiUrl(`/api/users/profile-picture/${registration.user.id}`)}
                                     alt={registration.user?.fullName || 'User'}
                                     className="w-10 h-10 rounded-full object-cover"
                                     onError={(e) => {

@@ -1,4 +1,5 @@
 import { apiSlice } from './apiSlice';
+import { getApiUrl } from '@/utils/helpers';
 import type {
   Post,
   CreatePostData,
@@ -88,7 +89,7 @@ export const postApi = apiSlice.injectEndpoints({
             hasToken: !!token
           });
           
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/posts`, {
+          const response = await fetch(getApiUrl('/api/posts'), {
             method: 'POST',
             headers: {
               ...(token && { 'authorization': `Bearer ${token}` }),
@@ -125,7 +126,7 @@ export const postApi = apiSlice.injectEndpoints({
             hasToken: !!token
           });
           
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/posts/${postId}`, {
+          const response = await fetch(getApiUrl(`/api/posts/${postId}`), {
             method: 'PUT',
             headers: {
               ...(token && { 'authorization': `Bearer ${token}` }),

@@ -1,4 +1,5 @@
 import { apiSlice } from './apiSlice'
+import { getApiUrl } from '@/utils/helpers'
 
 export interface EventCategory {
   id: string
@@ -233,7 +234,7 @@ export const eventApi = apiSlice.injectEndpoints({
             hasToken: !!token
           });
           
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/events`, {
+          const response = await fetch(getApiUrl('/api/events'), {
             method: 'POST',
             headers: {
               ...(token && { 'authorization': `Bearer ${token}` }),

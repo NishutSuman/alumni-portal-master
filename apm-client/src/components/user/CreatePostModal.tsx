@@ -19,6 +19,7 @@ import RichTextEditor from '../common/UI/RichTextEditor';
 import SimpleMentionEditor from '../common/UI/SimpleMentionEditor';
 import HybridRichTextEditor from '../common/UI/HybridRichTextEditor';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '@/utils/helpers';
 
 // Validation schema (matches backend expectations)
 const postSchema = yup.object({
@@ -58,20 +59,19 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
   // Helper function to convert R2 URLs to proxy URLs
   const getProxyImageUrl = (r2Url: string, postId: string, index?: number): string => {
     if (!r2Url) return r2Url;
-    
+
     // Check if it's already a proxy URL
     if (r2Url.startsWith('/api/') || r2Url.startsWith('http://localhost:')) {
       return r2Url;
     }
-    
-    // Convert R2 URL to proxy URL
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+    // Convert R2 URL to proxy URL using getApiUrl
     if (index !== undefined) {
       // Additional image
-      return `${baseUrl}/api/posts/${postId}/images/${index}`;
+      return getApiUrl(`/api/posts/${postId}/images/${index}`);
     } else {
       // Hero image
-      return `${baseUrl}/api/posts/${postId}/hero-image`;
+      return getApiUrl(`/api/posts/${postId}/hero-image`);
     }
   };
   

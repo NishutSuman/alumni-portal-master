@@ -22,6 +22,7 @@ import {
   type EmailProvider,
 } from '@/store/api/developerApi'
 import LoadingSpinner from '@/components/common/UI/LoadingSpinner'
+import { getApiUrl } from '@/utils/helpers'
 import {
   ArrowLeftIcon,
   BuildingOffice2Icon,
@@ -93,10 +94,7 @@ interface FormData {
 // Helper to get proxy URL for organization files (logo, bylaw, certificate)
 // Uses the backend proxy route instead of direct R2 URLs since R2 bucket is private
 const getOrgFileProxyUrl = (orgId: string, fileType: 'logo' | 'bylaw' | 'certificate') => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-  // Remove /api suffix if present since proxy route is at /api/organizations/...
-  const apiBase = baseUrl.replace(/\/api$/, '')
-  return `${apiBase}/api/organizations/${orgId}/files/${fileType}`
+  return getApiUrl(`/api/organizations/${orgId}/files/${fileType}`)
 }
 
 export default function OrganizationDetailsPage() {
@@ -520,7 +518,7 @@ function BasicInfoTab({ org, refetch }: any) {
     setIsUploading(true)
 
     // Use direct URL to backend for file uploads (Vite proxy has issues with multipart/form-data)
-    const uploadUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/developer/organizations/${org.id}/upload`
+    const uploadUrl = getApiUrl(`/api/developer/organizations/${org.id}/upload`)
 
     try {
       const formData = new FormData()
@@ -560,7 +558,7 @@ function BasicInfoTab({ org, refetch }: any) {
 
     try {
       // Use direct URL to backend for file operations
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/developer/organizations/${org.id}/files/logo`, {
+      const response = await fetch(getApiUrl(`/api/developer/organizations/${org.id}/files/logo`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${auth?.token}`,

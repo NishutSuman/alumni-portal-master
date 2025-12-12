@@ -1,6 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { PhotoIcon, CalendarIcon, UserIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import type { Album } from '../../../types/gallery';
+import { getApiUrl } from '@/utils/helpers';
 
 interface AlbumCardProps {
   album: Album;
@@ -47,12 +48,12 @@ const AlbumCard: FC<AlbumCardProps> = ({ album, onClick, onAction, showActions =
 
   // Generate proxy URL for album cover with cache-busting timestamp
   const coverImageUrl = album.coverImage
-    ? `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/cover/${album.id}?t=${new Date(album.updatedAt).getTime()}`
+    ? getApiUrl(`/api/albums/cover/${album.id}?t=${new Date(album.updatedAt).getTime()}`)
     : null;
 
   // Generate proxy URL for creator profile picture
   const creatorProfilePictureUrl = album.creator?.id
-    ? `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/users/profile-picture/${album.creator.id}`
+    ? getApiUrl(`/api/users/profile-picture/${album.creator.id}`)
     : null;
 
   return (

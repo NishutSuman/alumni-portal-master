@@ -25,6 +25,7 @@ import PDFModal from '@/components/common/UI/PDFModal';
 import ProfileMarquee from '@/components/common/UI/ProfileMarquee';
 import { useGetPublicOrganizationQuery } from '@/store/api/apiSlice';
 import { useGetPublicGroupsQuery } from '@/store/api/groupsApi';
+import { getApiUrl } from '@/utils/helpers';
 
 interface FoundingMember {
   name: string;
@@ -98,8 +99,7 @@ const OrganizationView = () => {
     const getProxyImageUrl = (r2Url: string | null, userId: string) => {
       if (!r2Url) return null;
       // Use the backend proxy to serve the image (avoids CORS)
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      return `${baseUrl}/api/users/profile-picture/${userId}`;
+      return getApiUrl(`/api/users/profile-picture/${userId}`);
     };
 
     // President
@@ -174,13 +174,11 @@ const OrganizationView = () => {
   const getFileUrl = (fileType: string) => {
     if (!orgData) return '';
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-
     switch (fileType) {
       case 'bylaw':
-        return `${baseUrl}/organization/files/bylaw`;
+        return getApiUrl('/api/organization/files/bylaw');
       case 'certificate':
-        return `${baseUrl}/organization/files/certificate`;
+        return getApiUrl('/api/organization/files/certificate');
       default:
         return '';
     }

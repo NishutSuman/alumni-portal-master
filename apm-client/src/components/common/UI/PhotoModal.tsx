@@ -7,6 +7,7 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import type { Photo } from '../../../types/gallery';
+import { getApiUrl } from '@/utils/helpers';
 
 interface PhotoModalProps {
   isOpen: boolean;
@@ -44,9 +45,9 @@ const PhotoModal: FC<PhotoModalProps> = ({
   const getPhotoProxyUrl = (url: string): string => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       const filename = url.split('/').pop();
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/photo/${filename}`;
+      return getApiUrl(`/api/albums/photo/${filename}`);
     }
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/photo/${url}`;
+    return getApiUrl(`/api/albums/photo/${url}`);
   };
 
   // Handle keyboard navigation

@@ -1,2 +1,0 @@
-import{k as i}from"./index-CR7i03R2.js";const r=i.injectEndpoints({endpoints:u=>({searchAlumni:u.query({query:e=>({url:"/alumni/search",params:e}),providesTags:["Alumni"]}),getAlumniStats:u.query({query:()=>"/alumni/stats",providesTags:["AlumniStats"]}),getAlumniProfile:u.query({query:e=>`/alumni/${e}`,providesTags:(e,t,s)=>[{type:"Alumni",id:s}]})})}),{useSearchAlumniQuery:n,useGetAlumniStatsQuery:l,useGetAlumniProfileQuery:m}=r;export{n as a,m as b,l as u};
-//# sourceMappingURL=alumniApi-3rMxmjCr.js.map

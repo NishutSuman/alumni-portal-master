@@ -1,6 +1,7 @@
 import React from 'react'
 import { XMarkIcon, CalendarIcon, MapPinIcon, ClockIcon, UsersIcon, CurrencyRupeeIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
+import { getApiUrl } from '@/utils/helpers'
 
 interface Event {
   id: string
@@ -105,7 +106,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
             {event.heroImage && (
               <div className="mb-4 sm:mb-6 -mx-4 sm:mx-0 sm:rounded-lg overflow-hidden">
                 <img
-                  src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/events/${event.id}/hero-image`}
+                  src={getApiUrl(`/api/events/${event.id}/hero-image`)}
                   alt={event.title}
                   className="w-full h-48 sm:h-64 object-cover"
                   onError={(e) => {

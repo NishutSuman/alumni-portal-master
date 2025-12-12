@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useUpdateAlbumMutation, useGetAlbumQuery } from '../../../store/api/galleryApi';
 import ImageUploader from '../../common/UI/ImageUploader';
 import type { Album } from '../../../types/gallery';
+import { getApiUrl } from '@/utils/helpers';
 
 interface EditAlbumModalProps {
   isOpen: boolean;
@@ -217,7 +218,7 @@ const EditAlbumModal: FC<EditAlbumModalProps> = ({ isOpen, onClose, album, onSuc
                       <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                         <img
                           key={coverImageKey}
-                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/albums/cover/${currentAlbum.id}?t=${new Date(currentAlbum.updatedAt).getTime()}`}
+                          src={getApiUrl(`/api/albums/cover/${currentAlbum.id}?t=${new Date(currentAlbum.updatedAt).getTime()}`)}
                           alt={currentAlbum.name}
                           className="w-full h-full object-cover"
                         />

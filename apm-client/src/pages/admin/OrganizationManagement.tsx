@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { getApiUrl } from '@/utils/helpers';
 import {
   BuildingOfficeIcon,
   PencilIcon,
@@ -433,8 +434,7 @@ const OrganizationManagement = () => {
     }
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-      const response = await fetch(`${apiBaseUrl}/admin/organization/files/delete`, {
+      const response = await fetch(getApiUrl('/api/admin/organization/files/delete'), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${auth?.token}`,
@@ -491,8 +491,7 @@ const OrganizationManagement = () => {
       });
 
       // Use plain fetch instead of RTK Query for FormData uploads
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-      const response = await fetch(`${apiBaseUrl}/admin/organization/admin/upload/files`, {
+      const response = await fetch(getApiUrl('/api/admin/organization/admin/upload/files'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${auth?.token}`,

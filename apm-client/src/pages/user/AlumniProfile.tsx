@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useGetAlumniProfileQuery } from '../../store/api/alumniApi'
 import LoadingSpinner from '../../components/common/UI/LoadingSpinner'
+import { getApiUrl } from '@/utils/helpers'
 
 const AlumniProfile: React.FC = () => {
   const { userId } = useParams<{ userId: string }>()
@@ -106,7 +107,7 @@ const AlumniProfile: React.FC = () => {
               <div className="relative">
                 {profile.profileImage ? (
                   <img
-                    src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/profile-picture/${profile.id}`}
+                    src={getApiUrl(`/api/users/profile-picture/${profile.id}`)}
                     alt={profile.fullName}
                     className="h-32 w-32 rounded-full border-4 border-white dark:border-gray-800 bg-white dark:bg-gray-800 object-cover"
                     onError={(e) => {
