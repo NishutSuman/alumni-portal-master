@@ -6,6 +6,7 @@ const {
 	requireRole,
 } = require("../middleware/auth/auth.middleware");
 const { asyncHandler } = require("../utils/response");
+const { optionalTenantMiddleware } = require("../middleware/tenant.middleware");
 const adminController = require("../controllers/admin/admin.controller");
 const ExportController = require("../controllers/export/export.controller");
 const batchCollectionController = require("../controllers/batch/batchCollection.controller");
@@ -19,8 +20,9 @@ const {
 	validateApproveRejectCollection,
 } = require("../middleware/validation/batchCollection.validation.middleware");
 
-// All admin routes require authentication
+// All admin routes require authentication and tenant context
 router.use(authenticateToken);
+router.use(optionalTenantMiddleware); // Set req.tenant from X-Tenant-Code header for multi-tenant
 
 // User management routes - accessible by SUPER_ADMIN and BATCH_ADMIN
 router.get(

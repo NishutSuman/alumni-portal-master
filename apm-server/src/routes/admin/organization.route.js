@@ -12,6 +12,7 @@ const path = require('path');
 const { authenticateToken, requireRole } = require('../../middleware/auth/auth.middleware');
 const { uploadOrganizationFiles } = require('../../middleware/upload.middleware');
 const { asyncHandler } = require('../../utils/response');
+const { optionalTenantMiddleware } = require('../../middleware/tenant.middleware');
 
 // Import controller
 const organizationController = require('../../controllers/admin/organization.controller');
@@ -27,6 +28,7 @@ const organizationController = require('../../controllers/admin/organization.con
  * Access: PUBLIC
  */
 router.get('/',
+  optionalTenantMiddleware, // Set req.tenant from X-Tenant-Code header
   asyncHandler(organizationController.getOrganizationDetails)
 );
 
@@ -34,8 +36,9 @@ router.get('/',
 // ADMIN ROUTES (SUPER_ADMIN ONLY)
 // ==========================================
 
-// Apply authentication and super admin role to all admin routes
+// Apply authentication, tenant middleware, and super admin role to all admin routes
 router.use(authenticateToken);
+router.use(optionalTenantMiddleware); // Set req.tenant from X-Tenant-Code header
 router.use(requireRole('SUPER_ADMIN'));
 
 /**

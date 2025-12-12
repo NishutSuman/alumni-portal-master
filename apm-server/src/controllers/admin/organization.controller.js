@@ -20,7 +20,17 @@ const getOrganizationDetails = async (req, res) => {
     const orgFilter = getOrganizationFilter(req);
     const tenantCode = req.headers['x-tenant-code'] || 'default';
     const cacheKey = `public:organization:details:${tenantCode}`;
+
+    // Debug logging for tenant isolation
+    console.log('🏢 getOrganizationDetails - Tenant debug:', {
+      tenantCode,
+      reqTenant: req.tenant ? { id: req.tenant.id, name: req.tenant.name, tenantCode: req.tenant.tenantCode } : null,
+      orgFilter,
+      cacheKey
+    });
+
     let organization = await CacheService.get(cacheKey);
+    const fromCache = !!organization;
 
     if (!organization) {
       organization = await prisma.organization.findFirst({
@@ -67,7 +77,15 @@ const getOrganizationDetails = async (req, res) => {
         isConfigured: false
       });
     }
-    
+
+    // Log what org was found/returned
+    console.log('🏢 getOrganizationDetails - Result:', {
+      fromCache,
+      foundOrgId: organization.id,
+      foundOrgName: organization.name,
+      requestedTenantCode: tenantCode
+    });
+
     return successResponse(res, {
       organization: {
         ...organization,
