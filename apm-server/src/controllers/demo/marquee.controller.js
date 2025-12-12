@@ -98,7 +98,6 @@ const getMarqueeProfiles = async (req, res) => {
 
     console.log(`📊 Found ${realUsers.length} real users with profile pictures for org: ${organizationId}`);
 
-    const baseUrl = process.env.API_URL || 'http://localhost:3000';
     let finalImages = [];
 
     // Get tenant code for URL (to pass to image proxy)
@@ -114,7 +113,8 @@ const getMarqueeProfiles = async (req, res) => {
       finalImages = shuffled.slice(0, MARQUEE_SIZE).map(user => ({
         id: user.id,
         type: 'real',
-        profileImage: `${baseUrl}/api/users/profile-picture/${user.id}?tenant=${tenantCode}`
+        // Return relative path - frontend will construct full URL
+        profileImage: `/api/users/profile-picture/${user.id}?tenant=${tenantCode}`
       }));
     } else {
       // Mix real + dummy images
@@ -128,13 +128,15 @@ const getMarqueeProfiles = async (req, res) => {
       const dummyImages = selectedDummyIndices.map(num => ({
         id: `dummy-pp${num}`,
         type: 'dummy',
-        profileImage: `${baseUrl}/api/users/profile-picture/dummy-pp${num}?tenant=${tenantCode}`
+        // Return relative path - frontend will construct full URL
+        profileImage: `/api/users/profile-picture/dummy-pp${num}?tenant=${tenantCode}`
       }));
 
       const realImages = realUsers.map(user => ({
         id: user.id,
         type: 'real',
-        profileImage: `${baseUrl}/api/users/profile-picture/${user.id}?tenant=${tenantCode}`
+        // Return relative path - frontend will construct full URL
+        profileImage: `/api/users/profile-picture/${user.id}?tenant=${tenantCode}`
       }));
 
       // Combine and shuffle

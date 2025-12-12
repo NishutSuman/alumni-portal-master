@@ -1,5 +1,6 @@
 // src/components/common/UI/Marquee.tsx
 import React, { useState } from 'react';
+import { getApiUrl } from '@/utils/helpers';
 
 export interface MarqueeImage {
   id: string;
@@ -66,7 +67,7 @@ const Marquee: React.FC<MarqueeProps> = ({
               className="flex-shrink-0"
             >
               <img
-                src={img.profileImage}
+                src={getApiUrl(img.profileImage)}
                 alt=""
                 className="w-16 h-16 rounded-full object-cover shadow-lg ring-2 ring-white dark:ring-gray-700 hover:scale-110 transition-transform duration-300"
                 loading="lazy"
@@ -95,7 +96,7 @@ const Marquee: React.FC<MarqueeProps> = ({
               className="flex-shrink-0"
             >
               <img
-                src={img.profileImage}
+                src={getApiUrl(img.profileImage)}
                 alt=""
                 className="w-16 h-16 rounded-full object-cover shadow-lg ring-2 ring-white dark:ring-gray-700 hover:scale-110 transition-transform duration-300"
                 loading="lazy"

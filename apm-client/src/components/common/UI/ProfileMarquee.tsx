@@ -46,11 +46,11 @@ const ProfileMarquee: React.FC<ProfileMarqueeProps> = ({
     }
 
     if (lastDummyIndex !== -1) {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      // Use relative path - Marquee component will construct full URL via getApiUrl
       modifiedImages[lastDummyIndex] = {
         id: user.id,
         type: 'real',
-        profileImage: `${baseUrl}/api/users/profile-picture/${user.id}`
+        profileImage: `/api/users/profile-picture/${user.id}`
       };
     }
 
