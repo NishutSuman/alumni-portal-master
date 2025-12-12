@@ -18,9 +18,9 @@ export const capitalize = (str: string): string => {
  *
  * Priority:
  * 1. VITE_API_URL env var (most reliable for production)
- * 2. Stored org URL from localStorage (if not localhost)
- * 3. VITE_API_BASE_URL env var (fallback)
- * 4. Empty string (for local development where proxy handles /api)
+ * 2. VITE_API_BASE_URL env var (fallback)
+ * 3. Stored org URL from localStorage (if not localhost in production)
+ * 4. Infer from current window location for production domains
  */
 export const getApiUrl = (path: string): string => {
   // If path already starts with http, return as is
@@ -32,19 +32,33 @@ export const getApiUrl = (path: string): string => {
   // This prevents localStorage containing localhost:3000 from breaking production
   let baseUrl = import.meta.env.VITE_API_URL || '';
 
-  // If no VITE_API_URL, check stored org URL (but reject localhost in production)
-  if (!baseUrl) {
-    const storedUrl = localStorage.getItem('guild-api-url');
-    if (storedUrl && !storedUrl.includes('localhost')) {
-      // Remove trailing /api if present to avoid double /api
-      baseUrl = storedUrl.replace(/\/api$/, '');
-    }
-  }
-
   // Fallback to VITE_API_BASE_URL (also remove /api suffix if present)
   if (!baseUrl) {
     const fallback = import.meta.env.VITE_API_BASE_URL || '';
     baseUrl = fallback.replace(/\/api$/, '');
+  }
+
+  // If still no baseUrl, check stored org URL (but reject localhost in production)
+  if (!baseUrl) {
+    const storedUrl = localStorage.getItem('guild-api-url');
+    if (storedUrl) {
+      const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+      if (!isProduction || !storedUrl.includes('localhost')) {
+        // Remove trailing /api if present to avoid double /api
+        baseUrl = storedUrl.replace(/\/api$/, '');
+      }
+    }
+  }
+
+  // Final fallback for production: infer backend URL from known deployment pattern
+  // If we're on Vercel (guild-client.vercel.app or similar), use Railway backend
+  if (!baseUrl && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Don't add fallback for localhost - let proxy handle it
+    if (!hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
+      // Production fallback - use Railway deployment
+      baseUrl = 'https://guild-alumni-portal-demo.up.railway.app';
+    }
   }
 
   // If path starts with /api, prefix with base URL
