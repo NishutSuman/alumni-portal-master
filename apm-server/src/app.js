@@ -8,6 +8,7 @@ const config = require("./config");
 const { PrismaClient } = require("@prisma/client");
 const { asyncHandler } = require("./utils/response");
 const { cloudflareR2Service } = require('./services/cloudflare-r2.service');
+const { optionalTenantMiddleware } = require('./middleware/tenant.middleware');
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
@@ -467,13 +468,16 @@ app.get("/api/organizations/:orgId/files/:type", asyncHandler(async (req, res) =
 
 // Organization file proxy route - serves files from R2
 // This route allows public access to organization files since they're meant to be displayed
-app.get("/api/organization/files/:type", asyncHandler(async (req, res) => {
+app.get("/api/organization/files/:type", optionalTenantMiddleware, asyncHandler(async (req, res) => {
   try {
     const { type } = req.params;
-    
-    // Get organization
+
+    // Build tenant filter from middleware
+    const tenantFilter = req.tenant?.id ? { id: req.tenant.id } : {};
+
+    // Get organization with tenant filter
     const organization = await prisma.organization.findFirst({
-      where: { isActive: true }
+      where: { ...tenantFilter, isActive: true }
     });
     
     if (!organization) {
@@ -899,13 +903,13 @@ app.use("/api/donations", require("./routes/donation.route"));
 app.use("/api/admin", require("./routes/admin.route"));
 app.use("/api/celebrations", require("./routes/celebrations.route"));
 
-// Organization public endpoint
+// Organization public endpoint - use optionalTenantMiddleware to set req.tenant from X-Tenant-Code header
 const organizationController = require("./controllers/admin/organization.controller");
-app.get("/api/organization", asyncHandler(organizationController.getOrganizationDetails));
+app.get("/api/organization", optionalTenantMiddleware, asyncHandler(organizationController.getOrganizationDetails));
 
 // Organization logo proxy endpoint (public - for navbar display)
 // GET /api/organization/files/logo - Proxies the logo from R2 storage
-app.get("/api/organization/files/logo", asyncHandler(async (req, res) => {
+app.get("/api/organization/files/logo", optionalTenantMiddleware, asyncHandler(async (req, res) => {
   try {
     const tenantCode = req.headers['x-tenant-code'] || 'default';
 
