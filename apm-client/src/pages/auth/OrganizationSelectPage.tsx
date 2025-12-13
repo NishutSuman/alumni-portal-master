@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
+import { useLocation } from 'react-router-dom'
 import { selectIsDark } from '@/store/slices/themeSlice'
 import ThemeToggle from '@/components/common/UI/ThemeToggle'
 import {
@@ -81,6 +82,25 @@ const OrganizationSelectPage: React.FC = () => {
   const [isSwitchingOrg, setIsSwitchingOrg] = useState(false) // Track if user is switching orgs
   const [switchEmail, setSwitchEmail] = useState<string | null>(null) // Store email when switching
   const isDark = useSelector(selectIsDark)
+  const location = useLocation()
+
+  // Get the redirect destination after org selection
+  // Priority: 1. sessionStorage (set by change org button), 2. router state, 3. default to login
+  const getRedirectPath = (): string => {
+    // Check sessionStorage first (set when changing org from register/login page)
+    const storedRedirect = sessionStorage.getItem('guild-redirect-after-org');
+    if (storedRedirect) {
+      sessionStorage.removeItem('guild-redirect-after-org'); // Clear after reading
+      return storedRedirect;
+    }
+    // Check router state (set by App.tsx when redirecting)
+    const fromState = (location.state as { from?: { pathname: string } })?.from?.pathname;
+    if (fromState) {
+      return fromState;
+    }
+    // Default to login
+    return '/auth/login';
+  }
 
   // Fetch organizations from API on mount
   // CRITICAL: If user is switching orgs, only show orgs they belong to
@@ -147,9 +167,9 @@ const OrganizationSelectPage: React.FC = () => {
     // Store organization in localStorage
     storeOrganization(org)
 
-    // Small delay for UX, then reload to reinitialize API with new URL
+    // Small delay for UX, then redirect to original destination (login or register)
     setTimeout(() => {
-      window.location.href = '/auth/login'
+      window.location.href = getRedirectPath()
     }, 300)
   }
 

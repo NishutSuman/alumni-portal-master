@@ -27,7 +27,7 @@ const tenantMiddleware = async (req, res, next) => {
     if (tenantCode) {
       const organization = await prisma.organization.findFirst({
         where: {
-          tenantCode: tenantCode,
+          tenantCode: { equals: tenantCode, mode: 'insensitive' },
         },
         select: {
           id: true,
@@ -155,7 +155,7 @@ const optionalTenantMiddleware = async (req, res, next) => {
     if (tenantCode) {
       const organization = await prisma.organization.findFirst({
         where: {
-          tenantCode: tenantCode,
+          tenantCode: { equals: tenantCode, mode: 'insensitive' },
           isActive: true,
         },
         select: {

@@ -1435,10 +1435,16 @@ const createOrganizationUser = async (req, res) => {
       return errorResponse(res, 'Organization has reached maximum user limit', 400);
     }
 
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    // Check if email already exists in THIS organization
+    // Multi-tenant: Same email can exist in different organizations (per user_email_org_unique constraint)
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: email.toLowerCase(),
+        organizationId: orgId
+      }
+    });
     if (existingUser) {
-      return errorResponse(res, 'Email already exists', 409);
+      return errorResponse(res, 'Email already exists in this organization', 409);
     }
 
     // Hash password

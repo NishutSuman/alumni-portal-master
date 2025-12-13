@@ -14,6 +14,7 @@ import {
   useGetOrganizationsByEmailMutation,
   useLazyGetAllOrganizationsQuery,
   useLazyGetOrganizationByCodeQuery,
+  useResendVerificationEmailMutation,
   type Organization
 } from '@/store/api/authApi'
 import { getApiBaseUrl, getOrganizationByCode } from '@/config/organizations'
@@ -70,12 +71,19 @@ const LoginPage = () => {
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
 
+  // Email verification state
+  const [showEmailVerification, setShowEmailVerification] = useState(false)
+
+  // Signup prompt state (when email not found)
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false)
+
   // API mutations
   const [getOrganizationsByEmail] = useGetOrganizationsByEmailMutation()
   const [getAllOrganizations] = useLazyGetAllOrganizationsQuery()
   const [getOrganizationByCodeQuery] = useLazyGetOrganizationByCodeQuery()
   const [requestReactivation, { isLoading: isRequestingOtp }] = useRequestReactivationMutation()
   const [verifyReactivation, { isLoading: isVerifying }] = useVerifyReactivationMutation()
+  const [resendVerificationEmail, { isLoading: isResendingVerification }] = useResendVerificationEmailMutation()
 
   // Check for email verification success
   useEffect(() => {
@@ -115,16 +123,9 @@ const LoginPage = () => {
           setCurrentStep('organization')
         }
       } else {
-        // Email not found - fetch all orgs for new user registration
-        const allOrgsResult = await getAllOrganizations().unwrap()
-
-        if (allOrgsResult.success && allOrgsResult.data.organizations.length > 0) {
-          setOrganizations(allOrgsResult.data.organizations)
-          setIsNewUser(true)
-          setCurrentStep('organization')
-        } else {
-          toast.error('No organizations available. Please contact support.')
-        }
+        // Email not found - show message and ask if they want to sign up
+        setIsNewUser(true)
+        setShowSignupPrompt(true)
       }
     } catch (err) {
       console.error('Error checking email:', err)
@@ -237,11 +238,47 @@ const LoginPage = () => {
     if (result && result.success) {
       // Login successful - navigation handled by auth hook
     } else {
+      // Check if email verification is required
+      if (result?.error?.includes('verify your email')) {
+        setShowEmailVerification(true)
+      }
       // Check if account is deactivated
-      if (result?.error?.includes('deactivated')) {
+      else if (result?.error?.includes('deactivated')) {
         setReactivationEmail(email)
         setShowReactivation(true)
       }
+    }
+  }
+
+  // Handle resend verification email
+  const handleResendVerification = async () => {
+    try {
+      await resendVerificationEmail({ email: email.trim().toLowerCase() }).unwrap()
+      toast.success('Verification email sent! Please check your inbox.')
+    } catch (err: unknown) {
+      const error = err as { data?: { message?: string } }
+      toast.error(error.data?.message || 'Failed to send verification email')
+    }
+  }
+
+  // Handle proceed to signup when email not found
+  const handleProceedToSignup = async () => {
+    setIsCheckingEmail(true)
+    try {
+      const allOrgsResult = await getAllOrganizations().unwrap()
+
+      if (allOrgsResult.success && allOrgsResult.data.organizations.length > 0) {
+        setOrganizations(allOrgsResult.data.organizations)
+        setShowSignupPrompt(false)
+        setCurrentStep('organization')
+      } else {
+        toast.error('No organizations available. Please contact support.')
+      }
+    } catch (err) {
+      console.error('Error fetching organizations:', err)
+      toast.error('Failed to fetch organizations. Please try again.')
+    } finally {
+      setIsCheckingEmail(false)
     }
   }
 
@@ -257,6 +294,7 @@ const LoginPage = () => {
         setCurrentStep('organization')
       }
       setPassword('')
+      setShowEmailVerification(false)
     } else if (currentStep === 'organization') {
       setCurrentStep('email')
       setSelectedOrg(null)
@@ -272,6 +310,8 @@ const LoginPage = () => {
     setOrganizations([])
     setPassword('')
     setIsNewUser(false)
+    setShowEmailVerification(false)
+    setShowSignupPrompt(false)
     // Clear tenant code when starting over
     localStorage.removeItem('guild-org-code')
   }
@@ -520,17 +560,54 @@ const LoginPage = () => {
                   </button>
                 </form>
 
-                <div className="mt-6 text-center">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    New to GUILD?{' '}
-                    <Link
-                      to="/auth/register"
-                      className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all"
-                    >
-                      Create an Account
-                    </Link>
-                  </p>
-                </div>
+                {/* Email Not Found - Signup Prompt */}
+                {showSignupPrompt && (
+                  <div className="mt-6">
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 p-4 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                      <div className="flex items-start gap-3">
+                        <EnvelopeIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="font-medium">Email not found</p>
+                          <p className="text-sm mt-1 text-yellow-600 dark:text-yellow-300">
+                            No account exists with <strong>{email}</strong>. Would you like to create a new account?
+                          </p>
+                          <div className="flex gap-3 mt-4">
+                            <button
+                              onClick={handleProceedToSignup}
+                              disabled={isCheckingEmail}
+                              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isCheckingEmail ? 'Loading...' : 'Sign Up'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowSignupPrompt(false)
+                                setIsNewUser(false)
+                              }}
+                              className="flex-1 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium text-sm transition-colors"
+                            >
+                              Try Again
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!showSignupPrompt && (
+                  <div className="mt-6 text-center">
+                    <p className="text-gray-600 dark:text-gray-400">
+                      New to GUILD?{' '}
+                      <Link
+                        to="/auth/register"
+                        className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all"
+                      >
+                        Create an Account
+                      </Link>
+                    </p>
+                  </div>
+                )}
               </>
             )}
 
@@ -676,19 +753,40 @@ const LoginPage = () => {
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 p-4 rounded-xl mb-6 border border-red-200 dark:border-red-800">
-                    <div>{error}</div>
-                    {error.includes('deactivated') && (
-                      <button
-                        onClick={() => {
-                          setReactivationEmail(email)
-                          setShowReactivation(true)
-                        }}
-                        className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        Reactivate your account
-                      </button>
-                    )}
+                  <div className={`p-4 rounded-xl mb-6 border ${
+                    showEmailVerification
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border-red-200 dark:border-red-800'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      {showEmailVerification && (
+                        <EnvelopeIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <div>{error}</div>
+                        {showEmailVerification && (
+                          <button
+                            onClick={handleResendVerification}
+                            disabled={isResendingVerification}
+                            className="mt-3 w-full py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            <EnvelopeIcon className="w-4 h-4" />
+                            {isResendingVerification ? 'Sending...' : 'Resend Verification Email'}
+                          </button>
+                        )}
+                        {error.includes('deactivated') && (
+                          <button
+                            onClick={() => {
+                              setReactivationEmail(email)
+                              setShowReactivation(true)
+                            }}
+                            className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Reactivate your account
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 

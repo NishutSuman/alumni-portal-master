@@ -31,16 +31,22 @@ const api = axios.create({
   timeout: 10000, // 10 seconds timeout
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and tenant code
 api.interceptors.request.use(
   (config) => {
     const state = store.getState();
     const token = state.auth.token;
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
+    // Multi-tenant support: Add X-Tenant-Code header if organization is selected
+    const orgCode = localStorage.getItem('guild-org-code');
+    if (orgCode) {
+      config.headers['X-Tenant-Code'] = orgCode;
+    }
+
     return config;
   },
   (error) => {

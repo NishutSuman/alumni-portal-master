@@ -45,13 +45,14 @@ const VerificationPendingPage = () => {
       const response = await api.get('/auth/me');
 
       if (response.data.success) {
-        const updatedUser = response.data.data;
+        // API returns { success, data: { user: {...} } }
+        const updatedUser = response.data.data.user || response.data.data;
 
         // Update Redux state with fresh user data
         dispatch(updateProfile(updatedUser));
 
         // Check if verification is now approved
-        if (updatedUser.isAlumniVerified && !updatedUser.pendingVerification) {
+        if (updatedUser.isAlumniVerified && !updatedUser.pendingVerification && !updatedUser.isRejected) {
           toast.success('Your verification has been approved! Redirecting to dashboard...');
 
           // Redirect based on role

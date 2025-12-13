@@ -6,8 +6,9 @@ const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
 const NotificationService = require('../../services/notification.service');
 const emailManager = require('../../services/email/EmailManager');
+const tenantEmailManager = require('../../services/email/TenantEmailManager');
 const SerialIdService = require('../../services/serialID.service');
-const { getOrganizationName } = require('../../utils/tenant.util');
+const { getOrganizationName, getTenantCode } = require('../../utils/tenant.util');
 
 /**
  * Get pending verification users
@@ -16,15 +17,24 @@ const getPendingVerifications = async (req, res) => {
   try {
     const { page = 1, limit = 20, batch: filterBatch, search = '' } = req.query;
     const offset = (page - 1) * limit;
-    
-    // Build where clause
+
+    // MULTI-TENANT: Get tenant ID from request
+    const tenantId = req.tenant?.id || req.user?.organizationId;
+
+    // Build where clause with tenant isolation
     let whereClause = {
       pendingVerification: true,
       isAlumniVerified: false,
       isActive: true,
-      isRejected: false
+      isRejected: false,
+      role: { not: 'DEVELOPER' } // Never show developers in org user lists
     };
-    
+
+    // CRITICAL: Filter by organization for multi-tenant isolation
+    if (tenantId) {
+      whereClause.organizationId = tenantId;
+    }
+
     // Add search filter
     if (search) {
       whereClause.OR = [
@@ -32,12 +42,12 @@ const getPendingVerifications = async (req, res) => {
         { email: { contains: search, mode: 'insensitive' } }
       ];
     }
-    
+
     // Add batch filter
     if (filterBatch) {
       whereClause.batch = parseInt(filterBatch);
     }
-    
+
     const [users, totalCount] = await Promise.all([
       prisma.user.findMany({
         where: whereClause,
@@ -56,26 +66,26 @@ const getPendingVerifications = async (req, res) => {
       }),
       prisma.user.count({ where: whereClause })
     ]);
-    
+
     // Add profile completeness calculation
     const usersWithCompleteness = users.map(user => ({
       ...user,
       registeredAt: user.createdAt,
       profileCompleteness: user.fullName && user.email ? 85 : 60 // Simple calculation
     }));
-    
+
     const pagination = {
       page: parseInt(page),
       limit: parseInt(limit),
       total: totalCount,
       totalPages: Math.ceil(totalCount / limit)
     };
-    
+
     return successResponse(res, {
       users: usersWithCompleteness,
       pagination
     });
-    
+
   } catch (error) {
     console.error('getPendingVerifications error:', error);
     return errorResponse(res, 'Failed to retrieve pending verifications', 500);
@@ -87,10 +97,18 @@ const getPendingVerifications = async (req, res) => {
  */
 const getVerificationStats = async (req, res) => {
   try {
-    
+    // MULTI-TENANT: Get tenant ID from request
+    const tenantId = req.tenant?.id || req.user?.organizationId;
+
+    // Build tenant filter - exclude DEVELOPER users
+    const tenantFilter = tenantId
+      ? { organizationId: tenantId, role: { not: 'DEVELOPER' } }
+      : { role: { not: 'DEVELOPER' } };
+
     const [pendingCount, verifiedCount, rejectedCount] = await Promise.all([
       prisma.user.count({
         where: {
+          ...tenantFilter,
           pendingVerification: true,
           isAlumniVerified: false,
           isActive: true,
@@ -99,12 +117,14 @@ const getVerificationStats = async (req, res) => {
       }),
       prisma.user.count({
         where: {
+          ...tenantFilter,
           isAlumniVerified: true,
           isActive: true
         }
       }),
       prisma.user.count({
         where: {
+          ...tenantFilter,
           isRejected: true,
           isActive: true
         }
@@ -123,7 +143,7 @@ const getVerificationStats = async (req, res) => {
       },
       recentActivity: []
     };
-    
+
     return successResponse(res, stats, 'Verification stats retrieved successfully');
   } catch (error) {
     console.error('getVerificationStats error:', error);
@@ -255,52 +275,59 @@ const verifyAlumniUser = async (req, res) => {
         }
       });
 
-      // Send email notification (if email service is available)
-      if (emailManager && emailManager.isInitialized) {
-        const emailService = emailManager.getService();
-        const organizationName = getOrganizationName(req);
-        await emailService.sendEmail({
+      // Send email notification using tenant email manager
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #10b981; margin: 0;">🎉 Welcome to ${organizationName}!</h2>
+          </div>
+
+          <p>Dear ${updated.fullName},</p>
+
+          <p>Congratulations! Your alumni status has been verified and your account is now active at <strong>${organizationName}</strong>.</p>
+
+          <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0; border-radius: 5px;">
+            <strong>Your account is now activated!</strong>
+            <p style="margin: 10px 0 0 0;">You can now access all portal features and connect with your fellow alumni.</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${frontendUrl}/auth/login"
+               style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+               Login to Portal
+            </a>
+          </div>
+
+          <p>Welcome to the community!</p>
+
+          <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
+            <h4 style="margin-top: 0;">Need Help?</h4>
+            <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
+          </div>
+
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+            <p style="margin: 10px 0 0 0;">
+              <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
+            </p>
+          </div>
+        </div>
+      `;
+
+      try {
+        await tenantEmailManager.sendEmail(tenantCode, {
           to: updated.email,
           subject: `Alumni Account Activated - Welcome to ${organizationName}!`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
-              <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="color: #10b981; margin: 0;">🎉 Welcome to ${organizationName}!</h2>
-              </div>
-
-              <p>Dear ${updated.fullName},</p>
-
-              <p>Congratulations! Your alumni status has been verified and your account is now active at <strong>${organizationName}</strong>.</p>
-
-              <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0; border-radius: 5px;">
-                <strong>Your account is now activated!</strong>
-                <p style="margin: 10px 0 0 0;">You can now access all portal features and connect with your fellow alumni.</p>
-              </div>
-
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/login"
-                   style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                   Login to Portal
-                </a>
-              </div>
-
-              <p>Welcome to the community!</p>
-
-              <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
-                <h4 style="margin-top: 0;">Need Help?</h4>
-                <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
-              </div>
-
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
-                <p style="margin: 10px 0 0 0;">
-                  <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
-                </p>
-              </div>
-            </div>
-          `
+          html: emailHtml
         });
         console.log(`✅ Account activation email sent to ${updated.email}`);
+      } catch (emailError) {
+        console.error('Failed to send activation email:', emailError);
+        // Don't fail verification if email fails
       }
     } catch (notificationError) {
       console.error('Failed to send verification notifications:', notificationError);
@@ -372,51 +399,47 @@ const rejectAlumniUser = async (req, res) => {
 
     // Send ONLY email notification to user about rejection (no push notification)
     try {
+      const tenantCode = getTenantCode(req);
+      const organizationName = getOrganizationName(req);
 
-      if (emailManager && emailManager.isInitialized) {
-        const emailService = emailManager.getService();
-        const organizationName = getOrganizationName(req);
+      const rejectionEmailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #dc3545; margin: 0;">Registration Review Update</h2>
+            <p style="color: #6b7280; margin-top: 10px;">${organizationName}</p>
+          </div>
 
-        // Send rejection email with organization branding
-        await emailService.sendEmail({
-          to: user.email,
-          subject: `Registration Application Update - ${organizationName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 10px;">
-              <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="color: #dc3545; margin: 0;">Registration Review Update</h2>
-                <p style="color: #6b7280; margin-top: 10px;">${organizationName}</p>
-              </div>
+          <p>Dear ${user.fullName},</p>
 
-              <p>Dear ${user.fullName},</p>
+          <p>Thank you for your interest in joining <strong>${organizationName}</strong>. After reviewing your registration application, we are unable to proceed with your registration at this time.</p>
 
-              <p>Thank you for your interest in joining <strong>${organizationName}</strong>. After reviewing your registration application, we are unable to proceed with your registration at this time.</p>
+          <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 5px;">
+            <strong>Reason:</strong> ${reason || 'Unable to verify your alumni status with our records'}
+          </div>
 
-              <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 5px;">
-                <strong>Reason:</strong> ${reason || 'Unable to verify your alumni status with our records'}
-              </div>
+          <p>If you believe this decision was made in error, please contact our support team with any additional documentation that may help verify your alumni status.</p>
 
-              <p>If you believe this decision was made in error, please contact our support team with any additional documentation that may help verify your alumni status.</p>
+          <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
+            <h4 style="margin-top: 0;">Need Help?</h4>
+            <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
+          </div>
 
-              <div style="margin: 30px 0; padding: 15px; background-color: #f3f4f6; border-radius: 5px;">
-                <h4 style="margin-top: 0;">Need Help?</h4>
-                <p style="margin-bottom: 0;">Contact our support team at: <strong>${process.env.SUPPORT_EMAIL || 'support@alumni.portal'}</strong></p>
-              </div>
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
+            <p style="margin: 10px 0 0 0;">
+              <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
+            </p>
+          </div>
+        </div>
+      `;
 
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                <p style="color: #6b7280; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${organizationName}. All rights reserved.</p>
-                <p style="margin: 10px 0 0 0;">
-                  <a href="https://digikite.in" target="_blank" style="color: #9ca3af; text-decoration: none; font-size: 11px;">Powered by Guild by Digikite</a>
-                </p>
-              </div>
-            </div>
-          `
-        });
+      await tenantEmailManager.sendEmail(tenantCode, {
+        to: user.email,
+        subject: `Registration Application Update - ${organizationName}`,
+        html: rejectionEmailHtml
+      });
 
-        console.log(`✅ Rejection email sent to ${user.email}`);
-      } else {
-        console.warn('⚠️ Email service not initialized - rejection email not sent');
-      }
+      console.log(`✅ Rejection email sent to ${user.email}`);
     } catch (emailError) {
       console.error('Failed to send rejection email:', emailError);
       // Don't fail the rejection if email fails

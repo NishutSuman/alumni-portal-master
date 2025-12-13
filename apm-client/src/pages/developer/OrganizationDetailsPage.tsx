@@ -51,6 +51,7 @@ import {
   DocumentIcon,
   TrashIcon,
   EyeIcon,
+  EyeSlashIcon,
   ChevronUpIcon,
   ChevronDownIcon,
   ClipboardDocumentListIcon,
@@ -2288,6 +2289,7 @@ function ActivityLogTab({ org }: any) {
 // Email Config Tab Component
 function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) {
   const [showPassword, setShowPassword] = useState(false)
+  const [showApiKey, setShowApiKey] = useState(false)
   const [testEmail, setTestEmail] = useState('')
   const [formData, setFormData] = useState<{
     provider: EmailProvider
@@ -2346,12 +2348,12 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
         smtpPort: config.smtpPort || 587,
         smtpSecure: config.smtpSecure || false,
         smtpUser: config.smtpUser || '',
-        smtpPassword: '', // Don't populate password (it's masked)
-        sendgridApiKey: '',
-        resendApiKey: '',
-        mailgunApiKey: '',
+        smtpPassword: config.smtpPassword || '',
+        sendgridApiKey: config.sendgridApiKey || '',
+        resendApiKey: config.resendApiKey || '',
+        mailgunApiKey: config.mailgunApiKey || '',
         mailgunDomain: config.mailgunDomain || '',
-        mailersendApiKey: '',
+        mailersendApiKey: config.mailersendApiKey || '',
         fromEmail: config.fromEmail || '',
         fromName: config.fromName || orgName,
         replyTo: config.replyTo || '',
@@ -2445,58 +2447,56 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
   return (
     <div className="space-y-6">
       {/* Status Banner */}
-      {config && (
-        <div className={`p-4 rounded-lg ${
-          config.isActive
-            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-            : config.isVerified
-            ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-            : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${
-                config.isActive ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'
-              }`}>
-                <EnvelopeIcon className={`h-5 w-5 ${
-                  config.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'
-                }`} />
-              </div>
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {config.isActive ? 'Custom Email Active' : config.isVerified ? 'Ready to Activate' : 'Not Configured'}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {config.isActive
-                    ? `Sending from ${config.fromEmail}`
-                    : config.isVerified
-                    ? 'Configuration verified. Click Activate to enable.'
-                    : 'Configure and test your email settings below.'}
-                </p>
-              </div>
+      <div className={`p-4 rounded-lg ${
+        config?.isActive
+          ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+          : config?.isVerified
+          ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+          : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-full ${
+              config?.isActive ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'
+            }`}>
+              <EnvelopeIcon className={`h-5 w-5 ${
+                config?.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'
+              }`} />
             </div>
-            <div className="flex gap-2">
-              {config.isActive ? (
-                <button
-                  onClick={handleDeactivate}
-                  disabled={deactivating}
-                  className="px-3 py-1.5 text-sm border border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 rounded-lg"
-                >
-                  {deactivating ? 'Deactivating...' : 'Deactivate'}
-                </button>
-              ) : config.isVerified ? (
-                <button
-                  onClick={handleActivate}
-                  disabled={activating}
-                  className="px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg"
-                >
-                  {activating ? 'Activating...' : 'Activate'}
-                </button>
-              ) : null}
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">
+                {config?.isActive ? 'Custom Email Active' : config?.isVerified ? 'Ready to Activate' : 'Not Configured'}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {config?.isActive
+                  ? `Sending from ${config.fromEmail}`
+                  : config?.isVerified
+                  ? 'Configuration verified. Click Activate to enable.'
+                  : 'Configure and test your email settings below. After testing, click Activate.'}
+              </p>
             </div>
           </div>
+          <div className="flex gap-2">
+            {config?.isActive ? (
+              <button
+                onClick={handleDeactivate}
+                disabled={deactivating}
+                className="px-3 py-1.5 text-sm border border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 rounded-lg"
+              >
+                {deactivating ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            ) : config?.isVerified ? (
+              <button
+                onClick={handleActivate}
+                disabled={activating}
+                className="px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg"
+              >
+                {activating ? 'Activating...' : 'Activate'}
+              </button>
+            ) : null}
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Email Usage Stats */}
       {stats && (
@@ -2660,14 +2660,24 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 SendGrid API Key
               </label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="sendgridApiKey"
-                value={formData.sendgridApiKey}
-                onChange={handleInputChange}
-                placeholder={config?.sendgridApiKey ? '••••••••' : 'SG.xxxxx...'}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  name="sendgridApiKey"
+                  value={formData.sendgridApiKey}
+                  onChange={handleInputChange}
+                  placeholder="SG.xxxxx..."
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title={showApiKey ? 'Hide API Key' : 'Show API Key'}
+                >
+                  {showApiKey ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
           )}
 
@@ -2677,14 +2687,24 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Resend API Key
               </label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="resendApiKey"
-                value={formData.resendApiKey}
-                onChange={handleInputChange}
-                placeholder={config?.resendApiKey ? '••••••••' : 're_xxxxx...'}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  name="resendApiKey"
+                  value={formData.resendApiKey}
+                  onChange={handleInputChange}
+                  placeholder="re_xxxxx..."
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title={showApiKey ? 'Hide API Key' : 'Show API Key'}
+                >
+                  {showApiKey ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
           )}
 
@@ -2695,14 +2715,24 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Mailgun API Key
                 </label>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="mailgunApiKey"
-                  value={formData.mailgunApiKey}
-                  onChange={handleInputChange}
-                  placeholder={config?.mailgunApiKey ? '••••••••' : 'key-xxxxx...'}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    name="mailgunApiKey"
+                    value={formData.mailgunApiKey}
+                    onChange={handleInputChange}
+                    placeholder="key-xxxxx..."
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    title={showApiKey ? 'Hide API Key' : 'Show API Key'}
+                  >
+                    {showApiKey ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -2726,14 +2756,24 @@ function EmailConfigTab({ orgId, orgName }: { orgId: string; orgName: string }) 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 MailerSend API Key
               </label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="mailersendApiKey"
-                value={formData.mailersendApiKey}
-                onChange={handleInputChange}
-                placeholder={config?.mailersendApiKey ? '••••••••' : 'mlsn.xxxxx...'}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  name="mailersendApiKey"
+                  value={formData.mailersendApiKey}
+                  onChange={handleInputChange}
+                  placeholder="mlsn.xxxxx..."
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title={showApiKey ? 'Hide API Key' : 'Show API Key'}
+                >
+                  {showApiKey ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                </button>
+              </div>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Get your API key from MailerSend dashboard → Email → Domains → API Tokens
               </p>

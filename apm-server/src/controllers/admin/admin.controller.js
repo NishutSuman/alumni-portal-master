@@ -5,6 +5,7 @@ const { successResponse, errorResponse } = require('../../utils/response');
 const AnalyticsService = require('../../services/analytics/AnalyticsService');
 const { prisma } = require('../../config/database');
 const NotificationService = require('../../services/notification.service');
+const { getTenantId, withTenant } = require('../../utils/tenant.util');
 
 // Get cache performance dashboard
 const getCacheDashboard = async (req, res) => {
@@ -165,31 +166,41 @@ const getCacheHealth = async (req, res) => {
 const getDashboardOverview = async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    
-    // Temporary simple implementation to test routing
-    const { prisma } = require('../../config/database');
-    
-    // Get basic counts from database
-    const [totalUsers, verifiedUsers, totalEvents, totalRegistrations] = await Promise.all([
-      prisma.user.count({ where: { role: 'USER', isActive: true } }),
-      prisma.user.count({ where: { role: 'USER', isActive: true, isAlumniVerified: true } }),
-      prisma.event.count({ where: { isActive: true } }),
-      prisma.eventRegistration.count()
+
+    // MULTI-TENANT: Get tenant ID from request
+    const tenantId = getTenantId(req);
+
+    // Build tenant filter - exclude DEVELOPER users from org stats
+    const tenantFilter = tenantId
+      ? { organizationId: tenantId, role: { not: 'DEVELOPER' } }
+      : { organizationId: req.user.organizationId, role: { not: 'DEVELOPER' } };
+
+    // Get basic counts from database with tenant isolation
+    const [totalUsers, verifiedUsers, pendingUsers, rejectedUsers, totalAdmins, batchAdmins, superAdmins, totalEvents, totalRegistrations] = await Promise.all([
+      prisma.user.count({ where: { ...tenantFilter, isActive: true } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, isAlumniVerified: true } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, pendingVerification: true, isAlumniVerified: false, isRejected: false } }),
+      prisma.user.count({ where: { ...tenantFilter, isRejected: true } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, role: { in: ['SUPER_ADMIN', 'BATCH_ADMIN'] } } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, role: 'BATCH_ADMIN' } }),
+      prisma.user.count({ where: { ...tenantFilter, isActive: true, role: 'SUPER_ADMIN' } }),
+      prisma.event.count({ where: { isActive: true, ...(tenantId ? { organizationId: tenantId } : {}) } }),
+      prisma.eventRegistration.count({ where: tenantId ? { event: { organizationId: tenantId } } : {} })
     ]);
-    
+
     // Create simplified overview response
     const overview = {
       userStats: {
         totalUsers: totalUsers || 0,
         verifiedUsers: verifiedUsers || 0,
-        pendingVerifications: (totalUsers || 0) - (verifiedUsers || 0),
-        rejectedUsers: 0,
+        pendingVerifications: pendingUsers || 0,
+        rejectedUsers: rejectedUsers || 0,
         activeUsers: verifiedUsers || 0
       },
       adminStats: {
-        totalAdmins: 0,
-        batchAdmins: 0,
-        superAdmins: 1
+        totalAdmins: totalAdmins || 0,
+        batchAdmins: batchAdmins || 0,
+        superAdmins: superAdmins || 0
       },
       recentActivity: {
         registrations: totalRegistrations || 0,
@@ -202,7 +213,7 @@ const getDashboardOverview = async (req, res) => {
         lastBackup: new Date().toISOString()
       }
     };
-    
+
     return successResponse(res, overview, 'Dashboard overview retrieved successfully');
   } catch (error) {
     console.error('Dashboard overview error:', error);
@@ -222,13 +233,24 @@ const getAllUsers = async (req, res) => {
     const { role: adminRole, id: adminId } = req.user;
     const offset = (page - 1) * limit;
 
-    // Build where clause
+    // MULTI-TENANT: Get tenant ID from request (set by tenant middleware)
+    const tenantId = getTenantId(req);
+
+    // Build where clause with tenant isolation
     let whereClause = {
       isActive: true,
       // IMPORTANT: Never show DEVELOPER users in organization user lists
       // Developers are independent cross-tenant users and don't belong to any org
       role: { not: 'DEVELOPER' }
     };
+
+    // CRITICAL: Filter by organization for multi-tenant isolation
+    if (tenantId) {
+      whereClause.organizationId = tenantId;
+    } else {
+      // Fallback: Use logged-in user's organization
+      whereClause.organizationId = req.user.organizationId;
+    }
     
     // Add search filter
     if (search) {

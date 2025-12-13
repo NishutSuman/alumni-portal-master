@@ -2,9 +2,11 @@
 // Fix file casing issues and imports
 
 import React, { useEffect, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { ErrorBoundary } from 'react-error-boundary'
+import { App as CapacitorApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 
 // Redux
 import { setInitializing, setOnlineStatus, updatePerformanceMetrics } from './store/slices/appSlice'
@@ -180,12 +182,31 @@ const RequireOrganization = ({ children }: { children: React.ReactNode }) => {
 function App() {
   const dispatch = useDispatch()
   const location = useLocation()
+  const navigate = useNavigate()
   const startTime = performance.now()
-  
+
   // Hooks
   const { isAuthenticated, user } = useAuth()
   const isDark = useSelector(selectIsDark)
   const { isOnline } = useDevice()
+
+  // Handle Android back button for Capacitor
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+        if (canGoBack) {
+          window.history.back()
+        } else {
+          // On root page, minimize app instead of closing
+          CapacitorApp.minimizeApp()
+        }
+      })
+
+      return () => {
+        backButtonListener.then(listener => listener.remove())
+      }
+    }
+  }, [])
 
   // Initialize app
   useEffect(() => {

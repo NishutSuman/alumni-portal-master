@@ -230,6 +230,7 @@ module.exports = {
   withTenant,
   getTenantData,
   getTenantConnect,
+  getRequiredTenantId,
   userBelongsToTenant,
   canAccessResource,
   getOrganizationId,

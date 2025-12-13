@@ -1435,20 +1435,25 @@ const resendVerificationEmail = async (req, res) => {
       const tenantCode = getTenantCode(req);
       const organizationName = getOrganizationName(req);
 
+      console.log(`📧 Resend verification - Tenant: ${tenantCode}, Org: ${organizationName}`);
+
       const emailService = await tenantEmailManager.getServiceForTenant(tenantCode);
+      console.log(`📧 Email service retrieved: ${emailService ? 'Yes' : 'No'}`);
+
       if (emailService) {
-        await emailService.sendVerificationEmail({
+        console.log(`📧 Sending verification email to: ${user.email}`);
+        const result = await emailService.sendVerificationEmail({
           to: user.email,
           name: user.fullName,
           verificationLink: verificationLink,
           organizationName: organizationName
         });
-        // Verification email sent successfully
+        console.log(`📧 Email send result:`, result);
       } else {
-        // Email system not initialized - token available in database
+        console.warn(`⚠️ No email service available for tenant: ${tenantCode}`);
       }
     } catch (emailError) {
-      console.error('Email sending error:', emailError);
+      console.error('❌ Email sending error:', emailError);
       // Don't fail the request if email fails
     }
 

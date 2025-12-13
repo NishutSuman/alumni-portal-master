@@ -21,7 +21,7 @@ import { useSelector } from 'react-redux';
 import { selectIsDark } from '@/store/slices/themeSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
 import { apiClient } from '@/services/api';
-import { getStoredOrgName, clearOrganization } from '@/config/organizations';
+import { getStoredOrgName, clearOrganization, hasOrganizationSelected } from '@/config/organizations';
 
 // Validation Schema
 const registrationSchema = yup.object().shape({
@@ -79,9 +79,20 @@ const RegistrationPage = () => {
   // Get current organization name
   const currentOrgName = getStoredOrgName();
 
-  // Handle change organization
+  // Redirect to org selection if no organization is selected
+  useEffect(() => {
+    if (!hasOrganizationSelected()) {
+      // Store the intended destination so org selection redirects back here
+      sessionStorage.setItem('guild-redirect-after-org', '/auth/register');
+      window.location.href = '/select-organization';
+    }
+  }, []);
+
+  // Handle change organization - redirect back to register after selection
   const handleChangeOrganization = () => {
     clearOrganization();
+    // Store the intended destination so org selection redirects back here
+    sessionStorage.setItem('guild-redirect-after-org', '/auth/register');
     window.location.href = '/select-organization';
   };
   

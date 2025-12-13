@@ -169,8 +169,8 @@ export const clearOrganization = (): void => {
 // Check if organization is selected
 export const hasOrganizationSelected = (): boolean => {
   const orgCode = getStoredOrgCode()
-  const apiUrl = getStoredApiUrl()
-  return !!(orgCode && apiUrl)
+  // Only org code is required - API URL can be derived from env
+  return !!orgCode
 }
 
 // Get the API base URL (dynamic based on selected org or fallback to env)

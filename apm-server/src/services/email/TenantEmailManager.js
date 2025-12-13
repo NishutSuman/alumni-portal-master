@@ -5,44 +5,8 @@ const nodemailer = require('nodemailer');
 const { PrismaClient } = require('@prisma/client');
 const crypto = require('crypto');
 const EmailService = require('./EmailService');
-const { EmailProviderFactory } = require('./providers');
 
 const prisma = new PrismaClient();
-
-// Encryption key for sensitive data (should be in env)
-const ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex').slice(0, 32);
-const ENCRYPTION_IV_LENGTH = 16;
-
-/**
- * Encrypt sensitive data like passwords and API keys
- */
-function encrypt(text) {
-  if (!text) return null;
-  const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
-/**
- * Decrypt sensitive data
- */
-function decrypt(text) {
-  if (!text) return null;
-  try {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift(), 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    console.error('Decryption error:', error.message);
-    return null;
-  }
-}
 
 class TenantEmailManager {
   constructor() {
@@ -177,7 +141,7 @@ class TenantEmailManager {
       secure: config.smtpSecure || false,
       auth: {
         user: config.smtpUser,
-        pass: decrypt(config.smtpPassword)
+        pass: config.smtpPassword
       },
       tls: {
         rejectUnauthorized: false // For self-signed certificates
@@ -226,7 +190,7 @@ class TenantEmailManager {
     const GmailProvider = require('./providers/GmailProvider');
     return new GmailProvider({
       user: config.smtpUser,
-      password: decrypt(config.smtpPassword),
+      password: config.smtpPassword,
       fromName: config.fromName
     });
   }
@@ -237,7 +201,7 @@ class TenantEmailManager {
   createSendGridProvider(config) {
     const SendGridProvider = require('./providers/SendGridProvider');
     return new SendGridProvider({
-      apiKey: decrypt(config.sendgridApiKey),
+      apiKey: config.sendgridApiKey,
       fromEmail: config.fromEmail,
       fromName: config.fromName
     });
@@ -249,7 +213,7 @@ class TenantEmailManager {
   createResendProvider(config) {
     const ResendProvider = require('./providers/ResendProvider');
     return new ResendProvider({
-      apiKey: decrypt(config.resendApiKey),
+      apiKey: config.resendApiKey,
       fromEmail: config.fromEmail,
       fromName: config.fromName
     });
@@ -266,7 +230,7 @@ class TenantEmailManager {
 
     const mg = mailgun.client({
       username: 'api',
-      key: decrypt(config.mailgunApiKey)
+      key: config.mailgunApiKey
     });
 
     return {
@@ -308,7 +272,7 @@ class TenantEmailManager {
   createMailerSendProvider(config) {
     const MailerSendProvider = require('./providers/MailerSendProvider');
     return new MailerSendProvider({
-      apiKey: decrypt(config.mailersendApiKey),
+      apiKey: config.mailersendApiKey,
       fromEmail: config.fromEmail,
       fromName: config.fromName
     });
@@ -458,26 +422,22 @@ class TenantEmailManager {
    */
   async saveEmailConfig(organizationId, configData, userId) {
     try {
-      // Encrypt sensitive fields
-      const encryptedData = { ...configData };
+      // Store config data as-is (no encryption for simplicity)
+      const saveData = { ...configData };
 
-      // Handle sensitive fields - encrypt if provided, remove from update if empty
-      // This prevents overwriting existing encrypted values with empty strings
+      // Handle sensitive fields - only update if provided, otherwise keep existing
       const sensitiveFields = ['smtpPassword', 'sendgridApiKey', 'resendApiKey', 'mailgunApiKey', 'mailersendApiKey'];
 
       for (const field of sensitiveFields) {
-        if (configData[field] && configData[field].trim() !== '') {
-          // Encrypt the new value
-          encryptedData[field] = encrypt(configData[field]);
-        } else {
-          // Remove empty values so they don't overwrite existing encrypted values
-          delete encryptedData[field];
+        if (!configData[field] || configData[field].trim() === '') {
+          // Remove empty values so they don't overwrite existing values
+          delete saveData[field];
         }
       }
 
       // Generate verification token for domain verification
       if (!configData.verificationToken) {
-        encryptedData.verificationToken = crypto.randomBytes(32).toString('hex');
+        saveData.verificationToken = crypto.randomBytes(32).toString('hex');
       }
 
       const existingConfig = await prisma.organizationEmailConfig.findUnique({
@@ -489,7 +449,7 @@ class TenantEmailManager {
         result = await prisma.organizationEmailConfig.update({
           where: { organizationId },
           data: {
-            ...encryptedData,
+            ...saveData,
             updatedBy: userId,
             isVerified: false, // Reset verification on config change
             isActive: false
@@ -499,7 +459,7 @@ class TenantEmailManager {
         result = await prisma.organizationEmailConfig.create({
           data: {
             organizationId,
-            ...encryptedData,
+            ...saveData,
             createdBy: userId,
             isVerified: false,
             isActive: false
@@ -519,7 +479,7 @@ class TenantEmailManager {
       return {
         success: true,
         config: result,
-        verificationToken: encryptedData.verificationToken
+        verificationToken: saveData.verificationToken || result.verificationToken
       };
     } catch (error) {
       console.error('Error saving email config:', error);
@@ -565,7 +525,7 @@ class TenantEmailManager {
   }
 
   /**
-   * Get email configuration for organization (with masked sensitive data)
+   * Get email configuration for organization
    */
   async getEmailConfig(organizationId) {
     try {
@@ -585,15 +545,8 @@ class TenantEmailManager {
         return null;
       }
 
-      // Mask sensitive fields
-      return {
-        ...config,
-        smtpPassword: config.smtpPassword ? '********' : null,
-        sendgridApiKey: config.sendgridApiKey ? '********' : null,
-        resendApiKey: config.resendApiKey ? '********' : null,
-        mailgunApiKey: config.mailgunApiKey ? '********' : null,
-        mailersendApiKey: config.mailersendApiKey ? '********' : null
-      };
+      // Return config as-is (no masking for dev portal)
+      return config;
     } catch (error) {
       console.error('Error getting email config:', error);
       return null;
