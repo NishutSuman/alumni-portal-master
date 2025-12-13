@@ -1,11 +1,15 @@
 // src/hooks/usePushNotifications.ts
 // Push Notification Hook for Capacitor (Android/iOS)
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token, PushNotificationSchema, ActionPerformed } from '@capacitor/push-notifications';
+import { Device } from '@capacitor/device';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
+import { useRegisterPushTokenMutation } from '@/store/api/notificationApi';
+import { apiSlice } from '@/store/api/apiSlice';
 
 interface PushNotificationState {
   isSupported: boolean;
@@ -21,6 +25,9 @@ interface UsePushNotificationsReturn extends PushNotificationState {
 
 export const usePushNotifications = (): UsePushNotificationsReturn => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [registerPushToken] = useRegisterPushTokenMutation();
+  const tokenRegisteredRef = useRef(false);
   const [state, setState] = useState<PushNotificationState>({
     isSupported: false,
     isRegistered: false,
@@ -28,25 +35,37 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
     error: null,
   });
 
+  // Helper to refresh notification cache when push is received
+  const refreshNotificationCache = useCallback(() => {
+    console.log('🔔 Refreshing notification cache after push received');
+    // Invalidate both notification list and unread count
+    dispatch(apiSlice.util.invalidateTags(['Notification', 'UnreadCount']));
+  }, [dispatch]);
+
   // Check if push notifications are supported (native platform only)
   const isNativePlatform = Capacitor.isNativePlatform();
 
   // Register for push notifications
   const registerForPush = useCallback(async () => {
     if (!isNativePlatform) {
-      console.log('Push notifications not supported on web');
+      console.log('🔔 Push notifications not supported on web');
       return;
     }
 
     try {
+      console.log('🔔 Requesting push notification permissions...');
       // Request permission
       const permissionResult = await PushNotifications.requestPermissions();
+      console.log('🔔 Permission result:', permissionResult);
 
       if (permissionResult.receive === 'granted') {
+        console.log('🔔 Permission granted, registering with FCM...');
         // Register with FCM
         await PushNotifications.register();
+        console.log('🔔 FCM registration called successfully');
         setState(prev => ({ ...prev, isRegistered: true, error: null }));
       } else {
+        console.log('🔔 Permission denied:', permissionResult.receive);
         setState(prev => ({
           ...prev,
           error: 'Push notification permission denied',
@@ -55,7 +74,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
         toast.error('Please enable notifications in settings for important updates');
       }
     } catch (error) {
-      console.error('Error registering for push:', error);
+      console.error('🔔 Error registering for push:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to register',
@@ -130,23 +149,43 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
 
   // Setup listeners
   useEffect(() => {
+    console.log('🔔 Push notifications hook initialized, isNativePlatform:', isNativePlatform);
+
     if (!isNativePlatform) {
+      console.log('🔔 Not a native platform, skipping push setup');
       setState(prev => ({ ...prev, isSupported: false }));
       return;
     }
 
+    console.log('🔔 Setting up push notifications for native platform');
     setState(prev => ({ ...prev, isSupported: true }));
 
     // Registration success - get FCM token
-    const registrationListener = PushNotifications.addListener('registration', (token: Token) => {
+    const registrationListener = PushNotifications.addListener('registration', async (token: Token) => {
+      console.log('📱 Push notification token received:', token.value.substring(0, 20) + '...');
       setState(prev => ({ ...prev, token: token.value, isRegistered: true }));
 
-      // TODO: Send token to backend to store for user
-      // This would typically be an API call like:
-      // api.post('/notifications/register-device', { token: token.value, platform: 'android' });
-
-      // Store token locally for now
+      // Store token locally
       localStorage.setItem('pushToken', token.value);
+
+      // Send token to backend (only once per session)
+      if (!tokenRegisteredRef.current) {
+        tokenRegisteredRef.current = true;
+        try {
+          const deviceInfo = await Device.getInfo();
+          const deviceId = await Device.getId();
+
+          await registerPushToken({
+            token: token.value,
+            deviceType: deviceInfo.platform || 'android',
+            deviceId: deviceId.identifier || 'unknown',
+          });
+          console.log('✅ Push token registered with backend');
+        } catch (error) {
+          console.error('❌ Failed to register push token with backend:', error);
+          tokenRegisteredRef.current = false; // Allow retry
+        }
+      }
     });
 
     // Registration error
@@ -163,7 +202,10 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
     const notificationReceivedListener = PushNotifications.addListener(
       'pushNotificationReceived',
       (notification: PushNotificationSchema) => {
-        console.log('Push notification received:', notification);
+        console.log('🔔 Push notification received:', notification);
+
+        // Refresh notification cache to update badge counts
+        refreshNotificationCache();
 
         // Show in-app toast for foreground notifications
         const title = notification.title || 'New Notification';
@@ -221,17 +263,29 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
     const notificationActionListener = PushNotifications.addListener(
       'pushNotificationActionPerformed',
       (action: ActionPerformed) => {
-        console.log('Push notification action performed:', action);
+        console.log('🔔 Push notification action performed:', action);
+        // Refresh notification cache when coming back from a notification tap
+        refreshNotificationCache();
         handleNotificationAction(action.notification);
       }
     );
 
-    // Check existing permissions on mount
-    PushNotifications.checkPermissions().then(result => {
+    // Check existing permissions on mount and auto-register
+    PushNotifications.checkPermissions().then(async result => {
+      console.log('🔔 Current permission status:', result.receive);
       if (result.receive === 'granted') {
         // Already have permission, register
+        console.log('🔔 Permission already granted, registering...');
         registerForPush();
+      } else if (result.receive === 'prompt' || result.receive === 'prompt-with-rationale') {
+        // Need to request permission
+        console.log('🔔 Requesting push notification permission...');
+        registerForPush();
+      } else {
+        console.log('🔔 Push notifications denied or unavailable');
       }
+    }).catch(error => {
+      console.error('🔔 Error checking push permissions:', error);
     });
 
     // Cleanup listeners
@@ -241,7 +295,7 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
       notificationReceivedListener.then(l => l.remove());
       notificationActionListener.then(l => l.remove());
     };
-  }, [isNativePlatform, handleNotificationAction, registerForPush]);
+  }, [isNativePlatform, handleNotificationAction, registerForPush, refreshNotificationCache]);
 
   return {
     ...state,

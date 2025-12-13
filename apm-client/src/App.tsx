@@ -1,12 +1,13 @@
 // src/App.tsx - FIXED VERSION
 // Fix file casing issues and imports
 
-import React, { useEffect, Suspense } from 'react'
+import React, { useEffect, Suspense, useState, useRef, useCallback } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { ErrorBoundary } from 'react-error-boundary'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
+import toast from 'react-hot-toast'
 
 // Redux
 import { setInitializing, setOnlineStatus, updatePerformanceMetrics } from './store/slices/appSlice'
@@ -18,7 +19,10 @@ import { useAuth } from './hooks/useAuth'
 import { useDevice } from './hooks/useDevice'
 
 // Organization config
-import { hasOrganizationSelected, getStoredOrgName } from './config/organizations'
+import { hasOrganizationSelected, getStoredOrgName, restoreOrgFromPreferences } from './config/organizations'
+
+// Splash Screen
+import SplashScreen from './components/common/SplashScreen'
 
 // FIXED: Correct file names with proper casing
 const PublicLayout = React.lazy(() => import('./components/common/Layout/PublicLayout'))
@@ -190,9 +194,25 @@ function App() {
   const isDark = useSelector(selectIsDark)
   const { isOnline } = useDevice()
 
+  // State for splash screen on mobile
+  const [showSplash, setShowSplash] = useState(Capacitor.isNativePlatform())
+  const [appInitialized, setAppInitialized] = useState(false)
+
+  // Back button double-press state
+  const lastBackPressRef = useRef<number>(0)
+
   // Get tenant info from Redux (persisted)
   const tenantCode = useSelector(selectTenantCode)
   const userOrganization = useSelector(selectUserOrganization)
+
+  // Dashboard paths that should be treated as entry points (no back navigation)
+  const isDashboardPath = useCallback((path: string) => {
+    return path === '/user/dashboard' ||
+           path === '/admin/dashboard' ||
+           path === '/developer' ||
+           path === '/user/social' ||
+           path === '/admin/users'
+  }, [])
 
   // CRITICAL: Restore org code from persisted user data on app init
   // This ensures the X-Tenant-Code header is set even after page refresh
@@ -211,11 +231,31 @@ function App() {
   // Handle Android back button for Capacitor
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-        if (canGoBack) {
+      const backButtonListener = CapacitorApp.addListener('backButton', () => {
+        const currentPath = window.location.pathname
+
+        // If on dashboard/entry point, handle double-press to exit
+        if (isDashboardPath(currentPath)) {
+          const now = Date.now()
+          const timeSinceLastPress = now - lastBackPressRef.current
+
+          if (timeSinceLastPress < 2000) {
+            // Double press within 2 seconds - exit app
+            CapacitorApp.exitApp()
+          } else {
+            // First press - show toast and record time
+            lastBackPressRef.current = now
+            toast('Press back again to exit', {
+              duration: 2000,
+              position: 'bottom-center',
+              icon: '👋',
+            })
+          }
+        } else if (window.history.length > 1) {
+          // Not on dashboard, go back normally
           window.history.back()
         } else {
-          // On root page, minimize app instead of closing
+          // No history, minimize
           CapacitorApp.minimizeApp()
         }
       })
@@ -224,24 +264,59 @@ function App() {
         backButtonListener.then(listener => listener.remove())
       }
     }
-  }, [])
+  }, [isDashboardPath])
 
-  // Initialize app
+  // Initialize app and handle splash screen
   useEffect(() => {
-    // Set online status
-    dispatch(setOnlineStatus(isOnline))
-    
-    // Performance tracking
-    const renderTime = performance.now() - startTime
-    dispatch(updatePerformanceMetrics({ renderTime }))
-    
-    // Mark app as initialized
-    const timer = setTimeout(() => {
-      dispatch(setInitializing(false))
-    }, 500)
+    // CRITICAL: On native mobile, restore org data from Capacitor Preferences first
+    // This ensures session persistence survives app restarts
+    const initializeApp = async () => {
+      if (Capacitor.isNativePlatform()) {
+        await restoreOrgFromPreferences()
+      }
 
-    return () => clearTimeout(timer)
+      // Set online status
+      dispatch(setOnlineStatus(isOnline))
+
+      // Performance tracking
+      const renderTime = performance.now() - startTime
+      dispatch(updatePerformanceMetrics({ renderTime }))
+
+      // Mark app as initialized
+      setTimeout(() => {
+        dispatch(setInitializing(false))
+        setAppInitialized(true)
+
+        // Hide splash screen after a brief delay
+        if (Capacitor.isNativePlatform()) {
+          setTimeout(() => {
+            setShowSplash(false)
+          }, 1000) // Show splash for 1 second
+        }
+      }, 500)
+    }
+
+    initializeApp()
   }, [dispatch, isOnline, startTime])
+
+  // Auto-redirect to dashboard for logged-in users on mobile app start
+  useEffect(() => {
+    if (appInitialized && Capacitor.isNativePlatform() && isAuthenticated && user) {
+      const currentPath = location.pathname
+
+      // If on login page or root, redirect to appropriate dashboard
+      if (currentPath === '/' || currentPath === '/auth/login' || currentPath === '/select-organization') {
+        const dashboardPath = user.role === 'DEVELOPER'
+          ? '/developer'
+          : (user.role === 'SUPER_ADMIN' || user.role === 'BATCH_ADMIN')
+            ? '/admin/dashboard'
+            : '/user/dashboard'
+
+        // Replace history so back button doesn't go to login
+        navigate(dashboardPath, { replace: true })
+      }
+    }
+  }, [appInitialized, isAuthenticated, user, location.pathname, navigate])
 
   // Update online status
   useEffect(() => {
@@ -298,7 +373,7 @@ function App() {
   }, [location.pathname])
 
   return (
-    <ErrorBoundary 
+    <ErrorBoundary
       FallbackComponent={ErrorFallback}
       onError={(error) => {
         console.error('App Error:', error)
@@ -306,6 +381,9 @@ function App() {
       }}
     >
       <div className={`App min-h-screen ${isDark ? 'dark' : ''}`}>
+        {/* Splash Screen for mobile app */}
+        {showSplash && <SplashScreen />}
+
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             {/* Public Routes - Simple landing page */}

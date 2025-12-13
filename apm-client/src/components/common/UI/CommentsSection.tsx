@@ -277,9 +277,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
         layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`${isReply ? 'ml-10 mt-2' : 'mb-3'}`}
+        className={`${isReply ? 'ml-6 sm:ml-10 mt-2' : 'mb-3'}`}
       >
-        <div className="flex space-x-3">
+        <div className="flex space-x-2 sm:space-x-3">
           {/* Profile Picture */}
           <div className="flex-shrink-0 mt-1">
             {loadedImages.has(comment.author.id) ? (
@@ -407,7 +407,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-3 mt-1 ml-3">
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 sm:space-x-3 mt-1">
               {/* Like Button (for showing reaction picker) */}
               <div className="relative">
                 <button
@@ -485,7 +485,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mt-3 ml-4"
+                className="mt-3 ml-0 sm:ml-4"
               >
                 <div className="flex items-start space-x-3">
                   <div className="flex-shrink-0 mt-1">
@@ -527,7 +527,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
 
             {/* Nested Replies */}
             {hasReplies && !isReply && (
-              <div className="mt-3 ml-6">
+              <div className="mt-3 ml-2 sm:ml-6">
                 {/* Show All Replies or Collapsed View */}
                 {replyCount > 1 && !showAllReplies ? (
                   <div>
@@ -581,7 +581,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
             
             {/* Show replies for nested comments (when isReply = true) */}
             {hasReplies && isReply && (
-              <div className="mt-3 ml-6">
+              <div className="mt-3 ml-2 sm:ml-6">
                 {comment.replies.map((reply) => (
                   <CommentItem 
                     key={reply.id} 
@@ -623,7 +623,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({ postId, allowComments
   }
 
   return (
-    <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+    <div className="px-3 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
       {/* Comments Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-sm font-medium text-gray-900 dark:text-white">

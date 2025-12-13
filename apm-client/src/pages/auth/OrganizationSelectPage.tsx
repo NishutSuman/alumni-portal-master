@@ -160,12 +160,12 @@ const OrganizationSelectPage: React.FC = () => {
   )
 
   // Handle organization selection from list
-  const handleSelectOrganization = (org: Organization) => {
+  const handleSelectOrganization = async (org: Organization) => {
     setIsLoading(true)
     setError(null)
 
-    // Store organization in localStorage
-    storeOrganization(org)
+    // Store organization in localStorage (and Capacitor Preferences on mobile)
+    await storeOrganization(org)
 
     // Small delay for UX, then redirect to original destination (login or register)
     setTimeout(() => {

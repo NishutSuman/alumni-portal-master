@@ -2,22 +2,18 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   HomeIcon,
-  UserGroupIcon,
   CalendarIcon,
   UsersIcon,
   Bars3Icon,
   BuildingOfficeIcon,
-  ChartBarIcon,
   ChatBubbleLeftRightIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
-  UserGroupIcon as UserGroupIconSolid,
   CalendarIcon as CalendarIconSolid,
   UsersIcon as UsersIconSolid,
   BuildingOfficeIcon as BuildingOfficeIconSolid,
-  ChartBarIcon as ChartBarIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   AcademicCapIcon as AcademicCapIconSolid,
 } from '@heroicons/react/24/solid';
@@ -61,10 +57,10 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ userRole, onMoreClick
             iconSolid: BuildingOfficeIconSolid,
           },
           {
-            name: 'Analytics',
-            path: '/admin/dashboard',
-            icon: ChartBarIcon,
-            iconSolid: ChartBarIconSolid,
+            name: 'Events',
+            path: '/admin/events',
+            icon: CalendarIcon,
+            iconSolid: CalendarIconSolid,
           },
         ];
 

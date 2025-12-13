@@ -168,25 +168,25 @@ const LinkedInReactions: React.FC<LinkedInReactionsProps> = ({
       )}
 
       {/* Bottom section: Action buttons (LinkedIn style) */}
-      <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
-        <div className="flex items-center space-x-1">
+      <div className="border-t border-gray-100 dark:border-gray-700 pt-2">
+        <div className="flex items-center justify-between">
           {/* Like/Reaction button */}
-          <div className="relative">
+          <div className="relative flex-1">
             <button
               onClick={handleMainButtonClick}
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
               disabled={disabled}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-all duration-200 ${
+              className={`flex items-center justify-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 w-full ${
                 hasReacted
                   ? `${REACTION_CONFIG[userReaction]?.color} bg-blue-50 dark:bg-blue-900/20 font-medium`
                   : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700'
               } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              <span className="text-lg">
+              <span className="text-base sm:text-lg">
                 {hasReacted ? REACTION_CONFIG[userReaction]?.emoji : '👍'}
               </span>
-              <span className="text-sm font-medium">
+              <span className="text-xs sm:text-sm font-medium">
                 {hasReacted ? REACTION_CONFIG[userReaction]?.label : 'Like'}
               </span>
             </button>
@@ -205,26 +205,26 @@ const LinkedInReactions: React.FC<LinkedInReactionsProps> = ({
                     setShowPicker(false);
                   }}
                 >
-                  <div className="bg-white dark:bg-gray-800 rounded-full shadow-xl border border-gray-200 dark:border-gray-700 p-2 flex space-x-1">
+                  <div className="bg-white dark:bg-gray-800 rounded-full shadow-xl border border-gray-200 dark:border-gray-700 p-1 sm:p-2 flex space-x-0.5 sm:space-x-1">
                     {Object.entries(REACTION_CONFIG).map(([reactionType, config]) => {
                       const isActive = userReaction === reactionType;
                       const count = reactions?.[reactionType as ReactionType] || 0;
-                      
+
                       return (
                         <motion.button
                           key={reactionType}
                           whileHover={{ scale: 1.3, y: -4 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => handleReactionClick(reactionType as ReactionType)}
-                          className={`relative p-2 rounded-full transition-all duration-200 ${
+                          className={`relative p-1.5 sm:p-2 rounded-full transition-all duration-200 ${
                             isActive
                               ? 'bg-blue-100 dark:bg-blue-900 scale-110 shadow-lg'
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
                           }`}
                           title={`${config.label}${count > 0 ? ` (${count})` : ''}`}
                         >
-                          <span className="text-xl">{config.emoji}</span>
-                          
+                          <span className="text-lg sm:text-xl">{config.emoji}</span>
+
                           {/* Count badge */}
                           {count > 0 && (
                             <motion.div
@@ -245,21 +245,21 @@ const LinkedInReactions: React.FC<LinkedInReactionsProps> = ({
           </div>
 
           {/* Comment button */}
-          <button 
+          <button
             onClick={onCommentClick}
-            className="flex items-center space-x-2 px-4 py-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="flex-1 flex items-center justify-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <ChatBubbleLeftIcon className="h-5 w-5" />
-            <span className="text-sm font-medium">Comment</span>
+            <ChatBubbleLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="text-xs sm:text-sm font-medium">Comment</span>
           </button>
 
           {/* Share button */}
-          <button 
+          <button
             onClick={onShareClick}
-            className="flex items-center space-x-2 px-4 py-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="flex-1 flex items-center justify-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-md text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <ShareIcon className="h-5 w-5" />
-            <span className="text-sm font-medium">Share</span>
+            <ShareIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="text-xs sm:text-sm font-medium">Share</span>
           </button>
         </div>
       </div>

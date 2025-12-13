@@ -31,6 +31,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useDevice } from '@/hooks/useDevice';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useSelector } from 'react-redux';
 import { selectIsDark } from '@/store/slices/themeSlice';
 import ThemeToggle from '@/components/common/UI/ThemeToggle';
@@ -39,6 +40,7 @@ import UserProfileDropdown from '@/components/common/UI/UserProfileDropdown';
 import OrganizationLogo from '@/components/common/UI/OrganizationLogo';
 import BrandLogo from '@/components/common/UI/BrandLogo';
 import { useGetPublicOrganizationQuery } from '@/store/api/apiSlice';
+import { useGetUnreadCountQuery } from '@/store/api/notificationApi';
 import MobileHeader from '@/components/common/Layout/MobileHeader';
 import MobileBottomNav from '@/components/common/Layout/MobileBottomNav';
 import MobileMoreSidebar from '@/components/common/Layout/MobileMoreSidebar';
@@ -441,9 +443,19 @@ const AdminLayout = () => {
   const [imageError, setImageError] = useState(false);
   const [moreSidebarOpen, setMoreSidebarOpen] = useState(false);
 
+  // Initialize push notifications for mobile
+  // This hook handles FCM registration and token sending to backend
+  usePushNotifications();
+
   // Fetch organization data from public endpoint
   const { data: organization } = useGetPublicOrganizationQuery();
   const organizationName = organization?.name || 'Organization';
+
+  // Fetch unread notification count for mobile header badge
+  const { data: unreadCountData } = useGetUnreadCountQuery(undefined, {
+    pollingInterval: 60000, // Poll every minute for new notifications
+  });
+  const unreadNotifications = unreadCountData?.count || 0;
 
   // Get navigation items based on user role
   const navigationItems = getNavigationItems(user?.role || 'USER');
@@ -491,7 +503,7 @@ const AdminLayout = () => {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Mobile Header */}
-        <MobileHeader unreadNotifications={0} />
+        <MobileHeader unreadNotifications={unreadNotifications} />
 
         {/* Main Content - Add padding for fixed header and bottom nav */}
         <main className="pb-20 pt-2">

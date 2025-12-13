@@ -2,6 +2,8 @@
 // Organization configuration for multi-tenant support
 // Each organization has a unique code and corresponding API URL
 
+import { Capacitor } from '@capacitor/core'
+import { Preferences } from '@capacitor/preferences'
 import { getApiUrl } from '@/utils/helpers'
 
 export interface Organization {
@@ -137,33 +139,75 @@ export const getOrganizationByCode = (code: string): Organization | undefined =>
   )
 }
 
-// Get stored organization code from localStorage
+// Get stored organization code (sync version for immediate use)
+// On mobile, this reads from localStorage which is synced from Preferences
 export const getStoredOrgCode = (): string | null => {
   return localStorage.getItem(ORG_STORAGE_KEYS.ORG_CODE)
 }
 
-// Get stored API URL from localStorage
+// Get stored API URL (sync version)
 export const getStoredApiUrl = (): string | null => {
   return localStorage.getItem(ORG_STORAGE_KEYS.API_URL)
 }
 
-// Get stored organization name from localStorage
+// Get stored organization name (sync version)
 export const getStoredOrgName = (): string | null => {
   return localStorage.getItem(ORG_STORAGE_KEYS.ORG_NAME)
 }
 
-// Store organization selection in localStorage
-export const storeOrganization = (org: Organization): void => {
+// Async version to restore org data from Capacitor Preferences on app start
+export const restoreOrgFromPreferences = async (): Promise<void> => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { value: orgCode } = await Preferences.get({ key: ORG_STORAGE_KEYS.ORG_CODE })
+      const { value: apiUrl } = await Preferences.get({ key: ORG_STORAGE_KEYS.API_URL })
+      const { value: orgName } = await Preferences.get({ key: ORG_STORAGE_KEYS.ORG_NAME })
+
+      // Sync to localStorage for synchronous access
+      if (orgCode) localStorage.setItem(ORG_STORAGE_KEYS.ORG_CODE, orgCode)
+      if (apiUrl) localStorage.setItem(ORG_STORAGE_KEYS.API_URL, apiUrl)
+      if (orgName) localStorage.setItem(ORG_STORAGE_KEYS.ORG_NAME, orgName)
+    } catch (error) {
+      console.error('Error restoring org from Preferences:', error)
+    }
+  }
+}
+
+// Store organization selection (both localStorage and Capacitor Preferences on mobile)
+export const storeOrganization = async (org: Organization): Promise<void> => {
+  // Always store in localStorage for sync access
   localStorage.setItem(ORG_STORAGE_KEYS.ORG_CODE, org.code)
   localStorage.setItem(ORG_STORAGE_KEYS.API_URL, org.apiUrl)
   localStorage.setItem(ORG_STORAGE_KEYS.ORG_NAME, org.name)
+
+  // Also store in Capacitor Preferences on native for persistence
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Preferences.set({ key: ORG_STORAGE_KEYS.ORG_CODE, value: org.code })
+      await Preferences.set({ key: ORG_STORAGE_KEYS.API_URL, value: org.apiUrl })
+      await Preferences.set({ key: ORG_STORAGE_KEYS.ORG_NAME, value: org.name })
+    } catch (error) {
+      console.error('Error storing org in Preferences:', error)
+    }
+  }
 }
 
-// Clear organization selection from localStorage
-export const clearOrganization = (): void => {
+// Clear organization selection (both localStorage and Capacitor Preferences)
+export const clearOrganization = async (): Promise<void> => {
   localStorage.removeItem(ORG_STORAGE_KEYS.ORG_CODE)
   localStorage.removeItem(ORG_STORAGE_KEYS.API_URL)
   localStorage.removeItem(ORG_STORAGE_KEYS.ORG_NAME)
+
+  // Also clear from Capacitor Preferences on native
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Preferences.remove({ key: ORG_STORAGE_KEYS.ORG_CODE })
+      await Preferences.remove({ key: ORG_STORAGE_KEYS.API_URL })
+      await Preferences.remove({ key: ORG_STORAGE_KEYS.ORG_NAME })
+    } catch (error) {
+      console.error('Error clearing org from Preferences:', error)
+    }
+  }
 }
 
 // Check if organization is selected

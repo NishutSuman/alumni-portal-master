@@ -4,7 +4,9 @@
 import { configureStore } from '@reduxjs/toolkit'
 import { setupListeners } from '@reduxjs/toolkit/query'
 import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist'
-import storage from 'redux-persist/lib/storage'
+// Use Capacitor Preferences on native mobile for persistent storage
+// localStorage can be cleared by the OS on mobile, causing session loss
+import capacitorStorage from './capacitorStorage'
 
 // Import slices
 import authSlice, { logout } from './slices/authSlice'
@@ -25,14 +27,14 @@ import { clearOrganization } from '@/config/organizations'
 // Persist configuration for auth (to maintain login state)
 const authPersistConfig = {
   key: 'guild-auth',
-  storage,
+  storage: capacitorStorage,
   whitelist: ['user', 'token', 'refreshToken', 'isAuthenticated'] // Only persist these fields
 }
 
 // Persist configuration for theme
 const themePersistConfig = {
   key: 'guild-theme',
-  storage,
+  storage: capacitorStorage,
 }
 
 // Create persisted reducers
