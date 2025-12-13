@@ -391,7 +391,11 @@ const registerPushToken = async (req, res) => {
 
   } catch (error) {
     console.error('Register push token error:', error);
-    return errorResponse(res, 'Failed to register push token', 500);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    // Return detailed error for debugging
+    return errorResponse(res, `Failed to register push token: ${error.message}`, 500);
   }
 };
 
