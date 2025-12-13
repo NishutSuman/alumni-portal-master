@@ -218,6 +218,8 @@ class NotificationService {
    * @returns {Promise<void>}
    */
   static async sendPushNotifications(notifications, tenantCode = null) {
+    console.log(`🔔 sendPushNotifications called for ${notifications.length} notifications`);
+
     try {
       for (const notification of notifications) {
         // Get user's push tokens from the device tokens table
@@ -236,7 +238,10 @@ class NotificationService {
           }
         });
 
-        if (!user) continue;
+        if (!user) {
+          console.log(`⚠️ User not found for notification ${notification.id}`);
+          continue;
+        }
 
         // Get tenant code from user's organization if not provided
         let effectiveTenantCode = tenantCode;
@@ -251,12 +256,18 @@ class NotificationService {
         // Get device tokens to send to
         const deviceTokens = user.deviceTokens?.map(dt => dt.token) || [];
 
+        console.log(`📱 User ${user.fullName} has ${deviceTokens.length} active device tokens`);
+        if (deviceTokens.length > 0) {
+          console.log(`   Token preview: ${deviceTokens[0]?.substring(0, 30)}...`);
+        }
+
         // Send push notification using tenant-aware service
         try {
           let pushResult;
 
           if (deviceTokens.length > 0) {
             // Send to actual device tokens using tenant-aware service
+            console.log(`📤 Sending FCM push to ${deviceTokens.length} tokens for ${user.fullName}`);
             pushResult = await TenantPushNotificationService.sendToTokens(
               effectiveTenantCode,
               {
@@ -269,26 +280,14 @@ class NotificationService {
                   userId: user.id,
                   ...notification.payload
                 },
-                priority: 'normal'
+                priority: 'high'  // Changed to high priority for better delivery
               }
             );
+            console.log(`📤 FCM push result:`, JSON.stringify(pushResult, null, 2));
           } else {
-            // Fallback to mock token for development
-            pushResult = await TenantPushNotificationService.sendToToken(
-              effectiveTenantCode,
-              {
-                token: 'mock-device-token',
-                title: notification.title,
-                body: notification.message,
-                data: {
-                  notificationId: notification.id,
-                  type: notification.type,
-                  userId: user.id,
-                  ...notification.payload
-                },
-                priority: 'normal'
-              }
-            );
+            // No device tokens registered
+            console.log(`⚠️ No device tokens for ${user.fullName}, skipping FCM push`);
+            pushResult = { success: false, error: 'No device tokens' };
           }
 
           // Update notification status based on result
@@ -299,7 +298,11 @@ class NotificationService {
             }
           });
 
-          console.log(`✅ Push notification sent to ${user.fullName}: ${notification.title}`);
+          if (pushResult.success) {
+            console.log(`✅ Push notification sent to ${user.fullName}: ${notification.title}`);
+          } else {
+            console.log(`⚠️ Push notification may have failed for ${user.fullName}: ${pushResult.error || 'unknown'}`);
+          }
         } catch (pushError) {
           console.error(`❌ Failed to send push notification to ${user.fullName}:`, pushError);
 

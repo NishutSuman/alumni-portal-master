@@ -303,58 +303,91 @@ const clearAllNotifications = async (req, res) => {
 const registerPushToken = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { token, deviceType, deviceInfo } = req.body;
+    const { token, deviceType, deviceId } = req.body;
 
     // Validate token format (basic validation)
     if (!token || typeof token !== 'string' || token.length < 50) {
       return errorResponse(res, 'Invalid push token format', 400);
     }
 
-    // Get current user tokens
+    // Map deviceType to platform enum
+    const platformMap = {
+      'android': 'ANDROID',
+      'ios': 'IOS',
+      'web': 'WEB'
+    };
+    const platform = platformMap[deviceType?.toLowerCase()] || 'ANDROID';
+
+    // Get user's organization for multi-tenant support
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { pushTokens: true }
+      select: { organizationId: true }
     });
 
-    const currentTokens = user?.pushTokens || [];
-    
-    // Add token if not already present
-    if (!currentTokens.includes(token)) {
-      const updatedTokens = [...currentTokens, token];
-      
-      // Keep only last 5 tokens per user (cleanup old devices)
-      const limitedTokens = updatedTokens.slice(-5);
+    // Check if token already exists for this user
+    const existingToken = await prisma.userDeviceToken.findFirst({
+      where: {
+        userId,
+        token
+      }
+    });
 
-      await prisma.user.update({
-        where: { id: userId },
-        data: { pushTokens: limitedTokens }
-      });
-
-      // Log activity
-      await prisma.activityLog.create({
+    if (existingToken) {
+      // Update existing token - mark as active and update lastUsedAt
+      await prisma.userDeviceToken.update({
+        where: { id: existingToken.id },
         data: {
-          userId,
-          action: 'push_token_registered',
-          details: {
-            deviceType,
-            deviceInfo,
-            tokenCount: limitedTokens.length
-          },
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
+          isActive: true,
+          lastUsedAt: new Date(),
+          invalidAt: null
         }
       });
 
-      return successResponse(res, { 
+      return successResponse(res, {
         registered: true,
-        tokenCount: limitedTokens.length 
-      }, 'Push token registered successfully');
+        message: 'Token reactivated'
+      }, 'Push token already exists, reactivated');
     }
 
-    return successResponse(res, { 
-      registered: false,
-      message: 'Token already registered' 
-    }, 'Push token already exists');
+    // Create new device token
+    await prisma.userDeviceToken.create({
+      data: {
+        userId,
+        token,
+        platform,
+        deviceId: deviceId || null,
+        deviceName: req.get('User-Agent')?.substring(0, 100) || null,
+        isActive: true,
+        organizationId: user?.organizationId || null
+      }
+    });
+
+    // Get token count for user
+    const tokenCount = await prisma.userDeviceToken.count({
+      where: { userId, isActive: true }
+    });
+
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'push_token_registered',
+        details: {
+          platform,
+          deviceId,
+          tokenCount
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    });
+
+    console.log(`✅ FCM token registered for user ${userId}, platform: ${platform}`);
+
+    return successResponse(res, {
+      registered: true,
+      tokenCount
+    }, 'Push token registered successfully');
 
   } catch (error) {
     console.error('Register push token error:', error);
@@ -376,19 +409,22 @@ const unregisterPushToken = async (req, res) => {
       return errorResponse(res, 'Push token is required', 400);
     }
 
-    // Get current user tokens
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { pushTokens: true }
+    // Find and deactivate the token
+    const result = await prisma.userDeviceToken.updateMany({
+      where: {
+        userId,
+        token
+      },
+      data: {
+        isActive: false,
+        invalidAt: new Date()
+      }
     });
 
-    const currentTokens = user?.pushTokens || [];
-    const updatedTokens = currentTokens.filter(t => t !== token);
-
-    if (updatedTokens.length !== currentTokens.length) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { pushTokens: updatedTokens }
+    if (result.count > 0) {
+      // Get remaining active token count
+      const remainingTokens = await prisma.userDeviceToken.count({
+        where: { userId, isActive: true }
       });
 
       // Log activity
@@ -397,20 +433,20 @@ const unregisterPushToken = async (req, res) => {
           userId,
           action: 'push_token_unregistered',
           details: {
-            remainingTokens: updatedTokens.length
+            remainingTokens
           },
           ipAddress: req.ip,
           userAgent: req.get('User-Agent')
         }
       });
 
-      return successResponse(res, { 
+      return successResponse(res, {
         unregistered: true,
-        remainingTokens: updatedTokens.length 
+        remainingTokens
       }, 'Push token unregistered successfully');
     }
 
-    return successResponse(res, { 
+    return successResponse(res, {
       unregistered: false,
       message: 'Token not found' 
     }, 'Push token was not registered');
