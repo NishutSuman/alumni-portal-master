@@ -293,24 +293,18 @@ const validateNotificationAccess = async (req, res, next) => {
 const validatePushPermissions = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    
-    // Check if user has opted out of push notifications (if you implement this setting)
+
+    // Check if user account is active
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
-        isActive: true,
-        notificationPreferences: true // If you add this field
+        isActive: true
       }
     });
 
     if (!user?.isActive) {
       return errorResponse(res, 'User account is not active', 403);
-    }
-
-    // If user has disabled push notifications
-    if (user.notificationPreferences?.pushEnabled === false) {
-      return errorResponse(res, 'Push notifications are disabled for this user', 400);
     }
 
     next();
