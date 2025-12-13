@@ -981,21 +981,27 @@ const approvePost = async (req, res) => {
       },
     });
     
-    // Create notification for post author
-    await prisma.notification.create({
-      data: {
-        userId: post.author.id,
+    // Create notification for post author using NotificationService (sends push too)
+    try {
+      const { NotificationService: PostNotificationService } = require('../../services/notification.service');
+      await PostNotificationService.createAndSendNotification({
+        recipientIds: [post.author.id],
         type: 'POST_APPROVED',
         title: `Post ${action}d`,
         message: `Your post "${post.title}" has been ${action}d by ${req.user.fullName}${reason ? `: ${reason}` : ''}`,
-        payload: {
+        data: {
           postId: post.id,
           action,
           reason,
           approvedBy: req.user.id,
         },
-      },
-    });
+        tenantCode: req.tenantCode,
+        organizationId: req.organizationId
+      });
+    } catch (notificationError) {
+      console.error('Failed to send post approval notification:', notificationError);
+      // Don't fail the main request if notification fails
+    }
 
     // Send mention notifications when post is approved
     if (action === 'approve' && post.tags && post.tags.length > 0) {

@@ -2,6 +2,7 @@
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { getTenantFilter } = require('../../utils/tenant.util');
+const { NotificationService } = require('../../services/notification.service');
 
 // Toggle reaction on a comment
 const toggleCommentReaction = async (req, res) => {
@@ -148,16 +149,17 @@ const toggleCommentReaction = async (req, res) => {
         ANGRY: '😠',
         SAD: '😢'
       };
-      
+
       const actionText = action === 'added' ? 'reacted' : 'changed their reaction';
-      
-      await prisma.notification.create({
-        data: {
-          userId: comment.createdBy,
-          type: 'GENERAL',
+
+      // Use NotificationService to create notification AND send push notification
+      try {
+        await NotificationService.createAndSendNotification({
+          recipientIds: [comment.createdBy],
+          type: 'POST_LIKED',
           title: 'Someone reacted to your comment',
           message: `${req.user.fullName} ${actionText} ${reactionEmojis[reactionType]} to your comment on "${comment.post.title}"`,
-          payload: {
+          data: {
             commentId: comment.id,
             postId: comment.postId,
             reactedBy: userId,
@@ -165,8 +167,13 @@ const toggleCommentReaction = async (req, res) => {
             reactionType,
             action: 'comment_reaction',
           },
-        },
-      });
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
+        });
+      } catch (notificationError) {
+        console.error('Failed to send comment reaction notification:', notificationError);
+        // Don't fail the main request if notification fails
+      }
     }
     
     // Get updated reaction counts from the Comment model (much faster)

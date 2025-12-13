@@ -2,6 +2,7 @@
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse } = require('../../utils/response');
 const { getTenantFilter } = require('../../utils/tenant.util');
+const { NotificationService } = require('../../services/notification.service');
 
 // Toggle reaction on a post
 const toggleReaction = async (req, res) => {
@@ -142,24 +143,30 @@ const toggleReaction = async (req, res) => {
         ANGRY: '😠',
         SAD: '😢'
       };
-      
+
       const actionText = action === 'added' ? 'reacted' : 'changed their reaction';
-      
-      await prisma.notification.create({
-        data: {
-          userId: post.createdBy,
-          type: 'GENERAL',
+
+      // Use NotificationService to create notification AND send push notification
+      try {
+        await NotificationService.createAndSendNotification({
+          recipientIds: [post.createdBy],
+          type: 'POST_LIKED',
           title: 'Someone reacted to your post',
           message: `${req.user.fullName} ${actionText} ${reactionEmojis[reactionType]} to your post "${post.title}"`,
-          payload: {
+          data: {
             postId: post.id,
             reactedBy: userId,
             reactorName: req.user.fullName,
             reactionType,
             action: 'post_reaction',
           },
-        },
-      });
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
+        });
+      } catch (notificationError) {
+        console.error('Failed to send reaction notification:', notificationError);
+        // Don't fail the main request if notification fails
+      }
     }
     
     // Get updated reaction counts from the Post model (much faster)

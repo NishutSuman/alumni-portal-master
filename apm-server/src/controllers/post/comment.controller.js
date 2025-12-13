@@ -2,6 +2,7 @@
 const { prisma } = require('../../config/database');
 const { successResponse, errorResponse, paginatedResponse, getPaginationParams, calculatePagination } = require('../../utils/response');
 const { getTenantFilter } = require('../../utils/tenant.util');
+const { NotificationService } = require('../../services/notification.service');
 
 // Create a comment on a post
 const createComment = async (req, res) => {
@@ -93,50 +94,51 @@ const createComment = async (req, res) => {
       },
     });
     
-    // Create notifications
-    const notifications = [];
-    
-    // Notify post author (if not commenting on own post)
-    if (post.createdBy !== req.user.id) {
-      notifications.push({
-        userId: post.createdBy,
-        type: 'COMMENT_REPLY',
-        title: 'New comment on your post',
-        message: `${req.user.fullName} commented on your post "${post.title}"`,
-        payload: {
-          postId: post.id,
-          commentId: comment.id,
-          commentedBy: req.user.id,
-          commenterName: req.user.fullName,
-          action: 'post_comment',
-        },
-      });
-    }
-    
-    // Notify mentioned users
-    validMentions.forEach(mentionedUserId => {
-      if (mentionedUserId !== req.user.id && mentionedUserId !== post.createdBy) {
-        notifications.push({
-          userId: mentionedUserId,
+    // Send notifications using NotificationService (which also sends push notifications)
+    try {
+      // Notify post author (if not commenting on own post)
+      if (post.createdBy !== req.user.id) {
+        await NotificationService.createAndSendNotification({
+          recipientIds: [post.createdBy],
+          type: 'POST_COMMENTED',
+          title: 'New comment on your post',
+          message: `${req.user.fullName} commented on your post "${post.title}"`,
+          data: {
+            postId: post.id,
+            commentId: comment.id,
+            commentedBy: req.user.id,
+            commenterName: req.user.fullName,
+            action: 'post_comment',
+          },
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
+        });
+      }
+
+      // Notify mentioned users
+      const mentionRecipients = validMentions.filter(
+        mentionedUserId => mentionedUserId !== req.user.id && mentionedUserId !== post.createdBy
+      );
+      if (mentionRecipients.length > 0) {
+        await NotificationService.createAndSendNotification({
+          recipientIds: mentionRecipients,
           type: 'MENTION',
           title: 'You were mentioned in a comment',
           message: `${req.user.fullName} mentioned you in a comment on "${post.title}"`,
-          payload: {
+          data: {
             postId: post.id,
             commentId: comment.id,
             mentionedBy: req.user.id,
             mentionerName: req.user.fullName,
             action: 'comment_mention',
           },
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
         });
       }
-    });
-    
-    // Create notifications in batch
-    if (notifications.length > 0) {
-      await prisma.notification.createMany({
-        data: notifications,
-      });
+    } catch (notificationError) {
+      console.error('Failed to send comment notification:', notificationError);
+      // Don't fail the main request if notification fails
     }
     
     // Log activity
@@ -273,36 +275,39 @@ const createReply = async (req, res) => {
       },
     });
     
-    // Create notifications
-    const notifications = [];
-    
-    // Notify parent comment author (if not replying to own comment)
-    if (parentComment.createdBy !== req.user.id) {
-      notifications.push({
-        userId: parentComment.createdBy,
-        type: 'COMMENT_REPLY',
-        title: 'Someone replied to your comment',
-        message: `${req.user.fullName} replied to your comment on "${post.title}"`,
-        payload: {
-          postId: post.id,
-          commentId: parentComment.id,
-          replyId: reply.id,
-          repliedBy: req.user.id,
-          replierName: req.user.fullName,
-          action: 'comment_reply',
-        },
-      });
-    }
-    
-    // Notify mentioned users
-    validMentions.forEach(mentionedUserId => {
-      if (mentionedUserId !== req.user.id && mentionedUserId !== parentComment.createdBy) {
-        notifications.push({
-          userId: mentionedUserId,
+    // Send notifications using NotificationService (which also sends push notifications)
+    try {
+      // Notify parent comment author (if not replying to own comment)
+      if (parentComment.createdBy !== req.user.id) {
+        await NotificationService.createAndSendNotification({
+          recipientIds: [parentComment.createdBy],
+          type: 'POST_COMMENTED',
+          title: 'Someone replied to your comment',
+          message: `${req.user.fullName} replied to your comment on "${post.title}"`,
+          data: {
+            postId: post.id,
+            commentId: parentComment.id,
+            replyId: reply.id,
+            repliedBy: req.user.id,
+            replierName: req.user.fullName,
+            action: 'comment_reply',
+          },
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
+        });
+      }
+
+      // Notify mentioned users
+      const mentionRecipients = validMentions.filter(
+        mentionedUserId => mentionedUserId !== req.user.id && mentionedUserId !== parentComment.createdBy
+      );
+      if (mentionRecipients.length > 0) {
+        await NotificationService.createAndSendNotification({
+          recipientIds: mentionRecipients,
           type: 'MENTION',
           title: 'You were mentioned in a reply',
           message: `${req.user.fullName} mentioned you in a reply on "${post.title}"`,
-          payload: {
+          data: {
             postId: post.id,
             commentId: parentComment.id,
             replyId: reply.id,
@@ -310,15 +315,13 @@ const createReply = async (req, res) => {
             mentionerName: req.user.fullName,
             action: 'reply_mention',
           },
+          tenantCode: req.tenantCode,
+          organizationId: req.organizationId
         });
       }
-    });
-    
-    // Create notifications in batch
-    if (notifications.length > 0) {
-      await prisma.notification.createMany({
-        data: notifications,
-      });
+    } catch (notificationError) {
+      console.error('Failed to send reply notification:', notificationError);
+      // Don't fail the main request if notification fails
     }
     
     // Log activity
