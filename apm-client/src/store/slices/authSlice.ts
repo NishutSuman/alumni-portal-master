@@ -35,6 +35,14 @@ export interface User {
       blacklistedAt?: string
     }
   }
+  // Multi-tenant support: organization info (persisted with user)
+  organizationId?: string
+  organization?: {
+    id: string
+    name: string
+    tenantCode: string
+    logoUrl?: string
+  }
 }
 
 export interface AuthState {
@@ -103,7 +111,7 @@ const authSlice = createSlice({
       rememberMe?: boolean
     }>) => {
       const { user, token, refreshToken, rememberMe = false } = action.payload
-      
+
       state.isAuthenticated = true
       state.isLoading = false
       state.user = user
@@ -113,16 +121,23 @@ const authSlice = createSlice({
       state.error = null
       state.loginAttempts = 0
       state.showWelcome = true
-      
+
       // Check if it's first login
       if (!user.lastLoginAt) {
         state.isFirstLogin = true
       }
-      
+
       // Set session expiry (2 hours from now)
       const expiry = new Date()
       expiry.setHours(expiry.getHours() + 2)
       state.sessionExpiry = expiry.toISOString()
+
+      // CRITICAL: Sync tenant code to localStorage for multi-tenant API calls
+      // This ensures the X-Tenant-Code header is set on all API requests
+      if (user.organization?.tenantCode) {
+        localStorage.setItem('guild-org-code', user.organization.tenantCode)
+        localStorage.setItem('guild-org-name', user.organization.name)
+      }
     },
     
     loginFailure: (state, action: PayloadAction<string>) => {
@@ -302,12 +317,16 @@ export const selectIsVerified = (state: { auth: AuthState }) => state.auth.user?
 export const selectIsPendingVerification = (state: { auth: AuthState }) => state.auth.user?.pendingVerification
 
 // Role-based selectors
-export const selectIsAdmin = (state: { auth: AuthState }) => 
+export const selectIsAdmin = (state: { auth: AuthState }) =>
   state.auth.user?.role === 'SUPER_ADMIN'
-export const selectIsBatchAdmin = (state: { auth: AuthState }) => 
+export const selectIsBatchAdmin = (state: { auth: AuthState }) =>
   state.auth.user?.role === 'BATCH_ADMIN'
-export const selectIsRegularUser = (state: { auth: AuthState }) => 
+export const selectIsRegularUser = (state: { auth: AuthState }) =>
   state.auth.user?.role === 'USER'
+
+// Multi-tenant selectors
+export const selectUserOrganization = (state: { auth: AuthState }) => state.auth.user?.organization
+export const selectTenantCode = (state: { auth: AuthState }) => state.auth.user?.organization?.tenantCode
 
 // Export reducer
 export default authSlice.reducer

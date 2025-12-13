@@ -10,7 +10,7 @@ import { Capacitor } from '@capacitor/core'
 
 // Redux
 import { setInitializing, setOnlineStatus, updatePerformanceMetrics } from './store/slices/appSlice'
-import { selectIsAuthenticated, selectUser } from './store/slices/authSlice'
+import { selectIsAuthenticated, selectUser, selectTenantCode, selectUserOrganization } from './store/slices/authSlice'
 import { selectIsDark } from './store/slices/themeSlice'
 
 // Hooks
@@ -189,6 +189,24 @@ function App() {
   const { isAuthenticated, user } = useAuth()
   const isDark = useSelector(selectIsDark)
   const { isOnline } = useDevice()
+
+  // Get tenant info from Redux (persisted)
+  const tenantCode = useSelector(selectTenantCode)
+  const userOrganization = useSelector(selectUserOrganization)
+
+  // CRITICAL: Restore org code from persisted user data on app init
+  // This ensures the X-Tenant-Code header is set even after page refresh
+  useEffect(() => {
+    if (isAuthenticated && userOrganization?.tenantCode) {
+      const storedOrgCode = localStorage.getItem('guild-org-code')
+      // Only restore if localStorage is missing or doesn't match
+      if (!storedOrgCode || storedOrgCode !== userOrganization.tenantCode) {
+        console.log('🔄 Restoring tenant code from persisted user:', userOrganization.tenantCode)
+        localStorage.setItem('guild-org-code', userOrganization.tenantCode)
+        localStorage.setItem('guild-org-name', userOrganization.name)
+      }
+    }
+  }, [isAuthenticated, userOrganization])
 
   // Handle Android back button for Capacitor
   useEffect(() => {
