@@ -100,7 +100,7 @@ const createComment = async (req, res) => {
       if (post.createdBy !== req.user.id) {
         await NotificationService.createAndSendNotification({
           recipientIds: [post.createdBy],
-          type: 'POST_COMMENTED',
+          type: 'COMMENT_REPLY',
           title: 'New comment on your post',
           message: `${req.user.fullName} commented on your post "${post.title}"`,
           data: {
@@ -281,7 +281,7 @@ const createReply = async (req, res) => {
       if (parentComment.createdBy !== req.user.id) {
         await NotificationService.createAndSendNotification({
           recipientIds: [parentComment.createdBy],
-          type: 'POST_COMMENTED',
+          type: 'COMMENT_REPLY',
           title: 'Someone replied to your comment',
           message: `${req.user.fullName} replied to your comment on "${post.title}"`,
           data: {

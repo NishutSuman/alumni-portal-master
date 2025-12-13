@@ -150,7 +150,7 @@ const toggleReaction = async (req, res) => {
       try {
         await NotificationService.createAndSendNotification({
           recipientIds: [post.createdBy],
-          type: 'POST_LIKED',
+          type: 'GENERAL',
           title: 'Someone reacted to your post',
           message: `${req.user.fullName} ${actionText} ${reactionEmojis[reactionType]} to your post "${post.title}"`,
           data: {
