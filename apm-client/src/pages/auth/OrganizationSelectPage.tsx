@@ -12,6 +12,7 @@ import {
   getOrgLogoUrl,
   fetchOrgDetails,
   fetchAllOrganizations,
+  fetchOrganizationsByEmail,
   type Organization,
 } from '@/config/organizations'
 import { BuildingOfficeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
@@ -77,19 +78,44 @@ const OrganizationSelectPage: React.FC = () => {
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [organizations, setOrganizations] = useState<Organization[]>(ORGANIZATIONS)
+  const [isSwitchingOrg, setIsSwitchingOrg] = useState(false) // Track if user is switching orgs
+  const [switchEmail, setSwitchEmail] = useState<string | null>(null) // Store email when switching
   const isDark = useSelector(selectIsDark)
 
   // Fetch organizations from API on mount
+  // CRITICAL: If user is switching orgs, only show orgs they belong to
   useEffect(() => {
     const loadOrganizations = async () => {
       setIsLoadingOrgs(true)
       try {
-        const fetchedOrgs = await fetchAllOrganizations()
-        if (fetchedOrgs.length > 0) {
-          setOrganizations(fetchedOrgs)
+        // Check if user is switching organizations (email stored in sessionStorage)
+        const storedEmail = sessionStorage.getItem('guild-switch-org-email')
+
+        if (storedEmail) {
+          // User is switching orgs - only show their organizations
+          setIsSwitchingOrg(true)
+          setSwitchEmail(storedEmail)
+
+          const userOrgs = await fetchOrganizationsByEmail(storedEmail)
+          if (userOrgs.length > 0) {
+            setOrganizations(userOrgs)
+          } else {
+            // No orgs found for this email - show error
+            setError('No organizations found for your account.')
+            setOrganizations([])
+          }
+
+          // Clear the stored email after use (one-time use)
+          sessionStorage.removeItem('guild-switch-org-email')
         } else {
-          // Fall back to static organizations if API returns empty
-          setOrganizations(ORGANIZATIONS)
+          // New user - show all organizations
+          const fetchedOrgs = await fetchAllOrganizations()
+          if (fetchedOrgs.length > 0) {
+            setOrganizations(fetchedOrgs)
+          } else {
+            // Fall back to static organizations if API returns empty
+            setOrganizations(ORGANIZATIONS)
+          }
         }
       } catch (err) {
         console.error('Failed to fetch organizations:', err)
@@ -181,11 +207,13 @@ const OrganizationSelectPage: React.FC = () => {
               </div>
               <h1 className="text-2xl md:text-3xl font-bold mb-1">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
-                  Select Your Organization
+                  {isSwitchingOrg ? 'Switch Organization' : 'Select Your Organization'}
                 </span>
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Choose your school or enter your organization code
+                {isSwitchingOrg
+                  ? `Select an organization linked to ${switchEmail}`
+                  : 'Choose your school or enter your organization code'}
               </p>
             </div>
 
@@ -267,52 +295,57 @@ const OrganizationSelectPage: React.FC = () => {
               )}
             </div>
 
-            {/* Divider */}
-            <div className="relative mb-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                  Or enter code manually
-                </span>
-              </div>
-            </div>
+            {/* Manual Code Entry - Only show for new users, not when switching orgs */}
+            {!isSwitchingOrg && (
+              <>
+                {/* Divider */}
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      Or enter code manually
+                    </span>
+                  </div>
+                </div>
 
-            {/* Manual Code Entry */}
-            <form onSubmit={handleSubmitCode} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Organization Code
-                </label>
-                <input
-                  type="text"
-                  value={orgCode}
-                  onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
-                  placeholder="Enter organization code (e.g., NAAO)"
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all uppercase text-sm"
-                  disabled={isLoading}
-                />
-              </div>
+                {/* Manual Code Entry Form */}
+                <form onSubmit={handleSubmitCode} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Organization Code
+                    </label>
+                    <input
+                      type="text"
+                      value={orgCode}
+                      onChange={(e) => setOrgCode(e.target.value.toUpperCase())}
+                      placeholder="Enter organization code (e.g., NAAO)"
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all uppercase text-sm"
+                      disabled={isLoading}
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || !orgCode.trim()}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-lg font-semibold text-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isLoading ? 'Connecting...' : 'Continue'}
-              </button>
-            </form>
+                  <button
+                    type="submit"
+                    disabled={isLoading || !orgCode.trim()}
+                    className="w-full py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-lg font-semibold text-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    {isLoading ? 'Connecting...' : 'Continue'}
+                  </button>
+                </form>
 
-            {/* Help Text */}
-            <div className="mt-4 text-center">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Don't know your organization code?{' '}
-                <span className="text-blue-600 dark:text-blue-400">
-                  Contact your alumni administrator
-                </span>
-              </p>
-            </div>
+                {/* Help Text */}
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Don't know your organization code?{' '}
+                    <span className="text-blue-600 dark:text-blue-400">
+                      Contact your alumni administrator
+                    </span>
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Company Credit */}

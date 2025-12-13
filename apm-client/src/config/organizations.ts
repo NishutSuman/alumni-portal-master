@@ -71,6 +71,38 @@ export const fetchAllOrganizations = async (): Promise<Organization[]> => {
   }
 }
 
+// Fetch organizations that a specific email is associated with
+// CRITICAL: Used when switching organizations to only show orgs the user belongs to
+export const fetchOrganizationsByEmail = async (email: string): Promise<Organization[]> => {
+  try {
+    const response = await fetch(getApiUrl('/api/auth/organizations-by-email'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    })
+    if (!response.ok) {
+      console.error('Failed to fetch organizations by email:', response.statusText)
+      return []
+    }
+    const data = await response.json()
+    // Transform the response to match Organization interface
+    const orgs = data?.data?.organizations || []
+    return orgs.map((org: { id: string; name: string; tenantCode: string; logoUrl?: string; logoProxyUrl?: string }) => ({
+      code: org.tenantCode,
+      name: org.name,
+      shortName: org.tenantCode,
+      apiUrl: getApiUrl('/api').replace('/api', ''), // Base URL without /api suffix
+      logoUrl: org.logoUrl,
+      logoProxyUrl: org.logoProxyUrl,
+    }))
+  } catch (error) {
+    console.error('Error fetching organizations by email:', error)
+    return []
+  }
+}
+
 // Local development organization - not shown in list, only accessible via code
 const LOCAL_DEV_ORG: Organization = {
   code: 'LOCAL-DEV',

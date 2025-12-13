@@ -94,6 +94,14 @@ export type AppThunk = any // For complex async actions if needed
  * This should be called when user wants to switch to a different school/organization
  */
 export const switchOrganization = () => {
+  // 0. CRITICAL: Store user's email before clearing auth state
+  // This ensures org selection page only shows orgs the user belongs to
+  const currentState = store.getState()
+  const userEmail = currentState.auth?.user?.email
+  if (userEmail) {
+    sessionStorage.setItem('guild-switch-org-email', userEmail)
+  }
+
   // 1. Dispatch logout to clear auth state and API cache
   store.dispatch(logout())
 
