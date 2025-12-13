@@ -269,6 +269,22 @@ class PushNotificationService {
             }
           }
         });
+
+        // Clean up invalid tokens from database
+        if (invalidTokens.length > 0) {
+          console.log(`🧹 Marking ${invalidTokens.length} invalid tokens as inactive`);
+          try {
+            const { PrismaClient } = require('@prisma/client');
+            const prisma = new PrismaClient();
+            await prisma.userDeviceToken.updateMany({
+              where: { token: { in: invalidTokens } },
+              data: { isActive: false, invalidAt: new Date() }
+            });
+            console.log(`✅ Marked ${invalidTokens.length} tokens as inactive`);
+          } catch (cleanupError) {
+            console.error('Failed to cleanup invalid tokens:', cleanupError.message);
+          }
+        }
       }
 
       return {
