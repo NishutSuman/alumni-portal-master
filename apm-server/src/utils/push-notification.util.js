@@ -252,9 +252,10 @@ class PushNotificationService {
         tokens: tokens.slice(0, 500) // FCM limit is 500 tokens per request
       };
 
-      const response = await this.messaging.sendMulticast(message);
-      
-      console.log(`✅ Multicast sent - Success: ${response.successCount}, Failure: ${response.failureCount}`);
+      // Use sendEachForMulticast instead of deprecated sendMulticast
+      const response = await this.messaging.sendEachForMulticast(message);
+
+      console.log(`✅ FCM multicast sent - Success: ${response.successCount}, Failure: ${response.failureCount}`);
 
       // Process failures to identify invalid tokens
       const invalidTokens = [];
@@ -276,6 +277,10 @@ class PushNotificationService {
 
     } catch (error) {
       console.error('❌ Send to tokens error:', error);
+      console.error('❌ Error details - code:', error.code, 'message:', error.message);
+      if (error.errorInfo) {
+        console.error('❌ Firebase error info:', JSON.stringify(error.errorInfo));
+      }
       return {
         success: false,
         error: error.code || 'UNKNOWN_ERROR',
