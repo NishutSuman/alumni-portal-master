@@ -260,9 +260,13 @@ class PushNotificationService {
       // Process failures to identify invalid tokens
       const invalidTokens = [];
       if (response.failureCount > 0) {
+        console.log(`⚠️ FCM failures detected, analyzing ${response.failureCount} failures:`);
         response.responses.forEach((resp, index) => {
-          if (!resp.success && resp.error?.code === 'messaging/registration-token-not-registered') {
-            invalidTokens.push(tokens[index]);
+          if (!resp.success) {
+            console.log(`  ❌ Token ${index}: ${resp.error?.code || 'unknown'} - ${resp.error?.message || 'no message'}`);
+            if (resp.error?.code === 'messaging/registration-token-not-registered') {
+              invalidTokens.push(tokens[index]);
+            }
           }
         });
       }

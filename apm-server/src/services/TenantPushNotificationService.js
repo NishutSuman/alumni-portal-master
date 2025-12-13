@@ -272,7 +272,10 @@ class TenantPushNotificationService {
 
       // If using default service
       if (messaging === this.defaultService) {
-        return await this.defaultService.sendToTokens(options);
+        console.log(`📤 Using default Firebase service for tenant ${tenantCode || 'none'}`);
+        const result = await this.defaultService.sendToTokens(options);
+        console.log(`📤 Default service result:`, JSON.stringify(result, null, 2));
+        return result;
       }
 
       const cached = this.tenantAppsCache.get(tenantCode);

@@ -268,6 +268,8 @@ class NotificationService {
           if (deviceTokens.length > 0) {
             // Send to actual device tokens using tenant-aware service
             console.log(`📤 Sending FCM push to ${deviceTokens.length} tokens for ${user.fullName}`);
+            console.log(`📤 Token(s): ${deviceTokens.map(t => t.substring(0, 20) + '...').join(', ')}`);
+            console.log(`📤 Tenant code: ${effectiveTenantCode}`);
             pushResult = await TenantPushNotificationService.sendToTokens(
               effectiveTenantCode,
               {
