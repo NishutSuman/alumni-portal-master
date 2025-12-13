@@ -27,39 +27,28 @@ const shuffleArray = (array) => {
  */
 const getMarqueeProfiles = async (req, res) => {
   try {
-    // Extract tenant info from request (set by tenant middleware)
-    let organizationId = req.tenant?.id || req.user?.organizationId;
+    // Extract tenant info from request (set by optionalTenantMiddleware from X-Tenant-Code header)
+    const organizationId = req.tenant?.id;
 
-    // If no organization ID, try to find a default organization
+    // Debug logging
+    console.log('🏢 Marquee - Tenant debug:', {
+      tenantCode: req.headers['x-tenant-code'],
+      reqTenant: req.tenant ? { id: req.tenant.id, name: req.tenant.name, tenantCode: req.tenant.tenantCode } : null,
+      organizationId
+    });
+
+    // SECURITY: Do NOT fall back to a random organization!
+    // If no tenant is set, the frontend should be sending X-Tenant-Code header
     if (!organizationId) {
-      console.log('⚠️ Marquee: No organization ID from tenant/user, attempting fallback...');
-
-      // Try to find the first active organization as fallback
-      const defaultOrg = await prisma.organization.findFirst({
-        where: { isActive: true },
-        select: { id: true, name: true }
+      console.warn('⚠️ Marquee: No organization ID from tenant middleware. X-Tenant-Code header:', req.headers['x-tenant-code']);
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No organization context'
       });
-
-      if (defaultOrg) {
-        organizationId = defaultOrg.id;
-        console.log(`✅ Marquee: Using fallback organization: ${defaultOrg.name} (${organizationId})`);
-      } else {
-        console.error('❌ Marquee: No organization found for marquee', {
-          hasTenant: !!req.tenant,
-          hasUser: !!req.user,
-          tenantId: req.tenant?.id,
-          userOrgId: req.user?.organizationId
-        });
-        // Return empty array instead of error to not break the UI
-        return res.json({
-          success: true,
-          data: [],
-          message: 'No organization found'
-        });
-      }
     }
 
-    console.log('✅ Marquee: Using organization ID:', organizationId);
+    console.log('✅ Marquee: Using organization ID:', organizationId, 'from tenant:', req.tenant?.name);
 
     // Check Redis cache first
     const cacheKey = `marquee:profiles:v3:${organizationId}`;

@@ -173,7 +173,12 @@ export const organizationApi = apiSlice.injectEndpoints({
       createdAt: string;
       updatedAt: string;
     }, void>({
-      query: () => '/organization',
+      // CRITICAL: Add tenant code to query URL so RTK Query caches per-tenant
+      // Otherwise all tenants share the same cache entry!
+      query: () => {
+        const orgCode = localStorage.getItem('guild-org-code') || 'default';
+        return `/organization?tenant=${orgCode}`;
+      },
       transformResponse: (response: any) => response.data.organization,
       providesTags: ['Organization'],
     }),

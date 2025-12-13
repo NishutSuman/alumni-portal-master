@@ -19,11 +19,17 @@ const getOrganizationDetails = async (req, res) => {
     // Use getOrganizationFilter for Organization model queries (uses 'id' not 'organizationId')
     const orgFilter = getOrganizationFilter(req);
     const tenantCode = req.headers['x-tenant-code'] || 'default';
-    const cacheKey = `public:organization:details:${tenantCode}`;
+
+    // CRITICAL: Include tenant ID in cache key to prevent cross-tenant cache pollution
+    // Previously cache key was only based on tenantCode header, but if middleware didn't run,
+    // wrong data could be cached under the correct key
+    const tenantId = req.tenant?.id || 'no-tenant';
+    const cacheKey = `public:organization:details:${tenantCode}:${tenantId}`;
 
     // Debug logging for tenant isolation
     console.log('🏢 getOrganizationDetails - Tenant debug:', {
       tenantCode,
+      tenantId,
       reqTenant: req.tenant ? { id: req.tenant.id, name: req.tenant.name, tenantCode: req.tenant.tenantCode } : null,
       orgFilter,
       cacheKey
